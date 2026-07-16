@@ -24,6 +24,8 @@ export type WidgetBehaviour = {
   autoOpen: boolean;
   autoOpenDelayMs: number;
   greetOnFirstVisit: boolean;
+  /** When true, ask for name/email before chat. When false, start with message only. */
+  collectVisitorDetails: boolean;
   collectEmail: boolean;
   collectPhone: boolean;
   offlineMessage: string;

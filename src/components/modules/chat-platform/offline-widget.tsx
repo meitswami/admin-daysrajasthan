@@ -3,12 +3,51 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublicWidgetConfig } from "@/modules/chat";
 
+type PackageLink = {
+  id: string;
+  name: string;
+  summary: string | null;
+  href: string | null;
+};
+
 type UiMessage = {
   id: string;
   role: "user" | "assistant";
   text: string;
   meta?: string | null;
+  packages?: PackageLink[];
 };
+
+function normalizeHref(href: string | null): string | null {
+  if (!href) return null;
+  if (/^https?:\/\//i.test(href)) return href;
+  if (!href.startsWith("/")) return `/${href}`;
+  return href;
+}
+
+function extractPackageLinks(presentation: unknown[] | undefined): PackageLink[] {
+  if (!Array.isArray(presentation)) return [];
+  return presentation
+    .filter((block): block is Record<string, unknown> => !!block && typeof block === "object")
+    .filter((block) => block.kind === "package_card")
+    .map((block, index) => ({
+      id: typeof block.packageId === "string" && block.packageId ? block.packageId : `pkg_${index}`,
+      name:
+        typeof block.name === "string" && block.name
+          ? block.name
+          : typeof block.title === "string" && block.title
+            ? block.title
+            : "Package",
+      summary:
+        typeof block.summary === "string"
+          ? block.summary
+          : typeof block.subtitle === "string"
+            ? block.subtitle
+            : null,
+      href: normalizeHref(typeof block.href === "string" ? block.href : null),
+    }))
+    .filter((pkg, index, all) => all.findIndex((item) => item.href === pkg.href && item.name === pkg.name) === index);
+}
 
 /**
  * Travel Days Chat Widget — Offline leave-a-message OR AI assistant (same shell).
@@ -47,6 +86,10 @@ export function OfflineChatWidget() {
           return;
         }
         setConfig(json.data);
+        // Skip lead fields when collectVisitorDetails is off — start with message only
+        if (!json.data.behaviour.collectVisitorDetails) {
+          setDetailsCaptured(true);
+        }
         if (json.data.appearance.welcomeBody) {
           setMessages([
             {
@@ -87,8 +130,8 @@ export function OfflineChatWidget() {
           key,
           message: text,
           sessionId,
-          name,
-          email,
+          name: config.behaviour.collectVisitorDetails ? name : undefined,
+          email: config.behaviour.collectVisitorDetails ? email : undefined,
         }),
       });
       const json = (await res.json()) as {
@@ -98,6 +141,7 @@ export function OfflineChatWidget() {
           sessionId: string;
           replyText: string;
           mode: string;
+          presentation?: unknown[];
           analytics?: { providerUsed?: string; usedFallback?: boolean; searchHits?: number };
           offlineQueued?: boolean;
         };
@@ -116,19 +160,19 @@ export function OfflineChatWidget() {
         return;
       }
 
-      setSessionId(json.data.sessionId);
-      // Hide lead fields after first successful turn when we have a name/email
-      if (name.trim() || email.trim() || json.data.sessionId) {
+      const data = json.data;
+      setSessionId(data.sessionId);
+      if (config.behaviour.collectVisitorDetails) {
         setDetailsCaptured(true);
       }
       const metaBits = [
-        json.data.mode === "ai" ? "AI" : "Offline",
-        json.data.analytics?.providerUsed && json.data.analytics.providerUsed !== "none"
-          ? `provider:${json.data.analytics.providerUsed}`
+        data.mode === "ai" ? "AI" : "Offline",
+        data.analytics?.providerUsed && data.analytics.providerUsed !== "none"
+          ? `provider:${data.analytics.providerUsed}`
           : null,
-        json.data.analytics?.usedFallback ? "fallback" : null,
-        json.data.analytics?.searchHits != null
-          ? `hits:${json.data.analytics.searchHits}`
+        data.analytics?.usedFallback ? "fallback" : null,
+        data.analytics?.searchHits != null
+          ? `hits:${data.analytics.searchHits}`
           : null,
       ].filter(Boolean);
 
@@ -137,12 +181,13 @@ export function OfflineChatWidget() {
         {
           id: `a_${Date.now()}`,
           role: "assistant",
-          text: json.data!.replyText,
+          text: data.replyText,
           meta: metaBits.join(" · ") || null,
+          packages: extractPackageLinks(data.presentation),
         },
       ]);
-      if (json.data.offlineQueued) {
-        setStatus(json.data.replyText);
+      if (data.offlineQueued) {
+        setStatus(data.replyText);
       }
     } catch {
       setStatus("Network error");
@@ -168,6 +213,7 @@ export function OfflineChatWidget() {
   }
 
   const a = config.appearance;
+  const collectDetails = config.behaviour.collectVisitorDetails;
   const disabled = !config.enabled || config.aiMode === "disabled";
   const headerSub =
     disabled
@@ -203,6 +249,36 @@ export function OfflineChatWidget() {
               style={m.role === "user" ? { background: a.primaryColor } : undefined}
             >
               <p className="whitespace-pre-wrap">{m.text}</p>
+              {m.role === "assistant" && !!m.packages?.length && (
+                <div className="mt-3 space-y-2">
+                  {m.packages.map((pkg) =>
+                    pkg.href ? (
+                      <a
+                        key={pkg.id}
+                        href={pkg.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+                      >
+                        <span className="font-medium text-[#7A1F1F]">{pkg.name}</span>
+                        {pkg.summary ? (
+                          <span className="mt-0.5 block text-xs text-stone-500">{pkg.summary}</span>
+                        ) : null}
+                      </a>
+                    ) : (
+                      <div
+                        key={pkg.id}
+                        className="rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800"
+                      >
+                        <span className="font-medium">{pkg.name}</span>
+                        {pkg.summary ? (
+                          <span className="mt-0.5 block text-xs text-stone-500">{pkg.summary}</span>
+                        ) : null}
+                      </div>
+                    )
+                  )}
+                </div>
+              )}
               {m.meta && (
                 <p className="mt-1 text-[10px] opacity-70">{m.meta}</p>
               )}
@@ -224,12 +300,13 @@ export function OfflineChatWidget() {
 
       {!disabled && (
         <form onSubmit={onSubmit} className="space-y-2 border-t border-stone-100 p-3">
-          {!detailsCaptured ? (
+          {collectDetails && !detailsCaptured ? (
             <>
               {config.behaviour.collectEmail && (
                 <input
                   className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
                   placeholder="Email"
+                  type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -242,6 +319,7 @@ export function OfflineChatWidget() {
               />
             </>
           ) : (
+            collectDetails &&
             (name.trim() || email.trim()) && (
               <p className="truncate text-[11px] text-stone-500">
                 Chatting as {[name.trim(), email.trim()].filter(Boolean).join(" · ")}
@@ -250,7 +328,7 @@ export function OfflineChatWidget() {
           )}
           <textarea
             required
-            rows={detailsCaptured ? 2 : 3}
+            rows={collectDetails && !detailsCaptured ? 3 : 2}
             className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
             placeholder={
               config.aiMode === "ai"

@@ -5,6 +5,9 @@
 
 import {
   CHAT_STORAGE_KEY,
+  DEFAULT_APPEARANCE,
+  DEFAULT_BEHAVIOUR,
+  DEFAULT_KNOWLEDGE_SCOPE,
   DEFAULT_PROMPTS,
   DEFAULT_PROVIDERS,
   DEFAULT_SETTINGS,
@@ -23,6 +26,9 @@ function migrateWebsites(websites: ChatWebsite[]): ChatWebsite[] {
   return websites.map((w) => ({
     ...w,
     aiMode: migrateAiMode(w.aiMode as string),
+    appearance: { ...DEFAULT_APPEARANCE, ...w.appearance },
+    behaviour: { ...DEFAULT_BEHAVIOUR, ...w.behaviour },
+    knowledgeScope: { ...DEFAULT_KNOWLEDGE_SCOPE, ...w.knowledgeScope },
   }));
 }
 

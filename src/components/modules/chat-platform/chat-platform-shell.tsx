@@ -244,6 +244,23 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                 <option value="disabled">Disabled</option>
               </Select>
             </div>
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-stone-100 px-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-stone-800">Collect visitor details</p>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  On: ask for Email, Name, then Description. Off: start chat with Description only.
+                </p>
+              </div>
+              <Toggle
+                checked={website.behaviour.collectVisitorDetails}
+                onChange={(v) =>
+                  updateBehaviour(website.id, {
+                    ...website.behaviour,
+                    collectVisitorDetails: v,
+                  })
+                }
+              />
+            </div>
             <Button type="button" onClick={() => { refresh(); show("Widget settings saved"); }}>
               Save
             </Button>
@@ -319,6 +336,7 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
               [
                 ["autoOpen", "Auto-open"],
                 ["greetOnFirstVisit", "Greet on first visit"],
+                ["collectVisitorDetails", "Collect visitor details (name / email)"],
                 ["collectEmail", "Collect email"],
                 ["collectPhone", "Collect phone"],
                 ["enableTypingIndicator", "Typing indicator"],

@@ -3,6 +3,9 @@
  */
 
 import {
+  DEFAULT_APPEARANCE,
+  DEFAULT_BEHAVIOUR,
+  DEFAULT_KNOWLEDGE_SCOPE,
   DEFAULT_PROMPTS,
   DEFAULT_PROVIDERS,
   DEFAULT_SETTINGS,
@@ -58,6 +61,9 @@ function normalizeState(state: ChatPlatformState): ChatPlatformState {
     websites: (state.websites ?? []).map((w: ChatWebsite) => ({
       ...w,
       aiMode: migrateAiMode(w.aiMode as string),
+      appearance: { ...DEFAULT_APPEARANCE, ...w.appearance },
+      behaviour: { ...DEFAULT_BEHAVIOUR, ...w.behaviour },
+      knowledgeScope: { ...DEFAULT_KNOWLEDGE_SCOPE, ...w.knowledgeScope },
     })),
     sessions: state.sessions ?? [],
     messages: state.messages ?? [],

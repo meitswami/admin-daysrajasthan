@@ -18,6 +18,7 @@ export const widgetBehaviourSchema = z.object({
   autoOpen: z.boolean(),
   autoOpenDelayMs: z.number().int().min(0).max(60_000),
   greetOnFirstVisit: z.boolean(),
+  collectVisitorDetails: z.boolean(),
   collectEmail: z.boolean(),
   collectPhone: z.boolean(),
   offlineMessage: z.string().min(1).max(400),

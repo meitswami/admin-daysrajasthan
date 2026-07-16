@@ -85,7 +85,7 @@ export function buildProviderPrompt(input: {
     "",
     `User message: ${userText}`,
     "",
-    "Respond with a concise travel assist narrative that only references retrieved ids/titles.",
+    "Respond with a concise travel assist narrative that references package/destination titles only — never expose internal ids, package_id, or database keys to the visitor.",
   ].join("\n");
 
   return {

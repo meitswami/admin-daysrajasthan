@@ -155,15 +155,63 @@ function filterHitsByScope(hits: SearchHit[], scope: KnowledgeScopeConfig): Sear
 }
 
 function presentationToReplyText(presentation: unknown[]): string {
+  let narrative: string | null = null;
+  const packageLines: string[] = [];
+  const destinationLines: string[] = [];
+
   for (const block of presentation) {
     if (!block || typeof block !== "object") continue;
     const b = block as Record<string, unknown>;
-    if (b.kind === "chat_message" && typeof b.text === "string" && b.text.trim()) {
-      return b.text;
+    const kind = b.kind;
+
+    if (kind === "chat_message" && typeof b.text === "string" && b.text.trim()) {
+      if (!narrative) narrative = stripInternalIds(b.text.trim());
+      continue;
     }
-    if (typeof b.body === "string" && b.body.trim()) return b.body;
+    if (
+      !narrative &&
+      typeof b.body === "string" &&
+      b.body.trim() &&
+      (kind === "message" || kind === "summary" || kind === "fallback_browse")
+    ) {
+      narrative = stripInternalIds(b.body.trim());
+      continue;
+    }
+    if (kind === "package_card") {
+      const name = typeof b.name === "string" ? b.name : typeof b.title === "string" ? b.title : null;
+      const summary =
+        typeof b.summary === "string" ? b.summary : typeof b.subtitle === "string" ? b.subtitle : null;
+      if (name) packageLines.push(summary ? `• ${name} — ${summary}` : `• ${name}`);
+      continue;
+    }
+    if (kind === "destination_card") {
+      const name = typeof b.name === "string" ? b.name : typeof b.title === "string" ? b.title : null;
+      const summary =
+        typeof b.summary === "string" ? b.summary : typeof b.subtitle === "string" ? b.subtitle : null;
+      if (name) destinationLines.push(summary ? `• ${name} — ${summary}` : `• ${name}`);
+    }
   }
+
+  // Prefer the assistant narrative (already visitor-formatted). Fall back to card titles.
+  if (narrative) return narrative;
+
+  const sections: string[] = [];
+  if (packageLines.length) sections.push(["Suggested packages:", ...packageLines].join("\n"));
+  if (destinationLines.length) sections.push(["Destinations:", ...destinationLines].join("\n"));
+  if (sections.length) return sections.join("\n\n");
   return "Here are grounded results from our catalog.";
+}
+
+/** Remove internal catalog ids from visitor-facing chat text. */
+function stripInternalIds(text: string): string {
+  return text
+    .replace(/\bid[=:\s]+[a-zA-Z0-9_-]+\b/gi, "")
+    .replace(/\bpackage[_-]?id\b[=:\s]*[a-zA-Z0-9_-]*/gi, "")
+    .replace(/\[(package|destination|knowledge|quotation|customer|lead)\]\s*/gi, "")
+    .replace(/\s*·\s*·\s*/g, " · ")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ *\n */g, "\n")
+    .trim();
 }
 
 function ensureSession(input: {
@@ -217,6 +265,22 @@ function persistMessage(msg: ChatMessageRecord): void {
       ...s.conversations.filter((c) => c.sessionId !== msg.sessionId),
     ].slice(0, 200),
   }));
+}
+
+function isConversationTurn(
+  message: ChatMessageRecord
+): message is ChatMessageRecord & { role: "user" | "assistant" } {
+  return message.role === "user" || message.role === "assistant";
+}
+
+function buildConversationTurns(sessionId: string): { role: "user" | "assistant"; text: string }[] {
+  return listSessionMessages(sessionId)
+    .filter(isConversationTurn)
+    .map((m) => ({
+      role: m.role,
+      text: m.text,
+    }))
+    .slice(-6);
 }
 
 function logAnalytics(entry: ChatTurnAnalytics): void {
@@ -321,6 +385,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
   const scope = site.knowledgeScope;
   const regionCode = scopeRegionCode(scope);
   const enrichedText = enrichTravelQuery(input.message.trim());
+  const conversationTurns = buildConversationTurns(session.id);
 
   const intelligence = await runIntelligence({
     text: enrichedText,
@@ -329,7 +394,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     locale: null,
     regionCode,
     preferredProvider: "local",
-    conversationTurns: [],
+    conversationTurns,
     extras: {
       knowledgeScope: scope,
       websiteId: site.id,

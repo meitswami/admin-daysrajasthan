@@ -36,6 +36,7 @@ export const DEFAULT_BEHAVIOUR: WidgetBehaviour = {
   autoOpen: false,
   autoOpenDelayMs: 0,
   greetOnFirstVisit: true,
+  collectVisitorDetails: true,
   collectEmail: true,
   collectPhone: false,
   offlineMessage: "Thanks — we received your message and will reply shortly.",
