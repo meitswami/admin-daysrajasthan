@@ -4,7 +4,7 @@ set -euo pipefail
 ADMIN_DIR=/var/www/daysrajasthan-admin
 ADMIN_PORT=3102
 ADMIN_REPO="${ADMIN_REPO_URL:-https://github.com/meitswami/admin-daysrajasthan.git}"
-BRANCH="${1:-main}"
+BRANCH="${1:-master}"
 TOKEN_FILE=/opt/daysrajasthan/env/github-token
 
 export PATH="/usr/bin:$PATH"
