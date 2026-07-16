@@ -1,0 +1,17 @@
+Always read:
+AGENTS.md
+MASTER_PROMPT.md
+ARCHITECTURE.md
+
+Never generate placeholder code.
+Implement one feature at a time.
+Explain architecture before coding.
+
+Hard rules:
+- Single Next.js app (no apps/admin + apps/web).
+- modules/intelligence (not modules/ai).
+- Knowledge Engine is the only Supabase domain query layer for travel facts.
+- Intelligence never searches the database directly.
+- Chat is channel-agnostic (widget → WhatsApp → voice…).
+- Renderer converts JSON to UI; Intelligence does not return Markdown UI.
+- Design-system owns Royal Rajasthan branding.

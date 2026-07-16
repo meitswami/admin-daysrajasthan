@@ -1,0 +1,72 @@
+/**
+ * Embed snippet generators — one-click copy targets for admin UI.
+ */
+
+import type { EmbedFormat, EmbedSnippet } from "../types";
+
+export function resolvePublicBaseUrl(explicit?: string | null): string {
+  if (explicit) return explicit.replace(/\/$/, "");
+  if (typeof window !== "undefined") return window.location.origin;
+  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
+}
+
+export function generateEmbedSnippets(input: {
+  baseUrl?: string | null;
+  widgetKey: string;
+  websiteSlug?: string;
+}): EmbedSnippet[] {
+  const base = resolvePublicBaseUrl(input.baseUrl);
+  const key = input.widgetKey;
+  const iframeSrc = `${base}/embed/chat?key=${encodeURIComponent(key)}`;
+  const configUrl = `${base}/api/chat/widget/config?key=${encodeURIComponent(key)}`;
+  const scriptUrl = `${base}/api/chat/widget/script?key=${encodeURIComponent(key)}`;
+
+  return [
+    {
+      format: "script",
+      label: "Widget Script",
+      language: "html",
+      code: `<!-- Travel Days Chat Widget -->\n<script src="${scriptUrl}" async></script>`,
+    },
+    {
+      format: "react",
+      label: "React Component",
+      language: "tsx",
+      code: `import { useEffect } from "react";\n\nexport function TravelDaysChatWidget() {\n  useEffect(() => {\n    const s = document.createElement("script");\n    s.src = "${scriptUrl}";\n    s.async = true;\n    document.body.appendChild(s);\n    return () => { s.remove(); };\n  }, []);\n  return null;\n}`,
+    },
+    {
+      format: "nextjs",
+      label: "Next.js Component",
+      language: "tsx",
+      code: `"use client";\n\nimport Script from "next/script";\n\nexport function TravelDaysChatWidget() {\n  return (\n    <Script src="${scriptUrl}" strategy="afterInteractive" />\n  );\n}`,
+    },
+    {
+      format: "iframe",
+      label: "Iframe Embed",
+      language: "html",
+      code: `<iframe\n  src="${iframeSrc}"\n  title="Travel Days Chat"\n  style="position:fixed;right:16px;bottom:16px;width:380px;height:560px;border:0;border-radius:16px;z-index:9999;"\n  allow="clipboard-write"\n></iframe>`,
+    },
+    {
+      format: "api_endpoint",
+      label: "API Endpoint",
+      language: "text",
+      code: `GET ${configUrl}\nHeader (optional future): x-td-widget-key: ${key}\n\nReturns public widget config (offline/manual). AI conversations not enabled yet.`,
+    },
+  ];
+}
+
+export function getEmbedSnippet(
+  format: EmbedFormat,
+  input: { baseUrl?: string | null; widgetKey: string }
+): EmbedSnippet {
+  const all = generateEmbedSnippets(input);
+  const hit = all.find((s) => s.format === format);
+  if (!hit) throw new Error(`Unknown embed format: ${format}`);
+  return hit;
+}
+
+export const SUBMODULE = {
+  parent: "chat" as const,
+  id: "embed" as const,
+  description: "Widget script / React / Next / iframe / API embed generators",
+} as const;
