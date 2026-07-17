@@ -1,0 +1,1 @@
+{"query":"DO $outer$\nDECLARE\n  q text;\nBEGIN\n  SELECT convert_from(decode(string_agg(chunk_b64, '' ORDER BY chunk_ord), 'base64'), 'UTF8')\n    INTO q\n  FROM _sql_import_chunks\n  WHERE batch_key = 'batch_01_1784270283276' AND stmt_idx = 3;\n  EXECUTE q;\nEND\n$outer$;"}

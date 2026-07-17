@@ -1,0 +1,1 @@
+{"query":"DELETE FROM _sql_import_chunks WHERE batch_key = 'b02_r17'"}

@@ -80,7 +80,19 @@ function normalizeState(state: ChatPlatformState): ChatPlatformState {
       email: c.email ?? null,
     })),
     settings: { ...DEFAULT_SETTINGS, ...state.settings },
-    providers: state.providers?.length ? state.providers : DEFAULT_PROVIDERS,
+    providers: state.providers?.length
+      ? state.providers.map((p) => ({
+          ...DEFAULT_PROVIDERS.find((d) => d.providerId === p.providerId),
+          ...p,
+          modelId: p.modelId ?? null,
+          apiKeyMasked: p.apiKeyMasked ?? null,
+          hasApiKey: p.hasApiKey ?? false,
+          status: p.status ?? "idle",
+          lastSuccessAt: p.lastSuccessAt ?? null,
+          lastError: p.lastError ?? null,
+          lastTestedAt: p.lastTestedAt ?? null,
+        }))
+      : DEFAULT_PROVIDERS,
   };
 }
 

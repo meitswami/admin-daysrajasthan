@@ -1,0 +1,7 @@
+INSERT INTO itineraries (id, package_name, destination, slug, pdf_url, cover_image_url, package_type, package_duration, show_on_website, is_trending, display_mode, status, download_count, created_at, updated_at) VALUES
+('acca72ad-2327-67e3-238e-ee4899f3c1ef', '01 Day Jaipur Tour Package', 'Jaipur', 'dr001-01-day-jaipur-tour-package', NULL, NULL, 'Domestic', '01 Day', true, false, 'grid', 'active', 0, now(), now()),
+('7e0cbe35-7b94-32a8-543f-159041043f41', '01 Day Jodhpur Tour Package', 'Jodhpur', 'dr002-01-day-jodhpur-tour-package', NULL, NULL, 'Domestic', '01 Day', true, false, 'grid', 'active', 0, now(), now()),
+('ca5ef6c9-819f-222d-717a-f82b63e185b8', '01 Day Udaipur Tour Package', 'Udaipur', 'dr003-01-day-udaipur-tour-package', NULL, NULL, 'Domestic', '01 Day', true, false, 'grid', 'active', 0, now(), now()),
+('f68e15f1-0a88-2431-56a2-4238f90aee10', '02 Days Jaipur Tour Package', 'Jaipur', 'dr004-02-days-jaipur-tour-package', NULL, NULL, 'Domestic', '01 Night / 02 Days', true, false, 'grid', 'active', 0, now(), now()),
+('6508d009-6820-7451-b94e-f063bdf2c7f4', '02 Days Jodhpur Tour Package', 'Jodhpur', 'dr005-02-days-jodhpur-tour-package', NULL, NULL, 'Domestic', '01 Night / 02 Days', true, false, 'grid', 'active', 0, now(), now())
+ON CONFLICT (id) DO UPDATE SET package_name = EXCLUDED.package_name, destination = EXCLUDED.destination, slug = EXCLUDED.slug, package_type = EXCLUDED.package_type, package_duration = EXCLUDED.package_duration, status = EXCLUDED.status, updated_at = now();

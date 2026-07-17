@@ -83,9 +83,36 @@ export {
   getProvider,
   listProviders,
   registerProvider,
+  resolveProviderOrder,
   runProvider,
+  runWithFailover,
   selectProvider,
 } from "./provider";
+export { githubModelsProvider } from "./provider/github-models";
+export { groqProvider } from "./provider/groq";
+export { huggingfaceProvider, normalizeHuggingFaceModelId } from "./provider/huggingface";
+export {
+  DEFAULT_GITHUB_MODELS_MODEL,
+  DEFAULT_GROQ_MODEL,
+  DEFAULT_HF_MODEL,
+  PROVIDER_TIMEOUT_MS,
+} from "./constants";
+export {
+  clearProviderApiKey,
+  getActiveProviderId,
+  getMaskedProviderApiKey,
+  getProviderApiKey,
+  getProviderRuntimeStatus,
+  hasProviderApiKey,
+  listProviderRuntimeStatuses,
+  markProviderError,
+  markProviderSuccess,
+  maskApiKey,
+  setProviderApiKey,
+  setProviderEnabled,
+  setProviderModel,
+  syncProviderConfigFromSlots,
+} from "./provider/secrets";
 
 export { SUBMODULE as formatter } from "./formatter";
 export { formatIntelligenceBlocks } from "./formatter";

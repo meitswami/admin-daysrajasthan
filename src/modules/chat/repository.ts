@@ -13,13 +13,65 @@ import {
   DEFAULT_SETTINGS,
   createDefaultWebsite,
 } from "./constants";
-import type { ChatAiMode, ChatPlatformState, ChatWebsite } from "./types";
+import type { AiProviderSlot, ChatAiMode, ChatPlatformState, ChatWebsite } from "./types";
 
 function migrateAiMode(mode: string | undefined): ChatAiMode {
   if (mode === "ai" || mode === "offline" || mode === "disabled") return mode;
   if (mode === "ai_ready_future") return "ai";
   if (mode === "manual") return "offline";
   return "ai";
+}
+
+function normalizeStoredHfModel(modelId: string | null | undefined): string | null {
+  if (modelId == null) return null;
+  const raw = modelId.trim();
+  if (!raw) return null;
+  if (raw.includes(":")) return raw;
+  if (raw.toLowerCase() === "qwen/qwen2.5-3b-instruct") {
+    return "Qwen/Qwen2.5-3B-Instruct:featherless-ai";
+  }
+  return raw;
+}
+
+function migrateProviders(providers: AiProviderSlot[] | undefined): AiProviderSlot[] {
+  const base = DEFAULT_PROVIDERS.map((d) => ({ ...d }));
+  if (!providers?.length) return base;
+  const byId = new Map(providers.map((p) => [p.providerId, p]));
+  const merged = base.map((def) => {
+    const prev = byId.get(def.providerId);
+    if (!prev) return def;
+    const modelId =
+      def.providerId === "huggingface"
+        ? normalizeStoredHfModel(prev.modelId ?? def.modelId)
+        : (prev.modelId ?? def.modelId);
+    return {
+      ...def,
+      ...prev,
+      modelId,
+      apiKeyMasked: prev.apiKeyMasked ?? null,
+      hasApiKey: prev.hasApiKey ?? false,
+      status: prev.status ?? def.status,
+      lastSuccessAt: prev.lastSuccessAt ?? null,
+      lastError: prev.lastError ?? null,
+      lastTestedAt: prev.lastTestedAt ?? null,
+    };
+  });
+  for (const p of providers) {
+    if (!merged.some((m) => m.providerId === p.providerId)) {
+      merged.push({
+        ...p,
+        modelId:
+          p.providerId === "huggingface" ? normalizeStoredHfModel(p.modelId) : (p.modelId ?? null),
+        apiKeyMasked: p.apiKeyMasked ?? null,
+        hasApiKey: p.hasApiKey ?? false,
+        status: p.status ?? "idle",
+        lastSuccessAt: p.lastSuccessAt ?? null,
+        lastError: p.lastError ?? null,
+        lastTestedAt: p.lastTestedAt ?? null,
+      });
+    }
+  }
+  return merged;
 }
 
 function migrateWebsites(websites: ChatWebsite[]): ChatWebsite[] {
@@ -83,7 +135,7 @@ export function loadChatPlatformState(): ChatPlatformState {
       messages: parsed.messages ?? [],
       analyticsLog: parsed.analyticsLog ?? [],
       settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-      providers: parsed.providers?.length ? parsed.providers : base.providers,
+      providers: migrateProviders(parsed.providers as AiProviderSlot[] | undefined),
     };
   } catch {
     return emptyState();

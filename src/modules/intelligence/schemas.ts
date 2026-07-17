@@ -34,6 +34,7 @@ export const intelligenceIntentSchema = z.enum([
 export const providerIdSchema = z.enum([
   "huggingface",
   "github-models",
+  "groq",
   "openrouter",
   "local",
   "azure",

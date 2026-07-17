@@ -1,0 +1,77 @@
+﻿[
+  {
+    "created_at": "2026-04-12T07:13:49.188776Z",
+    "database": {
+      "host": "db.cyydprpucjeiscetrdfa.supabase.co",
+      "postgres_engine": "17",
+      "release_channel": "ga",
+      "version": "17.6.1.104"
+    },
+    "id": "cyydprpucjeiscetrdfa",
+    "linked": false,
+    "name": "kutumbika-Society-management-system",
+    "organization_id": "jwvscomirbzyjrfiseub",
+    "organization_slug": "jwvscomirbzyjrfiseub",
+    "ref": "cyydprpucjeiscetrdfa",
+    "region": "ap-northeast-1",
+    "status": "ACTIVE_HEALTHY"
+  },
+  {
+    "created_at": "2026-05-16T18:59:56.083322Z",
+    "database": {
+      "host": "db.whzmtzatkxgiomwlwkgy.supabase.co",
+      "postgres_engine": "17",
+      "release_channel": "ga",
+      "version": "17.6.1.121"
+    },
+    "id": "whzmtzatkxgiomwlwkgy",
+    "linked": false,
+    "name": "e-Patrolling",
+    "organization_id": "jwvscomirbzyjrfiseub",
+    "organization_slug": "jwvscomirbzyjrfiseub",
+    "ref": "whzmtzatkxgiomwlwkgy",
+    "region": "ap-northeast-1",
+    "status": "INACTIVE"
+  },
+  {
+    "created_at": "2026-07-04T10:21:33.353626Z",
+    "database": {
+      "host": "db.vvohulfdouimgetqvsvz.supabase.co",
+      "postgres_engine": "17",
+      "release_channel": "ga",
+      "version": "17.6.1.141"
+    },
+    "id": "vvohulfdouimgetqvsvz",
+    "linked": false,
+    "name": "Accounts",
+    "organization_id": "jwvscomirbzyjrfiseub",
+    "organization_slug": "jwvscomirbzyjrfiseub",
+    "ref": "vvohulfdouimgetqvsvz",
+    "region": "ap-south-1",
+    "status": "INACTIVE"
+  },
+  {
+    "created_at": "2025-12-29T08:19:15.591724Z",
+    "database": {
+      "host": "db.wxeponjomqzaobmmqvwn.supabase.co",
+      "postgres_engine": "17",
+      "release_channel": "ga",
+      "version": "17.6.1.063"
+    },
+    "id": "wxeponjomqzaobmmqvwn",
+    "linked": false,
+    "name": "AI Vision MS",
+    "organization_id": "jwvscomirbzyjrfiseub",
+    "organization_slug": "jwvscomirbzyjrfiseub",
+    "ref": "wxeponjomqzaobmmqvwn",
+    "region": "ap-south-1",
+    "status": "INACTIVE"
+  }
+]
+node.exe : Cannot find project ref. Have you run supabase link?
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Cannot find pro... supabase link?:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

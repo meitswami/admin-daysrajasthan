@@ -1,0 +1,1 @@
+{"query":"INSERT INTO itinerary_revisions (id, itinerary_id, version_number, parent_revision_id, milestone_label, change_summary, save_type, snapshot, snapshot_checksum, created_at) VALUES\n(id);"}

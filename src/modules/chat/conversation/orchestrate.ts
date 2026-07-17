@@ -20,6 +20,7 @@ import {
   ensureServerChatPlatformState,
   mutateServerChatPlatformState,
 } from "../server-store";
+import { syncProviderConfigFromSlots } from "@/modules/intelligence";
 import type {
   ChatAiMode,
   ChatConversationStub,
@@ -378,7 +379,7 @@ function preferredLocalProvider(): ProviderId {
     .filter((p) => p.enabled && p.providerId !== "none")
     .sort((a, b) => a.priority - b.priority);
   const first = enabled[0]?.providerId;
-  return (first as ProviderId) || "local";
+  return (first as ProviderId) || "github-models";
 }
 
 function getConversationBySession(sessionId: string): ChatConversationStub | undefined {
@@ -391,6 +392,15 @@ function getConversationBySession(sessionId: string): ChatConversationStub | und
 export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnResult> {
   const started = Date.now();
   ensureLocalProviderRegistered();
+  // Hot-reload provider enablement/priority/models from Super Admin (no restart)
+  syncProviderConfigFromSlots(
+    ensureServerChatPlatformState().providers.map((p) => ({
+      providerId: p.providerId,
+      enabled: p.enabled,
+      priority: p.priority,
+      modelId: p.modelId ?? null,
+    }))
+  );
 
   const resolved = await resolveWebsiteFromKey(input.key);
   if (!resolved) {
@@ -411,6 +421,9 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     email: input.email?.trim() || null,
     mode: config.aiMode,
   });
+
+  // Prior turns only (before this message) — used for follow-up LLM routing
+  const priorTurns = buildConversationTurns(session.id);
 
   const userMsg: ChatMessageRecord = {
     id: `msg_${Date.now().toString(36)}_u`,
@@ -520,7 +533,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
   const scope = site.knowledgeScope;
   const regionCode = scopeRegionCode(scope);
   const enrichedText = enrichTravelQuery(input.message.trim());
-  const conversationTurns = buildConversationTurns(session.id);
+  const conversationTurns = priorTurns;
 
   const intelligence = await runIntelligence({
     text: enrichedText,

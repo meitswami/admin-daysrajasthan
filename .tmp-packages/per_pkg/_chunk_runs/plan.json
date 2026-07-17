@@ -1,0 +1,275 @@
+{
+  "plan": [
+    {
+      "code": "DR021",
+      "chunks": 9,
+      "batchKey": "pkg_DR021"
+    },
+    {
+      "code": "DR022",
+      "chunks": 9,
+      "batchKey": "pkg_DR022"
+    },
+    {
+      "code": "DR023",
+      "chunks": 9,
+      "batchKey": "pkg_DR023"
+    },
+    {
+      "code": "DR024",
+      "chunks": 9,
+      "batchKey": "pkg_DR024"
+    },
+    {
+      "code": "DR025",
+      "chunks": 9,
+      "batchKey": "pkg_DR025"
+    },
+    {
+      "code": "DR026",
+      "chunks": 8,
+      "batchKey": "pkg_DR026"
+    },
+    {
+      "code": "DR027",
+      "chunks": 8,
+      "batchKey": "pkg_DR027"
+    },
+    {
+      "code": "DR028",
+      "chunks": 9,
+      "batchKey": "pkg_DR028"
+    },
+    {
+      "code": "DR029",
+      "chunks": 9,
+      "batchKey": "pkg_DR029"
+    },
+    {
+      "code": "DR077",
+      "chunks": 10,
+      "batchKey": "pkg_DR077"
+    },
+    {
+      "code": "DR030",
+      "chunks": 10,
+      "batchKey": "pkg_DR030"
+    },
+    {
+      "code": "DR031",
+      "chunks": 11,
+      "batchKey": "pkg_DR031"
+    },
+    {
+      "code": "DR032",
+      "chunks": 10,
+      "batchKey": "pkg_DR032"
+    },
+    {
+      "code": "DR033",
+      "chunks": 10,
+      "batchKey": "pkg_DR033"
+    },
+    {
+      "code": "DR034",
+      "chunks": 10,
+      "batchKey": "pkg_DR034"
+    },
+    {
+      "code": "DR035",
+      "chunks": 10,
+      "batchKey": "pkg_DR035"
+    },
+    {
+      "code": "DR036",
+      "chunks": 10,
+      "batchKey": "pkg_DR036"
+    },
+    {
+      "code": "DR037",
+      "chunks": 11,
+      "batchKey": "pkg_DR037"
+    },
+    {
+      "code": "DR038",
+      "chunks": 9,
+      "batchKey": "pkg_DR038"
+    },
+    {
+      "code": "DR039",
+      "chunks": 10,
+      "batchKey": "pkg_DR039"
+    },
+    {
+      "code": "DR040",
+      "chunks": 9,
+      "batchKey": "pkg_DR040"
+    },
+    {
+      "code": "DR041",
+      "chunks": 9,
+      "batchKey": "pkg_DR041"
+    },
+    {
+      "code": "DR042",
+      "chunks": 9,
+      "batchKey": "pkg_DR042"
+    },
+    {
+      "code": "DR043",
+      "chunks": 10,
+      "batchKey": "pkg_DR043"
+    },
+    {
+      "code": "DR078",
+      "chunks": 8,
+      "batchKey": "pkg_DR078"
+    },
+    {
+      "code": "DR044",
+      "chunks": 12,
+      "batchKey": "pkg_DR044"
+    },
+    {
+      "code": "DR045",
+      "chunks": 11,
+      "batchKey": "pkg_DR045"
+    },
+    {
+      "code": "DR046",
+      "chunks": 12,
+      "batchKey": "pkg_DR046"
+    },
+    {
+      "code": "DR047",
+      "chunks": 11,
+      "batchKey": "pkg_DR047"
+    },
+    {
+      "code": "DR048",
+      "chunks": 11,
+      "batchKey": "pkg_DR048"
+    },
+    {
+      "code": "DR049",
+      "chunks": 9,
+      "batchKey": "pkg_DR049"
+    },
+    {
+      "code": "DR050",
+      "chunks": 11,
+      "batchKey": "pkg_DR050"
+    },
+    {
+      "code": "DR051",
+      "chunks": 11,
+      "batchKey": "pkg_DR051"
+    },
+    {
+      "code": "DR052",
+      "chunks": 10,
+      "batchKey": "pkg_DR052"
+    },
+    {
+      "code": "DR053",
+      "chunks": 10,
+      "batchKey": "pkg_DR053"
+    },
+    {
+      "code": "DR054",
+      "chunks": 13,
+      "batchKey": "pkg_DR054"
+    },
+    {
+      "code": "DR055",
+      "chunks": 12,
+      "batchKey": "pkg_DR055"
+    },
+    {
+      "code": "DR056",
+      "chunks": 9,
+      "batchKey": "pkg_DR056"
+    },
+    {
+      "code": "DR057",
+      "chunks": 12,
+      "batchKey": "pkg_DR057"
+    },
+    {
+      "code": "DR058",
+      "chunks": 14,
+      "batchKey": "pkg_DR058"
+    },
+    {
+      "code": "DR059",
+      "chunks": 10,
+      "batchKey": "pkg_DR059"
+    },
+    {
+      "code": "DR060",
+      "chunks": 10,
+      "batchKey": "pkg_DR060"
+    },
+    {
+      "code": "DR061",
+      "chunks": 14,
+      "batchKey": "pkg_DR061"
+    },
+    {
+      "code": "DR062",
+      "chunks": 14,
+      "batchKey": "pkg_DR062"
+    },
+    {
+      "code": "DR063",
+      "chunks": 14,
+      "batchKey": "pkg_DR063"
+    },
+    {
+      "code": "DR064",
+      "chunks": 14,
+      "batchKey": "pkg_DR064"
+    },
+    {
+      "code": "DR065",
+      "chunks": 14,
+      "batchKey": "pkg_DR065"
+    },
+    {
+      "code": "DR066",
+      "chunks": 11,
+      "batchKey": "pkg_DR066"
+    },
+    {
+      "code": "DR067",
+      "chunks": 15,
+      "batchKey": "pkg_DR067"
+    },
+    {
+      "code": "DR068",
+      "chunks": 13,
+      "batchKey": "pkg_DR068"
+    },
+    {
+      "code": "DR069",
+      "chunks": 17,
+      "batchKey": "pkg_DR069"
+    },
+    {
+      "code": "DR070",
+      "chunks": 17,
+      "batchKey": "pkg_DR070"
+    },
+    {
+      "code": "DR071",
+      "chunks": 18,
+      "batchKey": "pkg_DR071"
+    },
+    {
+      "code": "DR072",
+      "chunks": 17,
+      "batchKey": "pkg_DR072"
+    }
+  ],
+  "totalPackages": 54
+}

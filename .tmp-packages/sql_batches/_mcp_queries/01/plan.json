@@ -1,0 +1,96 @@
+{
+  "batchNum": "01",
+  "batchKey": "batch_01_1784270283276",
+  "plan": [
+    {
+      "step": 1,
+      "label": "ensure_staging",
+      "file": "001_ensure_staging.json",
+      "queryLen": 202
+    },
+    {
+      "step": 2,
+      "label": "clear_staging",
+      "file": "002_clear_staging.json",
+      "queryLen": 65
+    },
+    {
+      "step": 3,
+      "label": "stmt1_direct",
+      "file": "003_stmt1_direct.json",
+      "queryLen": 1517
+    },
+    {
+      "step": 4,
+      "label": "stmt2_direct",
+      "file": "004_stmt2_direct.json",
+      "queryLen": 2202
+    },
+    {
+      "step": 5,
+      "label": "stmt3_chunk1",
+      "file": "005_stmt3_chunk1.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 6,
+      "label": "stmt3_chunk2",
+      "file": "006_stmt3_chunk2.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 7,
+      "label": "stmt3_chunk3",
+      "file": "007_stmt3_chunk3.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 8,
+      "label": "stmt3_chunk4",
+      "file": "008_stmt3_chunk4.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 9,
+      "label": "stmt3_chunk5",
+      "file": "009_stmt3_chunk5.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 10,
+      "label": "stmt3_chunk6",
+      "file": "010_stmt3_chunk6.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 11,
+      "label": "stmt3_chunk7",
+      "file": "011_stmt3_chunk7.json",
+      "queryLen": 6119
+    },
+    {
+      "step": 12,
+      "label": "stmt3_chunk8",
+      "file": "012_stmt3_chunk8.json",
+      "queryLen": 1239
+    },
+    {
+      "step": 13,
+      "label": "stmt3_exec",
+      "file": "013_stmt3_exec.json",
+      "queryLen": 254
+    },
+    {
+      "step": 14,
+      "label": "stmt4_direct",
+      "file": "014_stmt4_direct.json",
+      "queryLen": 783
+    },
+    {
+      "step": 15,
+      "label": "cleanup_staging",
+      "file": "015_cleanup_staging.json",
+      "queryLen": 74
+    }
+  ]
+}

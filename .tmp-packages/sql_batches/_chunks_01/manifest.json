@@ -1,0 +1,33 @@
+{
+  "batch": "01",
+  "statements": [
+    {
+      "index": 1,
+      "sqlLen": 1516,
+      "b64Len": 2024,
+      "chunks": 1,
+      "direct": true
+    },
+    {
+      "index": 2,
+      "sqlLen": 2201,
+      "b64Len": 2936,
+      "chunks": 1,
+      "direct": true
+    },
+    {
+      "index": 3,
+      "sqlLen": 32303,
+      "b64Len": 43120,
+      "chunks": 6,
+      "direct": false
+    },
+    {
+      "index": 4,
+      "sqlLen": 782,
+      "b64Len": 1044,
+      "chunks": 1,
+      "direct": true
+    }
+  ]
+}

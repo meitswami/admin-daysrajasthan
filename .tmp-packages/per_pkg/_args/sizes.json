@@ -1,0 +1,374 @@
+[
+  {
+    "code": "DR014",
+    "sqlLen": 11212,
+    "argsLen": 12167,
+    "days": 4
+  },
+  {
+    "code": "DR015",
+    "sqlLen": 11069,
+    "argsLen": 12022,
+    "days": 4
+  },
+  {
+    "code": "DR016",
+    "sqlLen": 11991,
+    "argsLen": 13028,
+    "days": 4
+  },
+  {
+    "code": "DR017",
+    "sqlLen": 10337,
+    "argsLen": 11232,
+    "days": 4
+  },
+  {
+    "code": "DR018",
+    "sqlLen": 9084,
+    "argsLen": 9851,
+    "days": 4
+  },
+  {
+    "code": "DR019",
+    "sqlLen": 10114,
+    "argsLen": 10988,
+    "days": 4
+  },
+  {
+    "code": "DR020",
+    "sqlLen": 9183,
+    "argsLen": 9953,
+    "days": 4
+  },
+  {
+    "code": "DR076",
+    "sqlLen": 15017,
+    "argsLen": 16261,
+    "days": 5
+  },
+  {
+    "code": "DR021",
+    "sqlLen": 15963,
+    "argsLen": 17355,
+    "days": 5
+  },
+  {
+    "code": "DR022",
+    "sqlLen": 15911,
+    "argsLen": 17281,
+    "days": 5
+  },
+  {
+    "code": "DR023",
+    "sqlLen": 15965,
+    "argsLen": 17354,
+    "days": 5
+  },
+  {
+    "code": "DR024",
+    "sqlLen": 14670,
+    "argsLen": 15907,
+    "days": 5
+  },
+  {
+    "code": "DR025",
+    "sqlLen": 15939,
+    "argsLen": 17309,
+    "days": 5
+  },
+  {
+    "code": "DR026",
+    "sqlLen": 14343,
+    "argsLen": 15580,
+    "days": 5
+  },
+  {
+    "code": "DR027",
+    "sqlLen": 13116,
+    "argsLen": 14239,
+    "days": 5
+  },
+  {
+    "code": "DR028",
+    "sqlLen": 15658,
+    "argsLen": 17007,
+    "days": 5
+  },
+  {
+    "code": "DR029",
+    "sqlLen": 14664,
+    "argsLen": 15924,
+    "days": 5
+  },
+  {
+    "code": "DR077",
+    "sqlLen": 16965,
+    "argsLen": 18473,
+    "days": 6
+  },
+  {
+    "code": "DR030",
+    "sqlLen": 16772,
+    "argsLen": 18216,
+    "days": 6
+  },
+  {
+    "code": "DR031",
+    "sqlLen": 18293,
+    "argsLen": 19851,
+    "days": 6
+  },
+  {
+    "code": "DR032",
+    "sqlLen": 16789,
+    "argsLen": 18242,
+    "days": 6
+  },
+  {
+    "code": "DR033",
+    "sqlLen": 16563,
+    "argsLen": 17966,
+    "days": 6
+  },
+  {
+    "code": "DR034",
+    "sqlLen": 16496,
+    "argsLen": 17937,
+    "days": 6
+  },
+  {
+    "code": "DR035",
+    "sqlLen": 17685,
+    "argsLen": 19216,
+    "days": 6
+  },
+  {
+    "code": "DR036",
+    "sqlLen": 17974,
+    "argsLen": 19511,
+    "days": 6
+  },
+  {
+    "code": "DR037",
+    "sqlLen": 18399,
+    "argsLen": 20003,
+    "days": 6
+  },
+  {
+    "code": "DR038",
+    "sqlLen": 15696,
+    "argsLen": 17054,
+    "days": 6
+  },
+  {
+    "code": "DR039",
+    "sqlLen": 17647,
+    "argsLen": 19169,
+    "days": 6
+  },
+  {
+    "code": "DR040",
+    "sqlLen": 15962,
+    "argsLen": 17349,
+    "days": 6
+  },
+  {
+    "code": "DR041",
+    "sqlLen": 15648,
+    "argsLen": 17007,
+    "days": 6
+  },
+  {
+    "code": "DR042",
+    "sqlLen": 16070,
+    "argsLen": 17484,
+    "days": 6
+  },
+  {
+    "code": "DR043",
+    "sqlLen": 16684,
+    "argsLen": 18145,
+    "days": 6
+  },
+  {
+    "code": "DR078",
+    "sqlLen": 13958,
+    "argsLen": 15048,
+    "days": 7
+  },
+  {
+    "code": "DR044",
+    "sqlLen": 20185,
+    "argsLen": 21897,
+    "days": 7
+  },
+  {
+    "code": "DR045",
+    "sqlLen": 19525,
+    "argsLen": 21205,
+    "days": 7
+  },
+  {
+    "code": "DR046",
+    "sqlLen": 20268,
+    "argsLen": 22017,
+    "days": 7
+  },
+  {
+    "code": "DR047",
+    "sqlLen": 18593,
+    "argsLen": 20182,
+    "days": 7
+  },
+  {
+    "code": "DR048",
+    "sqlLen": 19532,
+    "argsLen": 21269,
+    "days": 7
+  },
+  {
+    "code": "DR049",
+    "sqlLen": 14527,
+    "argsLen": 15673,
+    "days": 7
+  },
+  {
+    "code": "DR050",
+    "sqlLen": 18303,
+    "argsLen": 19909,
+    "days": 7
+  },
+  {
+    "code": "DR051",
+    "sqlLen": 18673,
+    "argsLen": 20346,
+    "days": 7
+  },
+  {
+    "code": "DR052",
+    "sqlLen": 16777,
+    "argsLen": 18287,
+    "days": 7
+  },
+  {
+    "code": "DR053",
+    "sqlLen": 17022,
+    "argsLen": 18534,
+    "days": 7
+  },
+  {
+    "code": "DR054",
+    "sqlLen": 22727,
+    "argsLen": 24704,
+    "days": 8
+  },
+  {
+    "code": "DR055",
+    "sqlLen": 20396,
+    "argsLen": 22198,
+    "days": 8
+  },
+  {
+    "code": "DR056",
+    "sqlLen": 14794,
+    "argsLen": 16004,
+    "days": 8
+  },
+  {
+    "code": "DR057",
+    "sqlLen": 20025,
+    "argsLen": 21812,
+    "days": 8
+  },
+  {
+    "code": "DR058",
+    "sqlLen": 23837,
+    "argsLen": 25882,
+    "days": 9
+  },
+  {
+    "code": "DR059",
+    "sqlLen": 17117,
+    "argsLen": 18488,
+    "days": 9
+  },
+  {
+    "code": "DR060",
+    "sqlLen": 16346,
+    "argsLen": 17690,
+    "days": 9
+  },
+  {
+    "code": "DR061",
+    "sqlLen": 23695,
+    "argsLen": 25816,
+    "days": 9
+  },
+  {
+    "code": "DR062",
+    "sqlLen": 24000,
+    "argsLen": 26153,
+    "days": 10
+  },
+  {
+    "code": "DR063",
+    "sqlLen": 24610,
+    "argsLen": 26874,
+    "days": 10
+  },
+  {
+    "code": "DR064",
+    "sqlLen": 24277,
+    "argsLen": 26413,
+    "days": 10
+  },
+  {
+    "code": "DR065",
+    "sqlLen": 24854,
+    "argsLen": 27098,
+    "days": 10
+  },
+  {
+    "code": "DR066",
+    "sqlLen": 19609,
+    "argsLen": 21171,
+    "days": 11
+  },
+  {
+    "code": "DR067",
+    "sqlLen": 26011,
+    "argsLen": 28408,
+    "days": 11
+  },
+  {
+    "code": "DR068",
+    "sqlLen": 22075,
+    "argsLen": 23774,
+    "days": 12
+  },
+  {
+    "code": "DR069",
+    "sqlLen": 29934,
+    "argsLen": 32511,
+    "days": 12
+  },
+  {
+    "code": "DR070",
+    "sqlLen": 30219,
+    "argsLen": 32952,
+    "days": 14
+  },
+  {
+    "code": "DR071",
+    "sqlLen": 32251,
+    "argsLen": 35162,
+    "days": 14
+  },
+  {
+    "code": "DR072",
+    "sqlLen": 29317,
+    "argsLen": 32024,
+    "days": 14
+  }
+]

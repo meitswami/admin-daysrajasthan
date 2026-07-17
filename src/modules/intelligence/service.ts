@@ -12,7 +12,7 @@ import { retrieveViaSearch } from "./orchestrator";
 import { parseProviderText } from "./parser";
 import { planIntelligence } from "./planner";
 import { buildProviderPrompt } from "./prompt-builder";
-import { runProvider, selectProvider } from "./provider";
+import { runWithFailover } from "./provider";
 import { applySafetyRails } from "./safety";
 import { recordIntelligenceMetric, startIntelligenceSpan, endIntelligenceSpan } from "./telemetry";
 import type { IntelligenceRequest, IntelligenceResult, ProviderId } from "./types";
@@ -29,6 +29,22 @@ function fallbackNarrative(factsHitsCount: number): string {
     return "No catalog matches yet. Try another destination, package keyword, or travel style — results always come from Search + Knowledge.";
   }
   return "AI provider unavailable. Showing grounded Search + Knowledge results only.";
+}
+
+function searchOnlyNarrative(
+  hits: Array<{ title: string; subtitle: string | null; kind: string }>
+): string | null {
+  if (!hits.length) return null;
+  const lines = hits.slice(0, 6).map((h) => {
+    const label =
+      h.kind === "package"
+        ? "Package"
+        : h.kind === "destination"
+          ? "Destination"
+          : "Info";
+    return h.subtitle ? `• ${label}: ${h.title} — ${h.subtitle}` : `• ${label}: ${h.title}`;
+  });
+  return ["Here is what I found in our catalog:", ...lines].join("\n");
 }
 
 /**
@@ -64,31 +80,33 @@ export async function runIntelligence(input: unknown): Promise<IntelligenceResul
     let narrative: string | null = null;
 
     if (plan.needs.needAi) {
-      const adapter = await selectProvider(request.preferredProvider);
-      if (adapter) {
-        const prompt = buildProviderPrompt({
-          userText: request.text,
-          context,
-          plan,
-          facts,
-        });
-        try {
-          const result = await runProvider(adapter, prompt);
-          providerUsed = result.providerId;
-          const parsed = parseProviderText(result.rawText);
-          narrative = parsed.narrative || null;
-        } catch (err) {
-          usedFallback = true;
-          warnings.push(
-            err instanceof Error ? `Provider failed: ${err.message}` : "Provider failed"
-          );
-          narrative = fallbackNarrative(facts.hits.length);
+      try {
+        const result = await runWithFailover(
+          buildProviderPrompt({
+            userText: request.text,
+            context,
+            plan,
+            facts,
+          }),
+          request.preferredProvider
+        );
+        providerUsed = result.providerId;
+        const parsed = parseProviderText(result.rawText);
+        narrative = parsed.narrative || null;
+        if (result.attempted.length > 1) {
+          warnings.push(`Failover path: ${result.attempted.join(" → ")}`);
         }
-      } else {
+      } catch (err) {
         usedFallback = true;
-        warnings.push("No AI provider available — using Search + Knowledge fallback");
+        warnings.push(
+          err instanceof Error ? `Provider failed: ${err.message}` : "Provider failed"
+        );
         narrative = fallbackNarrative(facts.hits.length);
       }
+    } else if (plan.intent !== "greet") {
+      // Package / destination / FAQ / static — Search + Knowledge + Renderer only
+      narrative = searchOnlyNarrative(facts.hits) ?? fallbackNarrative(0);
+      providerUsed = "none";
     }
 
     let blocks = formatIntelligenceBlocks({

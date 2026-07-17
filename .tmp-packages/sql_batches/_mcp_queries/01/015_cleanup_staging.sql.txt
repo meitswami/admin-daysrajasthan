@@ -1,0 +1,1 @@
+DELETE FROM _sql_import_chunks WHERE batch_key = 'batch_01_1784270283276';

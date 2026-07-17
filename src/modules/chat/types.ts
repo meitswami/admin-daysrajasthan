@@ -48,6 +48,7 @@ export type AiProviderSlot = {
   providerId:
     | "huggingface"
     | "github-models"
+    | "groq"
     | "openrouter"
     | "openai"
     | "anthropic"
@@ -56,9 +57,19 @@ export type AiProviderSlot = {
     | "none";
   label: string;
   enabled: boolean;
-  /** Secrets stay in env — only keyed reference stored */
+  /** Env fallback hint — secrets never stored in this field */
   envKeyHint: string | null;
   priority: number;
+  /** Selected model id for hosted providers */
+  modelId?: string | null;
+  /** Masked key for UI only e.g. ghp_****abcd — never the raw secret */
+  apiKeyMasked?: string | null;
+  /** True when a key exists server-side or in env */
+  hasApiKey?: boolean;
+  status?: "idle" | "ready" | "error" | "disabled" | "untested";
+  lastSuccessAt?: string | null;
+  lastError?: string | null;
+  lastTestedAt?: string | null;
 };
 
 export type PromptTemplate = {

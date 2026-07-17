@@ -3,14 +3,23 @@ import type { ProviderId, TravelMemoryProfile } from "./types";
 export const INTELLIGENCE_MODULE_ID = "intelligence" as const;
 
 export const DEFAULT_PROVIDER_ORDER: ProviderId[] = [
-  "huggingface",
   "github-models",
+  "groq",
+  "local",
+  "huggingface",
   "openrouter",
   "openai",
   "anthropic",
   "azure",
-  "local",
 ];
+
+export const PROVIDER_TIMEOUT_MS = 45_000;
+
+/** GitHub Models catalog id (Mistral Small 3.1 family) */
+export const DEFAULT_GITHUB_MODELS_MODEL = "mistral-ai/mistral-small-2503";
+export const DEFAULT_GROQ_MODEL = "llama-3.1-8b-instant";
+/** HF Inference Router — matches OpenAI SDK baseURL https://router.huggingface.co/v1 */
+export const DEFAULT_HF_MODEL = "Qwen/Qwen2.5-3B-Instruct:featherless-ai";
 
 export const INTELLIGENCE_CACHE_PREFIX = "intelligence:v1:";
 

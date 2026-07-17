@@ -1,0 +1,92 @@
+[
+  {
+    "step": 1,
+    "file": "001.json",
+    "len": 691
+  },
+  {
+    "step": 2,
+    "file": "002.json",
+    "len": 727
+  },
+  {
+    "step": 3,
+    "file": "003.json",
+    "len": 697
+  },
+  {
+    "step": 4,
+    "file": "004.json",
+    "len": 779
+  },
+  {
+    "step": 5,
+    "file": "005.json",
+    "len": 691
+  },
+  {
+    "step": 7,
+    "file": "007.json",
+    "len": 478
+  },
+  {
+    "step": 8,
+    "file": "008.json",
+    "len": 869
+  },
+  {
+    "step": 9,
+    "file": "009.json",
+    "len": 882
+  },
+  {
+    "step": 10,
+    "file": "010.json",
+    "len": 871
+  },
+  {
+    "step": 11,
+    "file": "011.json",
+    "len": 899
+  },
+  {
+    "step": 12,
+    "file": "012.json",
+    "len": 869
+  },
+  {
+    "step": 14,
+    "file": "014.json",
+    "len": 540
+  },
+  {
+    "step": 15,
+    "file": "015.json",
+    "len": 8080
+  },
+  {
+    "step": 16,
+    "file": "016.json",
+    "len": 9866
+  },
+  {
+    "step": 17,
+    "file": "017.json",
+    "len": 11049
+  },
+  {
+    "step": 18,
+    "file": "018.json",
+    "len": 8849
+  },
+  {
+    "step": 19,
+    "file": "019.json",
+    "len": 7964
+  },
+  {
+    "step": 21,
+    "file": "021.json",
+    "len": 783
+  }
+]

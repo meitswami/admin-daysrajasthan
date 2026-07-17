@@ -1,0 +1,274 @@
+{
+  "uploads": [
+    {
+      "code": "DR021",
+      "uploadBytes": 21643,
+      "chunks": 8
+    },
+    {
+      "code": "DR022",
+      "uploadBytes": 21571,
+      "chunks": 8
+    },
+    {
+      "code": "DR023",
+      "uploadBytes": 21643,
+      "chunks": 8
+    },
+    {
+      "code": "DR024",
+      "uploadBytes": 19902,
+      "chunks": 7
+    },
+    {
+      "code": "DR025",
+      "uploadBytes": 21615,
+      "chunks": 8
+    },
+    {
+      "code": "DR026",
+      "uploadBytes": 19454,
+      "chunks": 7
+    },
+    {
+      "code": "DR027",
+      "uploadBytes": 17797,
+      "chunks": 6
+    },
+    {
+      "code": "DR028",
+      "uploadBytes": 21210,
+      "chunks": 7
+    },
+    {
+      "code": "DR029",
+      "uploadBytes": 19886,
+      "chunks": 7
+    },
+    {
+      "code": "DR077",
+      "uploadBytes": 22975,
+      "chunks": 8
+    },
+    {
+      "code": "DR030",
+      "uploadBytes": 22719,
+      "chunks": 8
+    },
+    {
+      "code": "DR031",
+      "uploadBytes": 24772,
+      "chunks": 9
+    },
+    {
+      "code": "DR032",
+      "uploadBytes": 22739,
+      "chunks": 8
+    },
+    {
+      "code": "DR033",
+      "uploadBytes": 22439,
+      "chunks": 8
+    },
+    {
+      "code": "DR034",
+      "uploadBytes": 22351,
+      "chunks": 8
+    },
+    {
+      "code": "DR035",
+      "uploadBytes": 23943,
+      "chunks": 8
+    },
+    {
+      "code": "DR036",
+      "uploadBytes": 24327,
+      "chunks": 8
+    },
+    {
+      "code": "DR037",
+      "uploadBytes": 24924,
+      "chunks": 9
+    },
+    {
+      "code": "DR038",
+      "uploadBytes": 21258,
+      "chunks": 7
+    },
+    {
+      "code": "DR039",
+      "uploadBytes": 23883,
+      "chunks": 8
+    },
+    {
+      "code": "DR040",
+      "uploadBytes": 21643,
+      "chunks": 8
+    },
+    {
+      "code": "DR041",
+      "uploadBytes": 21198,
+      "chunks": 7
+    },
+    {
+      "code": "DR042",
+      "uploadBytes": 21783,
+      "chunks": 8
+    },
+    {
+      "code": "DR043",
+      "uploadBytes": 22599,
+      "chunks": 8
+    },
+    {
+      "code": "DR078",
+      "uploadBytes": 18942,
+      "chunks": 7
+    },
+    {
+      "code": "DR044",
+      "uploadBytes": 27296,
+      "chunks": 9
+    },
+    {
+      "code": "DR045",
+      "uploadBytes": 26420,
+      "chunks": 9
+    },
+    {
+      "code": "DR046",
+      "uploadBytes": 27442,
+      "chunks": 10
+    },
+    {
+      "code": "DR047",
+      "uploadBytes": 25172,
+      "chunks": 9
+    },
+    {
+      "code": "DR048",
+      "uploadBytes": 26424,
+      "chunks": 9
+    },
+    {
+      "code": "DR049",
+      "uploadBytes": 19706,
+      "chunks": 7
+    },
+    {
+      "code": "DR050",
+      "uploadBytes": 24784,
+      "chunks": 9
+    },
+    {
+      "code": "DR051",
+      "uploadBytes": 25276,
+      "chunks": 9
+    },
+    {
+      "code": "DR052",
+      "uploadBytes": 22723,
+      "chunks": 8
+    },
+    {
+      "code": "DR053",
+      "uploadBytes": 23051,
+      "chunks": 8
+    },
+    {
+      "code": "DR054",
+      "uploadBytes": 30744,
+      "chunks": 11
+    },
+    {
+      "code": "DR055",
+      "uploadBytes": 27610,
+      "chunks": 10
+    },
+    {
+      "code": "DR056",
+      "uploadBytes": 20058,
+      "chunks": 7
+    },
+    {
+      "code": "DR057",
+      "uploadBytes": 27092,
+      "chunks": 9
+    },
+    {
+      "code": "DR058",
+      "uploadBytes": 32216,
+      "chunks": 11
+    },
+    {
+      "code": "DR059",
+      "uploadBytes": 23183,
+      "chunks": 8
+    },
+    {
+      "code": "DR060",
+      "uploadBytes": 22163,
+      "chunks": 8
+    },
+    {
+      "code": "DR061",
+      "uploadBytes": 32024,
+      "chunks": 11
+    },
+    {
+      "code": "DR062",
+      "uploadBytes": 32432,
+      "chunks": 11
+    },
+    {
+      "code": "DR063",
+      "uploadBytes": 33244,
+      "chunks": 11
+    },
+    {
+      "code": "DR064",
+      "uploadBytes": 32800,
+      "chunks": 11
+    },
+    {
+      "code": "DR065",
+      "uploadBytes": 33598,
+      "chunks": 12
+    },
+    {
+      "code": "DR066",
+      "uploadBytes": 26524,
+      "chunks": 9
+    },
+    {
+      "code": "DR067",
+      "uploadBytes": 35146,
+      "chunks": 12
+    },
+    {
+      "code": "DR068",
+      "uploadBytes": 29846,
+      "chunks": 10
+    },
+    {
+      "code": "DR069",
+      "uploadBytes": 40434,
+      "chunks": 14
+    },
+    {
+      "code": "DR070",
+      "uploadBytes": 40810,
+      "chunks": 14
+    },
+    {
+      "code": "DR071",
+      "uploadBytes": 43536,
+      "chunks": 15
+    },
+    {
+      "code": "DR072",
+      "uploadBytes": 39630,
+      "chunks": 14
+    }
+  ]
+}

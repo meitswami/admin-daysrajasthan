@@ -31,6 +31,7 @@ import {
   updateProviders,
   updateWebsite,
   type ChatHandoffMode,
+  type AiProviderSlot,
   type ChatPlatformState,
   type EmbedSnippet,
   type WidgetApiKey,
@@ -114,6 +115,16 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
               }
             : prev
         );
+      })
+      .catch(() => undefined);
+
+    void fetch("/api/chat/platform/providers")
+      .then(async (res) => {
+        const json = (await res.json()) as {
+          data?: { providers?: ChatPlatformState["providers"] };
+        };
+        if (!json.data?.providers?.length) return;
+        setState((prev) => (prev ? { ...prev, providers: json.data!.providers! } : prev));
       })
       .catch(() => undefined);
   }, []);
@@ -639,39 +650,328 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
       )}
 
       {section === "providers" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">AI Providers</CardTitle>
-            <CardDescription>
-              Local light path: Ollama / llama.cpp (`OLLAMA_BASE_URL`, `OLLAMA_MODEL=qwen2.5:1.5b`).
-              Falls back to catalog mock when the local model is offline.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {state.providers.map((p, idx) => (
-              <div
-                key={p.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-stone-100 px-3 py-2 text-sm"
-              >
-                <div>
-                  <p className="font-medium">{p.label}</p>
-                  <p className="text-xs text-stone-500">
-                    {p.envKeyHint ? `Env: ${p.envKeyHint}` : "No secret"} · priority {p.priority}
-                  </p>
-                </div>
-                <Toggle
-                  checked={p.enabled}
-                  onChange={(v) => {
-                    const next = [...state.providers];
-                    next[idx] = { ...p, enabled: v };
-                    updateProviders(next);
-                    refresh();
-                  }}
-                />
-              </div>
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">AI Providers</CardTitle>
+              <CardDescription>
+                Priority failover: GitHub Models → Groq → Local → Mock. Enter API keys here — they are
+                stored server-side and never shown again (masked only). Enable + Save activates
+                immediately (no restart).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <p>
+                <span className="font-medium">Current active provider: </span>
+                <span className="font-mono text-amber-800">
+                  {state.providers.find((p) => p.status === "ready" && p.enabled)?.label ??
+                    state.providers.find((p) => p.enabled)?.label ??
+                    "None"}
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+
+          {state.providers
+            .slice()
+            .sort((a, b) => a.priority - b.priority)
+            .map((p) => (
+              <Card key={p.id}>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base">{p.label}</CardTitle>
+                      <CardDescription>
+                        {p.providerId}
+                        {p.envKeyHint ? ` · env fallback: ${p.envKeyHint}` : ""}
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        variant={
+                          !p.enabled
+                            ? "default"
+                            : p.status === "ready"
+                              ? "success"
+                              : p.status === "error"
+                                ? "danger"
+                                : "warning"
+                        }
+                      >
+                        {!p.enabled
+                          ? "disabled"
+                          : p.status === "disabled"
+                            ? "idle"
+                            : (p.status ?? "idle")}
+                      </Badge>
+                      <Toggle
+                        checked={p.enabled}
+                        onChange={(v) => {
+                          const next = state.providers.map((x) =>
+                            x.id === p.id
+                              ? {
+                                  ...x,
+                                  enabled: v,
+                                  status: (v
+                                    ? x.status === "disabled"
+                                      ? "idle"
+                                      : (x.status ?? "idle")
+                                    : "disabled") as AiProviderSlot["status"],
+                                }
+                              : x
+                          );
+                          setState({ ...state, providers: next });
+                        }}
+                      />
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label>Priority (0 = primary)</Label>
+                    <Input
+                      className="mt-1.5"
+                      type="number"
+                      min={0}
+                      max={99}
+                      value={p.priority}
+                      onChange={(e) => {
+                        const priority = Number(e.target.value) || 0;
+                        const next = state.providers.map((x) =>
+                          x.id === p.id ? { ...x, priority } : x
+                        );
+                        setState({ ...state, providers: next });
+                      }}
+                    />
+                  </div>
+                  {(p.providerId === "github-models" ||
+                    p.providerId === "groq" ||
+                    p.providerId === "huggingface" ||
+                    p.providerId === "openrouter") && (
+                    <div>
+                      <Label>Model</Label>
+                      <Input
+                        className="mt-1.5 font-mono text-xs"
+                        value={p.modelId ?? ""}
+                        placeholder={
+                          p.providerId === "github-models"
+                            ? "mistral-ai/mistral-small-2503"
+                            : p.providerId === "groq"
+                              ? "llama-3.1-8b-instant"
+                              : p.providerId === "huggingface"
+                                ? "Qwen/Qwen2.5-3B-Instruct:featherless-ai"
+                                : "model-id"
+                        }
+                        onChange={(e) => {
+                          const next = state.providers.map((x) =>
+                            x.id === p.id ? { ...x, modelId: e.target.value } : x
+                          );
+                          setState({ ...state, providers: next });
+                        }}
+                      />
+                      {p.providerId === "huggingface" && (
+                        <p className="mt-1 text-[11px] text-stone-500">
+                          Include the inference provider suffix, e.g.{" "}
+                          <code className="text-[11px]">:featherless-ai</code> (HF model card →
+                          Featherless AI). Bare ids fail with model_not_supported.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {(p.providerId === "github-models" ||
+                    p.providerId === "groq" ||
+                    p.providerId === "huggingface" ||
+                    p.providerId === "openrouter") && (
+                    <div className="sm:col-span-2">
+                      <Label>API Key</Label>
+                      <Input
+                        className="mt-1.5 font-mono text-xs"
+                        type="password"
+                        autoComplete="off"
+                        placeholder={
+                          p.apiKeyMasked
+                            ? `Saved: ${p.apiKeyMasked} — paste new key to replace`
+                            : "Paste API key (shown once as masked after save)"
+                        }
+                        id={`key_${p.id}`}
+                        onChange={() => undefined}
+                      />
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          onClick={async () => {
+                            const el = document.getElementById(`key_${p.id}`) as HTMLInputElement | null;
+                            const raw = el?.value?.trim() ?? "";
+                            if (!raw) {
+                              show("Paste a key first");
+                              return;
+                            }
+                            const res = await fetch("/api/chat/platform/providers", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "save_key",
+                                providerId: p.providerId,
+                                apiKey: raw,
+                              }),
+                            });
+                            const json = (await res.json()) as {
+                              success?: boolean;
+                              message?: string;
+                              data?: { apiKeyMasked?: string };
+                            };
+                            if (!json.success) {
+                              show(json.message ?? "Key save failed");
+                              return;
+                            }
+                            if (el) el.value = "";
+                            const next = state.providers.map((x) =>
+                              x.id === p.id
+                                ? {
+                                    ...x,
+                                    apiKeyMasked: json.data?.apiKeyMasked ?? "****",
+                                    hasApiKey: true,
+                                  }
+                                : x
+                            );
+                            updateProviders(next);
+                            setState({ ...state, providers: next });
+                            show("API key saved (masked)");
+                          }}
+                        >
+                          Save key
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const res = await fetch("/api/chat/platform/providers", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "clear_key",
+                                providerId: p.providerId,
+                              }),
+                            });
+                            const json = (await res.json()) as { success?: boolean; message?: string };
+                            if (!json.success) {
+                              show(json.message ?? "Clear failed");
+                              return;
+                            }
+                            const next = state.providers.map((x) =>
+                              x.id === p.id
+                                ? { ...x, apiKeyMasked: null, hasApiKey: false, status: "untested" as const }
+                                : x
+                            );
+                            updateProviders(next);
+                            setState({ ...state, providers: next });
+                            show("API key cleared");
+                          }}
+                        >
+                          Clear key
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            // Persist config first so model/enable apply
+                            await fetch("/api/chat/platform/providers", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "save_config",
+                                providers: state.providers.map((x) => ({
+                                  id: x.id,
+                                  providerId: x.providerId,
+                                  label: x.label,
+                                  enabled: x.enabled,
+                                  envKeyHint: x.envKeyHint,
+                                  priority: x.priority,
+                                  modelId: x.modelId ?? null,
+                                })),
+                              }),
+                            });
+                            const res = await fetch("/api/chat/platform/providers", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({
+                                action: "test",
+                                providerId: p.providerId,
+                              }),
+                            });
+                            const json = (await res.json()) as {
+                              success?: boolean;
+                              message?: string;
+                              data?: { providers?: typeof state.providers; latencyMs?: number };
+                            };
+                            if (json.data?.providers) {
+                              updateProviders(json.data.providers);
+                              setState({ ...state, providers: json.data.providers });
+                            }
+                            show(
+                              json.success
+                                ? `${json.message}${json.data?.latencyMs != null ? ` (${json.data.latencyMs}ms)` : ""}`
+                                : json.message ?? "Test failed"
+                            );
+                          }}
+                        >
+                          Test Connection
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  <div className="sm:col-span-2 grid gap-1 text-xs text-stone-500">
+                    <p>Last success: {p.lastSuccessAt ? new Date(p.lastSuccessAt).toLocaleString() : "—"}</p>
+                    <p>Last tested: {p.lastTestedAt ? new Date(p.lastTestedAt).toLocaleString() : "—"}</p>
+                    {p.lastError && <p className="text-red-600">Last error: {p.lastError}</p>}
+                  </div>
+                </CardContent>
+              </Card>
             ))}
-          </CardContent>
-        </Card>
+
+          <Button
+            type="button"
+            onClick={async () => {
+              const res = await fetch("/api/chat/platform/providers", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  action: "save_config",
+                  providers: state.providers.map((x) => ({
+                    id: x.id,
+                    providerId: x.providerId,
+                    label: x.label,
+                    enabled: x.enabled,
+                    envKeyHint: x.envKeyHint,
+                    priority: x.priority,
+                    modelId: x.modelId ?? null,
+                  })),
+                }),
+              });
+              const json = (await res.json()) as {
+                success?: boolean;
+                message?: string;
+                data?: { providers?: typeof state.providers; activeProviderId?: string };
+              };
+              if (!json.success) {
+                show(json.message ?? "Save failed");
+                return;
+              }
+              if (json.data?.providers) {
+                updateProviders(json.data.providers);
+                setState({ ...state, providers: json.data.providers });
+              } else {
+                updateProviders(state.providers);
+              }
+              show(json.message ?? "Providers saved — active immediately");
+            }}
+          >
+            Save provider settings
+          </Button>
+        </div>
       )}
 
       {section === "prompts" && (

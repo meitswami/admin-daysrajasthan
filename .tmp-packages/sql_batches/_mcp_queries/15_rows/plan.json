@@ -1,0 +1,110 @@
+{
+  "batch": "15",
+  "plan": [
+    {
+      "step": 1,
+      "len": 586,
+      "file": "001.json"
+    },
+    {
+      "step": 2,
+      "len": 592,
+      "file": "002.json"
+    },
+    {
+      "step": 3,
+      "len": 608,
+      "file": "003.json"
+    },
+    {
+      "step": 4,
+      "len": 600,
+      "file": "004.json"
+    },
+    {
+      "step": 5,
+      "len": 606,
+      "file": "005.json"
+    },
+    {
+      "step": 6,
+      "len": 223,
+      "file": "006.json"
+    },
+    {
+      "step": 7,
+      "len": 221,
+      "file": "007.json"
+    },
+    {
+      "step": 8,
+      "len": 732,
+      "file": "008.json"
+    },
+    {
+      "step": 9,
+      "len": 735,
+      "file": "009.json"
+    },
+    {
+      "step": 10,
+      "len": 743,
+      "file": "010.json"
+    },
+    {
+      "step": 11,
+      "len": 739,
+      "file": "011.json"
+    },
+    {
+      "step": 12,
+      "len": 742,
+      "file": "012.json"
+    },
+    {
+      "step": 13,
+      "len": 351,
+      "file": "013.json"
+    },
+    {
+      "step": 14,
+      "len": 349,
+      "file": "014.json"
+    },
+    {
+      "step": 15,
+      "len": 19377,
+      "file": "015.json"
+    },
+    {
+      "step": 16,
+      "len": 25779,
+      "file": "016.json"
+    },
+    {
+      "step": 17,
+      "len": 21843,
+      "file": "017.json"
+    },
+    {
+      "step": 18,
+      "len": 29702,
+      "file": "018.json"
+    },
+    {
+      "step": 19,
+      "len": 29987,
+      "file": "019.json"
+    },
+    {
+      "step": 20,
+      "len": 183,
+      "file": "020.json"
+    },
+    {
+      "step": 21,
+      "len": 782,
+      "file": "021.json"
+    }
+  ]
+}

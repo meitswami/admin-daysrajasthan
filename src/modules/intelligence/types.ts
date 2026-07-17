@@ -103,6 +103,7 @@ export type PlannerDecision = {
 export type ProviderId =
   | "huggingface"
   | "github-models"
+  | "groq"
   | "openrouter"
   | "local"
   | "azure"

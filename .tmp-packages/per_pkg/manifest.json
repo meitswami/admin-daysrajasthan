@@ -1,0 +1,436 @@
+[
+  {
+    "code": "DR014",
+    "file": "DR014.sql",
+    "bytes": 11220,
+    "days": 4,
+    "title": "4 Days Jaisalmer & Bikaner Tour Package"
+  },
+  {
+    "code": "DR015",
+    "file": "DR015.sql",
+    "bytes": 11075,
+    "days": 4,
+    "title": "4 Days Jaisalmer & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR016",
+    "file": "DR016.sql",
+    "bytes": 11999,
+    "days": 4,
+    "title": "4 Days Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR017",
+    "file": "DR017.sql",
+    "bytes": 10343,
+    "days": 4,
+    "title": "4 Days Udaipur & Chittorgarh Tour Package"
+  },
+  {
+    "code": "DR018",
+    "file": "DR018.sql",
+    "bytes": 9094,
+    "days": 4,
+    "title": "4 Days Udaipur &Haldighati-Nathdwara Tour Package"
+  },
+  {
+    "code": "DR019",
+    "file": "DR019.sql",
+    "bytes": 10120,
+    "days": 4,
+    "title": "4 Days Udaipur & Kumbhalgarh Tour Package"
+  },
+  {
+    "code": "DR020",
+    "file": "DR020.sql",
+    "bytes": 9201,
+    "days": 4,
+    "title": "4 Days Udaipur & Mount Abu Tour Package"
+  },
+  {
+    "code": "DR076",
+    "file": "DR076.sql",
+    "bytes": 15023,
+    "days": 5,
+    "title": "05 Days Delhi, Agra & Jaipur Tour Package"
+  },
+  {
+    "code": "DR021",
+    "file": "DR021.sql",
+    "bytes": 15973,
+    "days": 5,
+    "title": "05 Days Jaipur-Chittorgarh & Udaipur Tour Package"
+  },
+  {
+    "code": "DR022",
+    "file": "DR022.sql",
+    "bytes": 15917,
+    "days": 5,
+    "title": "05 Days Jaipur-Jodhpur & Mount abu Tour Package"
+  },
+  {
+    "code": "DR023",
+    "file": "DR023.sql",
+    "bytes": 15973,
+    "days": 5,
+    "title": "05 Days Jaipur-Kumbhalgarh & Udaipur Tour Package"
+  },
+  {
+    "code": "DR024",
+    "file": "DR024.sql",
+    "bytes": 14684,
+    "days": 5,
+    "title": "05 Days Jaipur-Ajmer-Pushkar & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR025",
+    "file": "DR025.sql",
+    "bytes": 15951,
+    "days": 5,
+    "title": "05 Days Jaipur-Ajmer-Pushkar & Udaipur Tour Package"
+  },
+  {
+    "code": "DR026",
+    "file": "DR026.sql",
+    "bytes": 14349,
+    "days": 5,
+    "title": "05 Days Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR027",
+    "file": "DR027.sql",
+    "bytes": 13124,
+    "days": 5,
+    "title": "05 Days Jodhpur-Ranakpur& Mount abu Tour Package"
+  },
+  {
+    "code": "DR028",
+    "file": "DR028.sql",
+    "bytes": 15666,
+    "days": 5,
+    "title": "05 Days Udaipur-Chittorgarh & Mount abu Tour Package"
+  },
+  {
+    "code": "DR029",
+    "file": "DR029.sql",
+    "bytes": 14672,
+    "days": 5,
+    "title": "05 Days Udaipur-Kumbhalgarh & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR077",
+    "file": "DR077.sql",
+    "bytes": 16971,
+    "days": 6,
+    "title": "06 Days Delhi, Agra & Jaipur Tour Package"
+  },
+  {
+    "code": "DR030",
+    "file": "DR030.sql",
+    "bytes": 16778,
+    "days": 6,
+    "title": "06 Days Jaipur-Agra & Delhi Tour Package"
+  },
+  {
+    "code": "DR031",
+    "file": "DR031.sql",
+    "bytes": 18299,
+    "days": 6,
+    "title": "06 Days Jaipur-Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR032",
+    "file": "DR032.sql",
+    "bytes": 16795,
+    "days": 6,
+    "title": "06 Days Jaipur-Jodhpur & Udaipur Tour Package"
+  },
+  {
+    "code": "DR033",
+    "file": "DR033.sql",
+    "bytes": 16569,
+    "days": 6,
+    "title": "06 Days Jaipur-Pushkar-Chittorgarh & Udaipur Tour Package"
+  },
+  {
+    "code": "DR034",
+    "file": "DR034.sql",
+    "bytes": 16502,
+    "days": 6,
+    "title": "06 Days Jaipur-Ranthambhore & Udaipur Tour Package"
+  },
+  {
+    "code": "DR035",
+    "file": "DR035.sql",
+    "bytes": 17697,
+    "days": 6,
+    "title": "06 Days Jaipur-Udaipur & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR036",
+    "file": "DR036.sql",
+    "bytes": 17986,
+    "days": 6,
+    "title": "06 Days Jaipur-Udaipur & Kumbhalgarh Tour Package"
+  },
+  {
+    "code": "DR037",
+    "file": "DR037.sql",
+    "bytes": 18413,
+    "days": 6,
+    "title": "06 Days Jaipur-Udaipur & Mount Abu Tour Package"
+  },
+  {
+    "code": "DR038",
+    "file": "DR038.sql",
+    "bytes": 15702,
+    "days": 6,
+    "title": "06 Days Jodhpur-Jaisalmer & Bikaner Tour Package"
+  },
+  {
+    "code": "DR039",
+    "file": "DR039.sql",
+    "bytes": 17653,
+    "days": 6,
+    "title": "06 Days Jodhpur-Kumbhalgarh-Chittorgarh & Udaipur Tour Package"
+  },
+  {
+    "code": "DR040",
+    "file": "DR040.sql",
+    "bytes": 15972,
+    "days": 6,
+    "title": "06 Days Jodhpur-Mount abu &Udaipur Tour Package"
+  },
+  {
+    "code": "DR041",
+    "file": "DR041.sql",
+    "bytes": 15656,
+    "days": 6,
+    "title": "06 Days Jodhpur-Udaipur & Chittorgarh Tour Package"
+  },
+  {
+    "code": "DR042",
+    "file": "DR042.sql",
+    "bytes": 16076,
+    "days": 6,
+    "title": "06 Days Jodhpur-Udaipur & Jaipur Tour Package"
+  },
+  {
+    "code": "DR043",
+    "file": "DR043.sql",
+    "bytes": 16690,
+    "days": 6,
+    "title": "06 Days Udaipur-Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR078",
+    "file": "DR078.sql",
+    "bytes": 13964,
+    "days": 7,
+    "title": "07 Days Delhi, Agra & Jaipur Tour Package"
+  },
+  {
+    "code": "DR044",
+    "file": "DR044.sql",
+    "bytes": 20193,
+    "days": 7,
+    "title": "07 Days Jaipur-Ajmer-Pushkar-Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR045",
+    "file": "DR045.sql",
+    "bytes": 19535,
+    "days": 7,
+    "title": "07 Days Jaipur-Bikaner-Jaisalmer & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR046",
+    "file": "DR046.sql",
+    "bytes": 20282,
+    "days": 7,
+    "title": "07 Days Jaipur-Udaipur-Mount abu& Jodhpur Tour Package"
+  },
+  {
+    "code": "DR047",
+    "file": "DR047.sql",
+    "bytes": 18599,
+    "days": 7,
+    "title": "07 Days Jaipur-Ranthambhore-Udaipur & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR048",
+    "file": "DR048.sql",
+    "bytes": 19538,
+    "days": 7,
+    "title": "07 Days Jaipur-Ranthambhore-Udaipur & Mount abu Tour Package"
+  },
+  {
+    "code": "DR049",
+    "file": "DR049.sql",
+    "bytes": 14537,
+    "days": 7,
+    "title": "07 Days Jaisalmer-Jodhpur-Mount abu & Udaipur Tour Package"
+  },
+  {
+    "code": "DR050",
+    "file": "DR050.sql",
+    "bytes": 18309,
+    "days": 7,
+    "title": "07 Days Jaisalmer-Jodhpur-Pushkar & Jaipur Tour Package"
+  },
+  {
+    "code": "DR051",
+    "file": "DR051.sql",
+    "bytes": 18679,
+    "days": 7,
+    "title": "07 Days Jodhpur-Jaisalmer-Bikaner & Jaipur Tour Package"
+  },
+  {
+    "code": "DR052",
+    "file": "DR052.sql",
+    "bytes": 16783,
+    "days": 7,
+    "title": "07 Days Udaipur-Jodhpur-Jaisalmer & Bikaner Tour Package"
+  },
+  {
+    "code": "DR053",
+    "file": "DR053.sql",
+    "bytes": 17028,
+    "days": 7,
+    "title": "07 Days Udaipur-Jodhpur-Jaisalmer-Pushkar & Jaipur Tour Package"
+  },
+  {
+    "code": "DR054",
+    "file": "DR054.sql",
+    "bytes": 22741,
+    "days": 8,
+    "title": "08 Days Jaipur-Ajmer-Pushkar-Udaipur-Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR055",
+    "file": "DR055.sql",
+    "bytes": 20408,
+    "days": 8,
+    "title": "08 Days Jaipur-Ajmer-Pushkar-Bikaner-Jaisalmer & Jodhpur Tour Package"
+  },
+  {
+    "code": "DR056",
+    "file": "DR056.sql",
+    "bytes": 14802,
+    "days": 8,
+    "title": "08 Days Udaipur-Mount Abu-Jodhpur& Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR057",
+    "file": "DR057.sql",
+    "bytes": 20041,
+    "days": 8,
+    "title": "08 Days Delhi-Agra-Jaipur-Ajmer/Pushkar-Jodhpur Tour Package"
+  },
+  {
+    "code": "DR058",
+    "file": "DR058.sql",
+    "bytes": 23845,
+    "days": 9,
+    "title": "09 Days Jaipur-Bikaner-Jaisalmer-Jodhpur & Udaipur Tour Package"
+  },
+  {
+    "code": "DR059",
+    "file": "DR059.sql",
+    "bytes": 17127,
+    "days": 9,
+    "title": "09 Days Jaipur-Ranthambhore-Udaipur-Jodhpur& Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR060",
+    "file": "DR060.sql",
+    "bytes": 16362,
+    "days": 9,
+    "title": "09 Days Udaipur-Mount Abu-Jodhpur-Jaisalmer- Bikaner Tour Package"
+  },
+  {
+    "code": "DR061",
+    "file": "DR061.sql",
+    "bytes": 23701,
+    "days": 9,
+    "title": "09 Days Delhi-Agra-Jaipur-Ajmer/Pushkar-Udaipur-Mount Abu Tour Package"
+  },
+  {
+    "code": "DR062",
+    "file": "DR062.sql",
+    "bytes": 24006,
+    "days": 10,
+    "title": "10 Days Jaipur-Bikaner-Jaisalmer-Jodhpur-Udaipur-Ajmer/Puskhar-Jaipur Tour Package"
+  },
+  {
+    "code": "DR063",
+    "file": "DR063.sql",
+    "bytes": 24616,
+    "days": 10,
+    "title": "10 Days Mount Abu-Udaipur-Jodhpur-Jaisalmer- Bikaner-Jaipur Tour Package"
+  },
+  {
+    "code": "DR064",
+    "file": "DR064.sql",
+    "bytes": 24283,
+    "days": 10,
+    "title": "10 Days Jaipur-Ranthambhore-Udaipur-Jodhpur-Jaisalmer-Bikaner-Jaipur Tour Package"
+  },
+  {
+    "code": "DR065",
+    "file": "DR065.sql",
+    "bytes": 24860,
+    "days": 10,
+    "title": "10 Days Delhi-Agra-Jaipur-Ajmer/Pushkar-Jodhpur-Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR066",
+    "file": "DR066.sql",
+    "bytes": 19615,
+    "days": 11,
+    "title": "11 Days Jaipur-Ajmer/Pushkar-Kumbhalgarh-Udaipur-Jodhpur & Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR067",
+    "file": "DR067.sql",
+    "bytes": 26021,
+    "days": 11,
+    "title": "11 Days Jaipur-Bikaner-Jaisalmer-Jodhpur-Mount Abu-Udaipur-Ranthambhore Tour Package"
+  },
+  {
+    "code": "DR068",
+    "file": "DR068.sql",
+    "bytes": 22087,
+    "days": 12,
+    "title": "12 Days Jaipur-Pushkar-Bikaner-Jaisalmer-Jodhpur-Mount Abu-Udaipur-Ranthambhore Tour Package"
+  },
+  {
+    "code": "DR069",
+    "file": "DR069.sql",
+    "bytes": 29949,
+    "days": 12,
+    "title": "12 Days Delhi-Agra-Jaipur-Ajmer/Pushkar-Udaipur-Mount Abu-Jodhpur-Jaisalmer Tour Package"
+  },
+  {
+    "code": "DR070",
+    "file": "DR070.sql",
+    "bytes": 30231,
+    "days": 14,
+    "title": "14 Days Mount Abu-Udaipur-Chittorgarh-Pushkar-Jaipur-Bikaner-Jaisalmer-Jodhpur Tour Package"
+  },
+  {
+    "code": "DR071",
+    "file": "DR071.sql",
+    "bytes": 32257,
+    "days": 14,
+    "title": "14 Days Delhi-Agra-Jaipur-Ajmer/Pushkar-Udaipur-Mount Abu-Jodhpur-Jaisalmer-Bikaner-Jaipur Tour Package"
+  },
+  {
+    "code": "DR072",
+    "file": "DR072.sql",
+    "bytes": 29347,
+    "days": 14,
+    "title": "14 Days Jodhpur-Jaisalmer-Bikaner-Jaipur-Ranthambhore-Chittorgarh-Udaipur-Mount Abu Tour Package"
+  }
+]

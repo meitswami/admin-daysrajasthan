@@ -1,5 +1,4 @@
-﻿import { INTENT_CUES } from "../constants";
-import type {
+﻿import type {
   ExtractedEntity,
   IntelligenceIntent,
   IntelligenceRequest,
@@ -7,6 +6,7 @@ import type {
   PlannerNeeds,
   TravelMemoryProfile,
 } from "../types";
+import { INTENT_CUES } from "../constants";
 
 function detectIntent(text: string): { intent: IntelligenceIntent; confidence: number } {
   const lower = text.toLowerCase();
@@ -84,10 +84,32 @@ function extractEntities(text: string, memory: TravelMemoryProfile | null): Extr
   return entities;
 }
 
+/** Intents answered by Search → Knowledge → Renderer only (no LLM). */
+const SEARCH_ONLY_INTENTS = new Set<IntelligenceIntent>([
+  "greet",
+  "package_recommend",
+  "destination_recommend",
+  "explain_destination",
+  "faq",
+  "fallback_browse",
+]);
+
+/** Intents that always use an LLM when available. */
+const LLM_INTENTS = new Set<IntelligenceIntent>([
+  "compare_packages",
+  "travel_plan",
+  "suggest_route",
+  "optimize_plan",
+  "summarize",
+  "hotel_recommend",
+  "quotation_assist",
+]);
+
 function buildNeeds(
   intent: IntelligenceIntent,
   text: string,
-  surface: IntelligenceRequest["surface"]
+  surface: IntelligenceRequest["surface"],
+  conversationTurnCount: number
 ): PlannerNeeds {
   const baseQuery = text.trim();
   const needs: PlannerNeeds = {
@@ -110,38 +132,64 @@ function buildNeeds(
       needs.reason = "Greeting — no retrieval required";
       break;
     case "package_recommend":
-    case "compare_packages":
+      needs.needAi = false;
       needs.searchKinds = ["package", "destination"];
+      needs.reason = "Package search — Search + Renderer only";
       break;
     case "destination_recommend":
     case "explain_destination":
+      needs.needAi = false;
       needs.searchKinds = ["destination", "knowledge"];
+      needs.reason = "Destination details — Knowledge + Renderer only";
+      break;
+    case "faq":
+      needs.needAi = false;
+      needs.searchKinds = ["knowledge"];
+      needs.reason = "FAQ — Knowledge Engine only";
+      break;
+    case "fallback_browse":
+      needs.needAi = false;
+      needs.searchKinds = ["package", "destination", "knowledge"];
+      needs.reason = "Static browse — Search + Renderer only";
+      break;
+    case "compare_packages":
+      needs.needAi = true;
+      needs.searchKinds = ["package", "destination"];
+      needs.reason = "Package comparison — LLM with grounded facts";
       break;
     case "hotel_recommend":
+      needs.needAi = true;
       needs.searchKinds = ["knowledge", "package"];
       break;
     case "travel_plan":
     case "suggest_route":
     case "optimize_plan":
+      needs.needAi = true;
       needs.searchKinds = ["package", "destination", "knowledge"];
+      needs.reason = "Travel planning — LLM with grounded facts";
       break;
     case "quotation_assist":
+      needs.needAi = true;
       needs.needQuotation = true;
       needs.searchKinds = ["quotation", "package"];
       break;
     case "crm_assist":
+      needs.needAi = false;
       needs.needCustomerData = true;
       needs.searchKinds = ["customer", "lead"];
       break;
-    case "faq":
-      needs.searchKinds = ["knowledge"];
-      break;
-    case "fallback_browse":
+    case "summarize":
       needs.needAi = true;
-      needs.searchKinds = ["package", "destination", "knowledge"];
       break;
     default:
+      needs.needAi = LLM_INTENTS.has(intent) || !SEARCH_ONLY_INTENTS.has(intent);
       break;
+  }
+
+  // Conversational follow-up / personalized turns always use LLM (except pure greet)
+  if (conversationTurnCount > 0 && intent !== "greet") {
+    needs.needAi = true;
+    needs.reason = `${needs.reason} · conversational follow-up`;
   }
 
   if (surface === "quotation") needs.needQuotation = true;
@@ -160,12 +208,13 @@ export function planIntelligence(
 ): PlannerDecision {
   const { intent, confidence } = detectIntent(request.text);
   const entities = extractEntities(request.text, memory);
-  const needs = buildNeeds(intent, request.text, request.surface);
+  const turnCount = request.conversationTurns?.length ?? 0;
+  const needs = buildNeeds(intent, request.text, request.surface, turnCount);
   return { intent, entities, needs, confidence };
 }
 
 export const SUBMODULE = {
   parent: "intelligence" as const,
   id: "planner" as const,
-  description: "Decides AI / Search / Quotation / Memory needs before providers run",
+  description: "Intent / entity / needAi routing (Search-only vs LLM)",
 } as const;
