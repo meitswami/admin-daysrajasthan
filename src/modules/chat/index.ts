@@ -95,7 +95,12 @@ export {
   updateWebsite,
 } from "./service";
 
-export { generateEmbedSnippets, getEmbedSnippet, resolvePublicBaseUrl } from "./embed";
+export {
+  generateEmbedSnippets,
+  getEmbedSnippet,
+  resolvePublicBaseUrl,
+  resolveRequestPublicOrigin,
+} from "./embed";
 export { generateWidgetSecret, hashWidgetSecret } from "./keys";
 
 export { SUBMODULE as widget } from "./widget";

@@ -49,6 +49,7 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/login/update-password");
   const isPublicPath =
     request.nextUrl.pathname.startsWith("/proposal") ||
+    request.nextUrl.pathname.startsWith("/embed") ||
     request.nextUrl.pathname.startsWith("/api/public") ||
     request.nextUrl.pathname.startsWith("/api/itinerary-builder/share");
   const isProtected = !isAuthPage && !isPublicPath && !request.nextUrl.pathname.startsWith("/api");

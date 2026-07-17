@@ -1,4 +1,4 @@
-import { resolvePublicWidgetConfig } from "@/modules/chat";
+import { resolvePublicWidgetConfig, resolveRequestPublicOrigin } from "@/modules/chat";
 
 /**
  * Returns a small loader script that mounts the offline iframe widget.
@@ -6,7 +6,7 @@ import { resolvePublicWidgetConfig } from "@/modules/chat";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const key = url.searchParams.get("key") ?? "";
-  const origin = url.origin;
+  const origin = resolveRequestPublicOrigin(request);
 
   if (!key) {
     return new Response("/* Travel Days Chat: missing key */", {

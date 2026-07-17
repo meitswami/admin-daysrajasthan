@@ -4,10 +4,59 @@
 
 import type { EmbedFormat, EmbedSnippet } from "../types";
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+function isLoopbackHost(host: string): boolean {
+  const hostname = host.split(":")[0]?.toLowerCase() ?? "";
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}
+
 export function resolvePublicBaseUrl(explicit?: string | null): string {
-  if (explicit) return explicit.replace(/\/$/, "");
+  if (explicit) return stripTrailingSlash(explicit);
   if (typeof window !== "undefined") return window.location.origin;
-  return process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") || "http://localhost:3000";
+  return stripTrailingSlash(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000");
+}
+
+/**
+ * Public origin for widget script/iframe URLs behind reverse proxies.
+ * Prefer forwarded Host (nginx) over env so a leftover localhost APP_URL
+ * cannot poison production iframe src.
+ */
+export function resolveRequestPublicOrigin(request: Request): string {
+  const forwardedHost = (
+    request.headers.get("x-forwarded-host") ??
+    request.headers.get("host") ??
+    ""
+  )
+    .split(",")[0]
+    ?.trim();
+  const forwardedProto = (
+    request.headers.get("x-forwarded-proto") ??
+    new URL(request.url).protocol.replace(":", "") ??
+    "https"
+  )
+    .split(",")[0]
+    ?.trim();
+
+  if (forwardedHost && !isLoopbackHost(forwardedHost)) {
+    return `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const envUrl = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (envUrl) {
+    try {
+      const parsed = new URL(envUrl);
+      if (!isLoopbackHost(parsed.host)) {
+        return stripTrailingSlash(envUrl);
+      }
+    } catch {
+      // ignore invalid NEXT_PUBLIC_APP_URL
+    }
+  }
+
+  return new URL(request.url).origin;
 }
 
 export function generateEmbedSnippets(input: {
