@@ -109,7 +109,7 @@ export type {
   WorkflowStep,
 } from "./workflow-trace";
 export { listRememberedWorkflowTraces } from "./workflow-trace";
-export { fetchWorkflowTraces, persistWorkflowTrace } from "./workflow-persist";
+/* workflow-persist uses next/headers — import from @/modules/chat/workflow-persist in server routes only */
 
 export { SUBMODULE as widget } from "./widget";
 export { SUBMODULE as conversation } from "./conversation";
