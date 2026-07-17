@@ -1,19 +1,39 @@
 #!/bin/bash
 # Poll GitHub remotes and auto-deploy when HEAD changes.
-# Safe to run from cron every minute.
 set -euo pipefail
 
 LOG=/opt/daysrajasthan/logs/poller.log
 LOCKDIR=/opt/daysrajasthan/locks
 STATE=/opt/daysrajasthan/env
+WEB_KEY=/opt/daysrajasthan/env/travel-days-deploy-key
 mkdir -p "$LOCKDIR" "$(dirname "$LOG")"
 
-# Avoid git dubious ownership failures under cron
 git config --global --add safe.directory /var/www/daysrajasthan-admin >/dev/null 2>&1 || true
 git config --global --add safe.directory /var/www/daysrajasthan-web >/dev/null 2>&1 || true
 git config --global --add safe.directory '*' >/dev/null 2>&1 || true
 
 log() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" | tee -a "$LOG"; }
+
+ensure_web_ssh_remote() {
+  local dir=/var/www/daysrajasthan-web
+  [[ -d "$dir/.git" ]] || return 0
+  [[ -f "$WEB_KEY" ]] || return 0
+  cd "$dir"
+  git remote set-url origin git@github.com:dimenfox70/travel-days-rajasthan.git
+  # Prefer deploy key; do not use HTTPS PAT for this private repo
+  git config --local core.sshCommand "ssh -i ${WEB_KEY} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+  git config --local --unset-all credential.helper >/dev/null 2>&1 || true
+  git config --local credential.helper ""
+}
+
+ensure_admin_https_creds() {
+  if [[ -f /opt/daysrajasthan/env/github-token ]]; then
+    TOKEN="$(tr -d '\r\n' < /opt/daysrajasthan/env/github-token)"
+    git config --global credential.helper store
+    printf 'https://x-access-token:%s@github.com\n' "$TOKEN" > /root/.git-credentials
+    chmod 600 /root/.git-credentials
+  fi
+}
 
 run_if_changed() {
   local name="$1"
@@ -28,7 +48,6 @@ run_if_changed() {
     return 0
   fi
 
-  # Skip if deploy already running
   if [[ -f "$lock" ]]; then
     local pid
     pid="$(cat "$lock" 2>/dev/null || true)"
@@ -55,7 +74,6 @@ run_if_changed() {
       return 0
     fi
   else
-    # First run: record current SHA without deploying
     printf '%s\n' "$local_sha" > "$state_file"
     log "INIT $name sha=$local_sha"
     return 0
@@ -77,13 +95,8 @@ run_if_changed() {
   rm -f "$lock"
 }
 
-# Ensure credentials for private admin repo
-if [[ -f /opt/daysrajasthan/env/github-token ]]; then
-  TOKEN="$(tr -d '\r\n' < /opt/daysrajasthan/env/github-token)"
-  git config --global credential.helper store
-  printf 'https://x-access-token:%s@github.com\n' "$TOKEN" > /root/.git-credentials
-  chmod 600 /root/.git-credentials
-fi
+ensure_web_ssh_remote
+ensure_admin_https_creds
 
 run_if_changed "web"   /var/www/daysrajasthan-web   main   /opt/daysrajasthan/scripts/deploy-web.sh
 run_if_changed "admin" /var/www/daysrajasthan-admin master /opt/daysrajasthan/scripts/deploy-admin.sh
