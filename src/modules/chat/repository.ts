@@ -83,6 +83,7 @@ export function loadChatPlatformState(): ChatPlatformState {
       messages: parsed.messages ?? [],
       analyticsLog: parsed.analyticsLog ?? [],
       settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+      providers: parsed.providers?.length ? parsed.providers : base.providers,
     };
   } catch {
     return emptyState();

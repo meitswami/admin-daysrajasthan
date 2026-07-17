@@ -1,23 +1,29 @@
 /**
  * Chat turn orchestration — Gateway handler target.
  * Widget → Intelligence → Renderer (DTO only). Offline / AI / Disabled runtime modes.
+ * Superadmin inbox + human handoff assignment.
  */
 
 import { ModuleError } from "@/modules/shared";
 import { runIntelligence } from "@/modules/intelligence";
-import type { IntelligenceResult } from "@/modules/intelligence";
+import type { IntelligenceResult, ProviderId } from "@/modules/intelligence";
 import { renderIntelligenceDto } from "@/modules/renderer";
 import type { SearchHit } from "@/modules/search";
+import { createAssignment } from "@/modules/customer-relations";
+import { DEMO_TEAM } from "@/lib/rbac/current-user";
 
 import { CHAT_MODULE_ID, LOCAL_DEMO_WIDGET_KEY_ALIASES } from "../constants";
-import { ensureMockProviderRegistered } from "../mock-provider";
+import { ensureLocalProviderRegistered } from "../local-provider";
 import { hashWidgetSecret } from "../keys";
+import { startLeadOffer } from "../lead-routing";
 import {
   ensureServerChatPlatformState,
   mutateServerChatPlatformState,
 } from "../server-store";
 import type {
   ChatAiMode,
+  ChatConversationStub,
+  ChatHandoffStatus,
   ChatMessageRecord,
   ChatSessionRecord,
   ChatTurnAnalytics,
@@ -43,6 +49,7 @@ export type ChatTurnResult = {
   intelligence: IntelligenceResult | null;
   analytics: ChatTurnAnalytics;
   offlineQueued?: boolean;
+  humanTakeover?: boolean;
 };
 
 function isLocalDemoKey(secretKey: string): boolean {
@@ -110,7 +117,6 @@ function enrichTravelQuery(text: string): string {
       }
     }
   }
-  // Duration cues help match "3 Days …" packages
   if (/\b3\s*-?\s*days?\b/i.test(text) && !lower.includes("3 days")) {
     extras.push("3 Days");
   }
@@ -143,7 +149,7 @@ function filterHitsByScope(hits: SearchHit[], scope: KnowledgeScopeConfig): Sear
       .join(" ")
       .toLowerCase();
 
-    if (!regionHay) return true; // no region metadata — keep hit
+    if (!regionHay) return true;
     return allowedRegions.some(
       (r) =>
         regionHay.includes(r) ||
@@ -192,7 +198,6 @@ function presentationToReplyText(presentation: unknown[]): string {
     }
   }
 
-  // Prefer the assistant narrative (already visitor-formatted). Fall back to card titles.
   if (narrative) return narrative;
 
   const sections: string[] = [];
@@ -202,7 +207,6 @@ function presentationToReplyText(presentation: unknown[]): string {
   return "Here are grounded results from our catalog.";
 }
 
-/** Remove internal catalog ids from visitor-facing chat text. */
 function stripInternalIds(text: string): string {
   return text
     .replace(/\bid[=:\s]+[a-zA-Z0-9_-]+\b/gi, "")
@@ -212,6 +216,11 @@ function stripInternalIds(text: string): string {
     .replace(/[ \t]{2,}/g, " ")
     .replace(/ *\n */g, "\n")
     .trim();
+}
+
+function resolveTeamMember(id: string | null | undefined) {
+  if (!id) return null;
+  return DEMO_TEAM.find((m) => m.id === id && m.is_active) ?? null;
 }
 
 function ensureSession(input: {
@@ -242,29 +251,102 @@ function ensureSession(input: {
   return session;
 }
 
-function persistMessage(msg: ChatMessageRecord): void {
-  mutateServerChatPlatformState((s) => ({
-    ...s,
-    messages: [msg, ...s.messages].slice(0, 500),
-    conversations: [
-      {
-        id: `conv_${msg.sessionId}`,
-        websiteId: msg.websiteId,
-        channel: (msg.role === "assistant" && msg.provider ? "ai" : "manual") as
-          | "ai"
-          | "manual"
-          | "widget",
-        visitorLabel: "Visitor",
-        status: "open" as const,
-        messageCount: s.messages.filter((m) => m.sessionId === msg.sessionId).length + 1,
-        lastMessagePreview: msg.text.slice(0, 120),
-        createdAt: msg.createdAt,
-        updatedAt: msg.createdAt,
-        sessionId: msg.sessionId,
-      },
-      ...s.conversations.filter((c) => c.sessionId !== msg.sessionId),
-    ].slice(0, 200),
-  }));
+function persistMessage(
+  msg: ChatMessageRecord,
+  opts?: {
+    visitorLabel?: string;
+    email?: string | null;
+    saveQuery?: boolean;
+  }
+): ChatConversationStub {
+  let saved!: ChatConversationStub;
+  mutateServerChatPlatformState((s) => {
+    const settings = s.settings;
+    const prev = s.conversations.find((c) => c.sessionId === msg.sessionId);
+    const session = s.sessions.find((x) => x.id === msg.sessionId);
+    const queries =
+      msg.role === "user" && (opts?.saveQuery ?? settings.saveQueriesToSuperadmin)
+        ? [...(prev?.queries ?? []), msg.text].slice(-50)
+        : prev?.queries ?? [];
+
+    let handoffStatus: ChatHandoffStatus = prev?.handoffStatus ?? "ai";
+    let assignedToTeamMemberId = prev?.assignedToTeamMemberId ?? null;
+    let assignedToName = prev?.assignedToName ?? null;
+    let assignedAt = prev?.assignedAt ?? null;
+    let assignedBy = prev?.assignedBy ?? null;
+    let humanTakeover = prev?.humanTakeover ?? false;
+    let status = prev?.status ?? ("open" as const);
+    let offeredToTeamMemberId = prev?.offeredToTeamMemberId ?? null;
+    let offeredToName = prev?.offeredToName ?? null;
+    let offerExpiresAt = prev?.offerExpiresAt ?? null;
+    let declinedByTeamMemberIds = prev?.declinedByTeamMemberIds ?? [];
+    let floatingAt = prev?.floatingAt ?? null;
+    let escalatedToAdminAt = prev?.escalatedToAdminAt ?? null;
+    let adminNotifiedAt = prev?.adminNotifiedAt ?? null;
+
+    saved = {
+      id: prev?.id ?? `conv_${msg.sessionId}`,
+      websiteId: msg.websiteId,
+      channel: (msg.role === "assistant" && msg.provider
+        ? "ai"
+        : prev?.channel ?? "widget") as ChatConversationStub["channel"],
+      visitorLabel: opts?.visitorLabel || prev?.visitorLabel || session?.visitorLabel || "Visitor",
+      email: opts?.email ?? prev?.email ?? session?.email ?? null,
+      status,
+      messageCount: s.messages.filter((m) => m.sessionId === msg.sessionId).length + 1,
+      lastMessagePreview: msg.text.slice(0, 160),
+      createdAt: prev?.createdAt ?? msg.createdAt,
+      updatedAt: msg.createdAt,
+      sessionId: msg.sessionId,
+      queries,
+      handoffStatus,
+      assignedToTeamMemberId,
+      assignedToName,
+      assignedAt,
+      assignedBy,
+      humanTakeover,
+      offeredToTeamMemberId,
+      offeredToName,
+      offerExpiresAt,
+      declinedByTeamMemberIds,
+      floatingAt,
+      escalatedToAdminAt,
+      adminNotifiedAt,
+    };
+
+    // First visitor message → start offer / admin queue with 20s accept routing
+    if (msg.role === "user" && !prev) {
+      saved = startLeadOffer(saved);
+    }
+
+    return {
+      ...s,
+      messages: [msg, ...s.messages].slice(0, 500),
+      conversations: [saved, ...s.conversations.filter((c) => c.sessionId !== msg.sessionId)].slice(
+        0,
+        200
+      ),
+    };
+  });
+
+  // Fire-and-forget CRP assignment when auto-offered on first message
+  if (
+    msg.role === "user" &&
+    saved.offeredToTeamMemberId &&
+    saved.assignedBy === "system:auto_human" &&
+    (saved.queries?.length ?? 0) === 1
+  ) {
+    void createAssignment({
+      entityType: "inquiry",
+      entityId: saved.id,
+      assignedTo: saved.offeredToName || saved.offeredToTeamMemberId,
+      assignedBy: "chat-platform",
+      priority: "medium",
+      note: `Website chat lead offered (20s accept): ${saved.visitorLabel}${saved.email ? ` <${saved.email}>` : ""}`,
+    }).catch(() => undefined);
+  }
+
+  return saved;
 }
 
 function isConversationTurn(
@@ -290,12 +372,25 @@ function logAnalytics(entry: ChatTurnAnalytics): void {
   }));
 }
 
+function preferredLocalProvider(): ProviderId {
+  const state = ensureServerChatPlatformState();
+  const enabled = state.providers
+    .filter((p) => p.enabled && p.providerId !== "none")
+    .sort((a, b) => a.priority - b.priority);
+  const first = enabled[0]?.providerId;
+  return (first as ProviderId) || "local";
+}
+
+function getConversationBySession(sessionId: string): ChatConversationStub | undefined {
+  return ensureServerChatPlatformState().conversations.find((c) => c.sessionId === sessionId);
+}
+
 /**
  * Primary chat turn — used by POST /api/chat.
  */
 export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnResult> {
   const started = Date.now();
-  ensureMockProviderRegistered();
+  ensureLocalProviderRegistered();
 
   const resolved = await resolveWebsiteFromKey(input.key);
   if (!resolved) {
@@ -330,7 +425,47 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     latencyMs: 0,
     createdAt: new Date().toISOString(),
   };
-  persistMessage(userMsg);
+  const conversation = persistMessage(userMsg, {
+    visitorLabel,
+    email: input.email?.trim() || null,
+    saveQuery: true,
+  });
+
+  // Human agent owns the thread — queue visitor message, no AI reply
+  if (conversation.humanTakeover) {
+    const replyText =
+      "Thanks — a Travel Days agent has this chat and will reply to you shortly.";
+    const analytics: ChatTurnAnalytics = {
+      responseTimeMs: Date.now() - started,
+      usedFallback: false,
+      searchHits: 0,
+      providerUsed: "human",
+      mode: config.aiMode,
+      sessionId: session.id,
+    };
+    logAnalytics(analytics);
+    return {
+      mode: config.aiMode,
+      sessionId: session.id,
+      replyText,
+      presentation: [
+        {
+          kind: "chat_message",
+          text: replyText,
+          role: "assistant",
+          title: null,
+          subtitle: null,
+          themeHints: {},
+          a11yLabel: "Human handoff",
+          refs: [],
+          id: "human_handoff",
+        },
+      ],
+      intelligence: null,
+      analytics,
+      humanTakeover: true,
+    };
+  }
 
   // Offline mode — leave a message only
   if (config.aiMode === "offline") {
@@ -369,7 +504,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       latencyMs: analytics.responseTimeMs,
       createdAt: new Date().toISOString(),
     };
-    persistMessage(assistantMsg);
+    persistMessage(assistantMsg, { visitorLabel, email: input.email?.trim() || null });
     return {
       mode: "offline",
       sessionId: session.id,
@@ -381,7 +516,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     };
   }
 
-  // AI mode — Intelligence → Renderer
+  // AI mode — Intelligence → Renderer (Ollama/local when available)
   const scope = site.knowledgeScope;
   const regionCode = scopeRegionCode(scope);
   const enrichedText = enrichTravelQuery(input.message.trim());
@@ -393,7 +528,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     sessionId: session.id,
     locale: null,
     regionCode,
-    preferredProvider: "local",
+    preferredProvider: preferredLocalProvider(),
     conversationTurns,
     extras: {
       knowledgeScope: scope,
@@ -402,7 +537,6 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     },
   });
 
-  // Soft filter Search hits by Knowledge Scope before presentation
   const filteredHits = filterHitsByScope(intelligence.facts.hits, scope);
   const scopedIntelligence: IntelligenceResult = {
     ...intelligence,
@@ -441,7 +575,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     latencyMs: analytics.responseTimeMs,
     createdAt: new Date().toISOString(),
   };
-  persistMessage(assistantMsg);
+  persistMessage(assistantMsg, { visitorLabel, email: input.email?.trim() || null });
 
   return {
     mode: "ai",
@@ -450,6 +584,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     presentation: presentation as unknown[],
     intelligence: scopedIntelligence,
     analytics,
+    humanTakeover: false,
   };
 }
 
@@ -459,4 +594,109 @@ export function listSessionMessages(sessionId: string): ChatMessageRecord[] {
     .filter((m) => m.sessionId === sessionId)
     .slice()
     .reverse();
+}
+
+/** Superadmin / agent assigns a conversation to a team member. */
+export function assignConversationToAgent(input: {
+  conversationId: string;
+  teamMemberId: string;
+  assignedBy: string;
+  takeOver?: boolean;
+}): ChatConversationStub {
+  const member = resolveTeamMember(input.teamMemberId);
+  if (!member) {
+    throw new ModuleError(CHAT_MODULE_ID, "AGENT_NOT_FOUND", "Team member not found");
+  }
+
+  const state = ensureServerChatPlatformState();
+  const existing = state.conversations.find((c) => c.id === input.conversationId);
+  if (!existing) {
+    throw new ModuleError(CHAT_MODULE_ID, "CONVERSATION_NOT_FOUND", "Conversation not found");
+  }
+
+  const updated: ChatConversationStub = {
+    ...existing,
+    status: "open",
+    handoffStatus: input.takeOver === false ? "assigned" : "human_active",
+    humanTakeover: input.takeOver !== false,
+    assignedToTeamMemberId: member.id,
+    assignedToName: member.name,
+    assignedAt: new Date().toISOString(),
+    assignedBy: input.assignedBy,
+    updatedAt: new Date().toISOString(),
+  };
+
+  mutateServerChatPlatformState((s) => ({
+    ...s,
+    conversations: s.conversations.map((c) => (c.id === input.conversationId ? updated : c)),
+  }));
+
+  void createAssignment({
+    entityType: "inquiry",
+    entityId: updated.id,
+    assignedTo: member.name,
+    assignedBy: input.assignedBy,
+    priority: "high",
+    note: `Chat conversation assigned to ${member.name}`,
+  }).catch(() => undefined);
+
+  return updated;
+}
+
+/** Human agent reply into an existing session (Superadmin inbox). */
+export function postAgentReply(input: {
+  sessionId: string;
+  text: string;
+  agentName: string;
+}): ChatMessageRecord {
+  const state = ensureServerChatPlatformState();
+  const session = state.sessions.find((s) => s.id === input.sessionId);
+  if (!session) {
+    throw new ModuleError(CHAT_MODULE_ID, "SESSION_NOT_FOUND", "Session not found");
+  }
+  const msg: ChatMessageRecord = {
+    id: `msg_${Date.now().toString(36)}_agent`,
+    sessionId: input.sessionId,
+    websiteId: session.websiteId,
+    role: "assistant",
+    text: input.text.trim(),
+    presentation: [
+      {
+        kind: "chat_message",
+        text: input.text.trim(),
+        role: "assistant",
+        title: input.agentName,
+        subtitle: null,
+        themeHints: {},
+        a11yLabel: `Agent ${input.agentName}`,
+        refs: [],
+        id: "agent_reply",
+      },
+    ],
+    provider: "human",
+    usedFallback: false,
+    searchHits: 0,
+    latencyMs: 0,
+    createdAt: new Date().toISOString(),
+  };
+  persistMessage(msg, { visitorLabel: session.visitorLabel, email: session.email });
+  mutateServerChatPlatformState((s) => ({
+    ...s,
+    conversations: s.conversations.map((c) =>
+      c.sessionId === input.sessionId
+        ? {
+            ...c,
+            humanTakeover: true,
+            handoffStatus: "human_active" as const,
+            channel: "manual" as const,
+            updatedAt: new Date().toISOString(),
+          }
+        : c
+    ),
+  }));
+  return msg;
+}
+
+export function getConversationForSession(sessionId: string) {
+  return getConversationBySession(sessionId);
 }

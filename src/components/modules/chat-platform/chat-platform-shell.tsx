@@ -30,10 +30,12 @@ import {
   updatePrompt,
   updateProviders,
   updateWebsite,
+  type ChatHandoffMode,
   type ChatPlatformState,
   type EmbedSnippet,
   type WidgetApiKey,
 } from "@/modules/chat";
+import { getCurrentTeamMember, listTeamMembers } from "@/lib/rbac/current-user";
 import { cn } from "@/lib/utils";
 import { Copy, Plus, Trash2 } from "lucide-react";
 
@@ -73,6 +75,11 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
   const [createdSecret, setCreatedSecret] = useState<string | null>(null);
   const [snippets, setSnippets] = useState<EmbedSnippet[]>([]);
   const [embedKey, setEmbedKey] = useState(LOCAL_DEMO_WIDGET_KEY);
+  const [selectedConversationId, setSelectedConversationId] = useState<string>("");
+  const [assignMemberId, setAssignMemberId] = useState("tm-vandana");
+  const [agentReply, setAgentReply] = useState("");
+  const team = useMemo(() => listTeamMembers().filter((m) => m.is_active), []);
+  const me = useMemo(() => getCurrentTeamMember(), []);
 
   const refresh = useCallback(() => {
     const next = getChatPlatformState();
@@ -82,9 +89,15 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
     void fetch("/api/chat/platform/sync")
       .then(async (res) => {
         const json = (await res.json()) as {
-          data?: { conversations?: ChatPlatformState["conversations"]; feedback?: ChatPlatformState["feedback"] };
+          data?: {
+            conversations?: ChatPlatformState["conversations"];
+            feedback?: ChatPlatformState["feedback"];
+            messages?: ChatPlatformState["messages"];
+            sessions?: ChatPlatformState["sessions"];
+            settings?: ChatPlatformState["settings"];
+          };
         };
-        if (!json.data?.conversations && !json.data?.feedback) return;
+        if (!json.data) return;
         setState((prev) =>
           prev
             ? {
@@ -93,6 +106,11 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                   ? json.data.conversations
                   : prev.conversations,
                 feedback: json.data?.feedback?.length ? json.data.feedback : prev.feedback,
+                messages: json.data?.messages?.length ? json.data.messages : prev.messages,
+                sessions: json.data?.sessions?.length ? json.data.sessions : prev.sessions,
+                settings: json.data?.settings
+                  ? { ...prev.settings, ...json.data.settings }
+                  : prev.settings,
               }
             : prev
         );
@@ -625,7 +643,8 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
           <CardHeader>
             <CardTitle className="text-base">AI Providers</CardTitle>
             <CardDescription>
-              Configuration only — no provider calls until AI conversations are approved.
+              Local light path: Ollama / llama.cpp (`OLLAMA_BASE_URL`, `OLLAMA_MODEL=qwen2.5:1.5b`).
+              Falls back to catalog mock when the local model is offline.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -704,29 +723,199 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
       )}
 
       {section === "conversations" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Conversations</CardTitle>
-            <CardDescription>
-              Offline/manual leave-a-message inbox. AI threads will appear here later.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {state.conversations.length === 0 && (
-              <p className="text-sm text-stone-500">No conversations yet — try the offline embed.</p>
-            )}
-            {state.conversations.map((c) => (
-              <div key={c.id} className="rounded-lg border border-stone-100 px-3 py-2 text-sm">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{c.visitorLabel}</span>
-                  <Badge variant="info">{c.status}</Badge>
-                  <Badge>{c.channel}</Badge>
-                </div>
-                <p className="mt-1 text-xs text-stone-500">{c.lastMessagePreview}</p>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Superadmin query inbox</CardTitle>
+              <CardDescription>
+                Every visitor query is saved here. Assign to a human agent or take over the chat.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {state.conversations.length === 0 && (
+                <p className="text-sm text-stone-500">No conversations yet — try the widget.</p>
+              )}
+              {state.conversations.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedConversationId(c.id);
+                    setAssignMemberId(c.assignedToTeamMemberId || "tm-vandana");
+                  }}
+                  className={cn(
+                    "w-full rounded-lg border px-3 py-2 text-left text-sm transition",
+                    selectedConversationId === c.id
+                      ? "border-amber-300 bg-amber-50"
+                      : "border-stone-100 hover:bg-stone-50"
+                  )}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{c.visitorLabel}</span>
+                    <Badge variant="info">{c.status}</Badge>
+                    <Badge>{c.channel}</Badge>
+                    {c.handoffStatus && <Badge variant="success">{c.handoffStatus}</Badge>}
+                  </div>
+                  <p className="mt-1 text-xs text-stone-500">{c.lastMessagePreview}</p>
+                  {c.assignedToName && (
+                    <p className="mt-1 text-[11px] text-amber-800">Assigned: {c.assignedToName}</p>
+                  )}
+                  {(c.queries?.length ?? 0) > 0 && (
+                    <p className="mt-1 text-[11px] text-stone-400">{c.queries!.length} queries saved</p>
+                  )}
+                </button>
+              ))}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Thread & assignment</CardTitle>
+              <CardDescription>
+                Assign leads to a team member, or reply as a human agent (AI pauses after takeover).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(() => {
+                const selected =
+                  state.conversations.find((c) => c.id === selectedConversationId) ??
+                  state.conversations[0];
+                if (!selected) {
+                  return <p className="text-sm text-stone-500">Select a conversation.</p>;
+                }
+                const thread = state.messages
+                  .filter((m) => m.sessionId === selected.sessionId)
+                  .slice()
+                  .reverse();
+                return (
+                  <>
+                    <div className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2 text-sm">
+                      <p className="font-medium">{selected.visitorLabel}</p>
+                      <p className="text-xs text-stone-500">
+                        {selected.email || "No email"} · {selected.handoffStatus || "ai"}
+                      </p>
+                    </div>
+
+                    {(selected.queries?.length ?? 0) > 0 && (
+                      <div>
+                        <Label>Saved queries</Label>
+                        <ul className="mt-1.5 space-y-1 text-sm text-stone-700">
+                          {selected.queries!.map((q, i) => (
+                            <li key={`${selected.id}_q_${i}`} className="rounded bg-white px-2 py-1 border border-stone-100">
+                              {q}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-stone-100 p-3">
+                      {thread.length === 0 && (
+                        <p className="text-xs text-stone-500">No messages in thread yet.</p>
+                      )}
+                      {thread.map((m) => (
+                        <div
+                          key={m.id}
+                          className={cn(
+                            "rounded-lg px-3 py-2 text-sm",
+                            m.role === "user" ? "bg-[#7A1F1F] text-white ml-6" : "bg-stone-100 mr-6"
+                          )}
+                        >
+                          <p className="whitespace-pre-wrap">{m.text}</p>
+                          <p className="mt-1 text-[10px] opacity-70">
+                            {m.role}
+                            {m.provider ? ` · ${m.provider}` : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-end gap-2">
+                      <div className="min-w-[180px] flex-1">
+                        <Label>Assign to team member</Label>
+                        <Select
+                          className="mt-1.5"
+                          value={assignMemberId}
+                          onChange={(e) => setAssignMemberId(e.target.value)}
+                        >
+                          {team.map((m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.name} ({m.role})
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={async () => {
+                          const res = await fetch("/api/chat/platform/handoff", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "assign",
+                              conversationId: selected.id,
+                              teamMemberId: assignMemberId,
+                              assignedBy: me.name,
+                              takeOver: true,
+                            }),
+                          });
+                          const json = (await res.json()) as { success?: boolean; message?: string };
+                          if (!json.success) {
+                            show(json.message ?? "Assign failed");
+                            return;
+                          }
+                          show(json.message ?? "Assigned");
+                          refresh();
+                        }}
+                      >
+                        Assign & take over
+                      </Button>
+                    </div>
+
+                    <div>
+                      <Label>Human agent reply</Label>
+                      <Textarea
+                        className="mt-1.5"
+                        rows={3}
+                        placeholder="Type a reply to the client…"
+                        value={agentReply}
+                        onChange={(e) => setAgentReply(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        className="mt-2"
+                        disabled={!agentReply.trim() || !selected.sessionId}
+                        onClick={async () => {
+                          if (!selected.sessionId) return;
+                          const res = await fetch("/api/chat/platform/handoff", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              action: "agent_reply",
+                              sessionId: selected.sessionId,
+                              text: agentReply.trim(),
+                              agentName: me.name,
+                            }),
+                          });
+                          const json = (await res.json()) as { success?: boolean; message?: string };
+                          if (!json.success) {
+                            show(json.message ?? "Reply failed");
+                            return;
+                          }
+                          setAgentReply("");
+                          show("Reply sent");
+                          refresh();
+                        }}
+                      >
+                        Send as agent
+                      </Button>
+                    </div>
+                  </>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {section === "feedback" && (
@@ -768,6 +957,107 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                 onChange={(v) => updatePlatformSettings({ allowIframeEmbed: v })}
               />
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-stone-100 px-3 py-3">
+              <div className="min-w-0 pr-3">
+                <p className="text-sm font-medium">Save all queries to Superadmin</p>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Every visitor question is stored in Conversations for Superadmin review.
+                </p>
+              </div>
+              <Toggle
+                checked={state.settings.saveQueriesToSuperadmin !== false}
+                onChange={(v) => updatePlatformSettings({ saveQueriesToSuperadmin: v })}
+              />
+            </div>
+
+            <div className="rounded-lg border border-stone-100 p-3 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Human handoff mode</p>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Choose how chat leads reach your team.
+                </p>
+              </div>
+              <div className="grid gap-2">
+                <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-stone-100 px-3 py-2">
+                  <input
+                    type="radio"
+                    className="mt-1"
+                    name="handoffMode"
+                    checked={state.settings.handoffMode === "auto_human"}
+                    onChange={() =>
+                      updatePlatformSettings({ handoffMode: "auto_human" as ChatHandoffMode })
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Auto-assign to human agent</span>
+                    <span className="block text-xs text-stone-500">
+                      New chats go to the default agent so they can take over live.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 rounded-lg border border-stone-100 px-3 py-2">
+                  <input
+                    type="radio"
+                    className="mt-1"
+                    name="handoffMode"
+                    checked={(state.settings.handoffMode ?? "admin_assign") === "admin_assign"}
+                    onChange={() =>
+                      updatePlatformSettings({ handoffMode: "admin_assign" as ChatHandoffMode })
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">Admin assigns to team member</span>
+                    <span className="block text-xs text-stone-500">
+                      Queue for Superadmin — pick a specific teammate from Conversations.
+                    </span>
+                  </span>
+                </label>
+              </div>
+              {state.settings.handoffMode === "auto_human" && (
+                <div className="space-y-3">
+                  <div>
+                    <Label>Default agent</Label>
+                    <Select
+                      className="mt-1.5"
+                      value={state.settings.defaultAgentTeamMemberId ?? "tm-vandana"}
+                      onChange={(e) =>
+                        updatePlatformSettings({ defaultAgentTeamMemberId: e.target.value })
+                      }
+                    >
+                      {team.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} ({m.role})
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Accept countdown (seconds)</Label>
+                    <Input
+                      className="mt-1.5"
+                      type="number"
+                      min={5}
+                      max={120}
+                      value={state.settings.leadAcceptSeconds ?? 20}
+                      onChange={(e) =>
+                        updatePlatformSettings({
+                          leadAcceptSeconds: Math.max(
+                            5,
+                            Math.min(120, Number(e.target.value) || 20)
+                          ),
+                        })
+                      }
+                    />
+                    <p className="mt-1 text-xs text-stone-500">
+                      If the agent does not Accept in time, the lead rotates to the next Online agent.
+                      If nobody is online, it becomes floating for any active teammate to Claim — and
+                      Admin gets an alert sound + SWAL.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div>
               <Label>Public API base URL (optional)</Label>
               <Input

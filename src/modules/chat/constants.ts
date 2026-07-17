@@ -58,9 +58,9 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
   {
     id: "prov_local",
     providerId: "local",
-    label: "Mock Provider (local)",
+    label: "Ollama / llama.cpp (local light)",
     enabled: true,
-    envKeyHint: null,
+    envKeyHint: "OLLAMA_BASE_URL",
     priority: 0,
   },
   {
@@ -114,7 +114,16 @@ export const DEFAULT_SETTINGS: ChatPlatformSettings = {
   requireAllowedDomain: true,
   allowIframeEmbed: true,
   publicApiBaseUrl: null,
+  saveQueriesToSuperadmin: true,
+  handoffMode: "admin_assign",
+  defaultAgentTeamMemberId: "tm-vandana",
+  leadAcceptSeconds: 20,
 };
+
+/** Accept window before rotating an offered chat lead */
+export const LEAD_ACCEPT_SECONDS_DEFAULT = 20;
+/** Presence heartbeat — online if seen within this window */
+export const TEAM_ONLINE_TTL_MS = 45_000;
 
 export function createDefaultWebsite(partial?: Partial<ChatWebsite>): ChatWebsite {
   const now = new Date().toISOString();

@@ -105,6 +105,18 @@ export type ChatWebsite = {
   updatedAt: string;
 };
 
+/** How chat leads are routed to humans. */
+export type ChatHandoffMode = "auto_human" | "admin_assign";
+
+export type ChatHandoffStatus =
+  | "ai"
+  | "queued_human"
+  | "offered"
+  | "assigned"
+  | "human_active"
+  | "floating"
+  | "escalated_admin";
+
 export type ChatConversationStub = {
   id: string;
   websiteId: string;
@@ -116,6 +128,28 @@ export type ChatConversationStub = {
   createdAt: string;
   updatedAt: string;
   sessionId?: string | null;
+  email?: string | null;
+  /** All visitor queries captured for Superadmin inbox */
+  queries?: string[];
+  handoffStatus?: ChatHandoffStatus;
+  assignedToTeamMemberId?: string | null;
+  assignedToName?: string | null;
+  assignedAt?: string | null;
+  assignedBy?: string | null;
+  /** When true, AI stops auto-replying — human agent owns the thread */
+  humanTakeover?: boolean;
+  /** Current offer target (must Accept within offerExpiresAt) */
+  offeredToTeamMemberId?: string | null;
+  offeredToName?: string | null;
+  /** ISO deadline for Accept (20s window) */
+  offerExpiresAt?: string | null;
+  /** Agents who missed/declined this rotation */
+  declinedByTeamMemberIds?: string[];
+  /** When lead became claimable by any online agent */
+  floatingAt?: string | null;
+  /** When Superadmin was escalated because auto-accept timed out / no agents */
+  escalatedToAdminAt?: string | null;
+  adminNotifiedAt?: string | null;
 };
 
 export type ChatMessageRecord = {
@@ -175,6 +209,17 @@ export type ChatPlatformSettings = {
   requireAllowedDomain: boolean;
   allowIframeEmbed: boolean;
   publicApiBaseUrl: string | null;
+  /** Persist every visitor query into Superadmin Conversations inbox */
+  saveQueriesToSuperadmin: boolean;
+  /**
+   * auto_human — auto-assign chat lead to default agent
+   * admin_assign — queue for Superadmin to assign a team member
+   */
+  handoffMode: ChatHandoffMode;
+  /** Team member id used when handoffMode is auto_human */
+  defaultAgentTeamMemberId: string | null;
+  /** Seconds an offered agent has to Accept before rotation (default 20) */
+  leadAcceptSeconds: number;
 };
 
 export type ChatPlatformState = {

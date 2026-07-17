@@ -68,7 +68,49 @@ function normalizeState(state: ChatPlatformState): ChatPlatformState {
     sessions: state.sessions ?? [],
     messages: state.messages ?? [],
     analyticsLog: state.analyticsLog ?? [],
+    conversations: (state.conversations ?? []).map((c) => ({
+      ...c,
+      queries: c.queries ?? [],
+      handoffStatus: c.handoffStatus ?? "ai",
+      assignedToTeamMemberId: c.assignedToTeamMemberId ?? null,
+      assignedToName: c.assignedToName ?? null,
+      assignedAt: c.assignedAt ?? null,
+      assignedBy: c.assignedBy ?? null,
+      humanTakeover: c.humanTakeover ?? false,
+      email: c.email ?? null,
+    })),
+    settings: { ...DEFAULT_SETTINGS, ...state.settings },
+    providers: state.providers?.length ? state.providers : DEFAULT_PROVIDERS,
   };
+}
+
+/**
+ * Merge admin config sync without wiping live Superadmin query inbox / sessions.
+ */
+export function mergeAdminConfigIntoServer(incoming: ChatPlatformState): ChatPlatformState {
+  const existing = g.__tdChatPlatformServer;
+  const next = normalizeState({
+    ...incoming,
+    // Preserve runtime inbox unless incoming already carries richer runtime data
+    conversations:
+      (existing?.conversations?.length ?? 0) >= (incoming.conversations?.length ?? 0)
+        ? existing?.conversations ?? incoming.conversations ?? []
+        : incoming.conversations ?? [],
+    messages:
+      (existing?.messages?.length ?? 0) >= (incoming.messages?.length ?? 0)
+        ? existing?.messages ?? incoming.messages ?? []
+        : incoming.messages ?? [],
+    sessions:
+      (existing?.sessions?.length ?? 0) >= (incoming.sessions?.length ?? 0)
+        ? existing?.sessions ?? incoming.sessions ?? []
+        : incoming.sessions ?? [],
+    analyticsLog:
+      (existing?.analyticsLog?.length ?? 0) >= (incoming.analyticsLog?.length ?? 0)
+        ? existing?.analyticsLog ?? incoming.analyticsLog ?? []
+        : incoming.analyticsLog ?? [],
+  });
+  g.__tdChatPlatformServer = next;
+  return next;
 }
 
 export function getServerChatPlatformState(): ChatPlatformState | null {

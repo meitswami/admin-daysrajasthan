@@ -85,9 +85,10 @@ export const mockTravelProvider: ProviderAdapter = {
   },
 };
 
-/** Idempotent — call from chat API / orchestration. */
+/** Prefer ensureLocalProviderRegistered from ./local-provider (Ollama + mock fallback). */
 export function ensureMockProviderRegistered(): void {
   if (registered) return;
+  // Soft-register mock only; local-provider overwrites with composite when loaded
   registerProvider(mockTravelProvider);
   registered = true;
 }
@@ -95,5 +96,5 @@ export function ensureMockProviderRegistered(): void {
 export const SUBMODULE = {
   parent: "chat" as const,
   id: "mock-provider" as const,
-  description: "Mock Travel Provider implementing Intelligence provider interface",
+  description: "Catalog-grounded mock fallback when Ollama is offline",
 } as const;
