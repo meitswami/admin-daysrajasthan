@@ -1268,7 +1268,7 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                     </div>
 
                     <WorkflowTracePanel
-                      sessionId={selected.sessionId}
+                      sessionId={selected.sessionId ?? ""}
                       conversationId={selected.id}
                       testingEnabled={state.settings.testingWorkflowTrace === true}
                     />
