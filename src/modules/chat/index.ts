@@ -103,6 +103,14 @@ export {
 } from "./embed";
 export { generateWidgetSecret, hashWidgetSecret } from "./keys";
 
+export type {
+  ChatWorkflowTrace,
+  PackageHitSummary,
+  WorkflowStep,
+} from "./workflow-trace";
+export { listRememberedWorkflowTraces } from "./workflow-trace";
+export { fetchWorkflowTraces, persistWorkflowTrace } from "./workflow-persist";
+
 export { SUBMODULE as widget } from "./widget";
 export { SUBMODULE as conversation } from "./conversation";
 export { SUBMODULE as sessions } from "./sessions";

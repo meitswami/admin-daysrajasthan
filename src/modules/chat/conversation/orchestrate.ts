@@ -20,7 +20,13 @@ import {
   ensureServerChatPlatformState,
   mutateServerChatPlatformState,
 } from "../server-store";
-import { syncProviderConfigFromSlots } from "@/modules/intelligence";
+import { hasProviderApiKey, syncProviderConfigFromSlots } from "@/modules/intelligence";
+import { persistWorkflowTrace } from "../workflow-persist";
+import {
+  WorkflowTracer,
+  buildPackageSummaries,
+  type ChatWorkflowTrace,
+} from "../workflow-trace";
 import type {
   ChatAiMode,
   ChatConversationStub,
@@ -51,6 +57,8 @@ export type ChatTurnResult = {
   analytics: ChatTurnAnalytics;
   offlineQueued?: boolean;
   humanTakeover?: boolean;
+  /** Present only when Settings → Testing workflow trace is ON */
+  workflow?: ChatWorkflowTrace | null;
 };
 
 function isLocalDemoKey(secretKey: string): boolean {
@@ -375,11 +383,29 @@ function logAnalytics(entry: ChatTurnAnalytics): void {
 
 function preferredLocalProvider(): ProviderId {
   const state = ensureServerChatPlatformState();
-  const enabled = state.providers
-    .filter((p) => p.enabled && p.providerId !== "none")
+  const ranked = state.providers
+    .filter((p) => p.providerId !== "none")
     .sort((a, b) => a.priority - b.priority);
+
+  // Prefer enabled cloud providers that already have a key (UI or env)
+  for (const p of ranked) {
+    if (!p.enabled || p.providerId === "local") continue;
+    if (hasProviderApiKey(p.providerId as ProviderId)) {
+      return p.providerId as ProviderId;
+    }
+  }
+
+  // Auto-pick any cloud provider with an env/stored key even if slot was left disabled
+  for (const p of ranked) {
+    if (p.providerId === "local") continue;
+    if (hasProviderApiKey(p.providerId as ProviderId)) {
+      return p.providerId as ProviderId;
+    }
+  }
+
+  const enabled = ranked.filter((p) => p.enabled);
   const first = enabled[0]?.providerId;
-  return (first as ProviderId) || "github-models";
+  return (first as ProviderId) || "local";
 }
 
 function getConversationBySession(sessionId: string): ChatConversationStub | undefined {
@@ -391,10 +417,14 @@ function getConversationBySession(sessionId: string): ChatConversationStub | und
  */
 export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnResult> {
   const started = Date.now();
+  const platform = ensureServerChatPlatformState();
+  const traceEnabled = platform.settings.testingWorkflowTrace === true;
+  const tracer = traceEnabled ? new WorkflowTracer() : null;
+
   ensureLocalProviderRegistered();
   // Hot-reload provider enablement/priority/models from Super Admin (no restart)
   syncProviderConfigFromSlots(
-    ensureServerChatPlatformState().providers.map((p) => ({
+    platform.providers.map((p) => ({
       providerId: p.providerId,
       enabled: p.enabled,
       priority: p.priority,
@@ -404,12 +434,18 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
 
   const resolved = await resolveWebsiteFromKey(input.key);
   if (!resolved) {
+    tracer?.mark("resolve_widget_key", "error", "Invalid or revoked widget key");
     throw new ModuleError(CHAT_MODULE_ID, "INVALID_KEY", "Invalid or revoked widget key");
   }
+  tracer?.mark("resolve_widget_key", "ok", `website=${resolved.site.name}`, {
+    websiteId: resolved.site.id,
+    aiMode: resolved.config.aiMode,
+  });
 
   const { site, config } = resolved;
 
   if (!config.enabled || config.aiMode === "disabled") {
+    tracer?.mark("widget_gate", "error", "Widget disabled");
     throw new ModuleError(CHAT_MODULE_ID, "WIDGET_DISABLED", "Chat widget is disabled");
   }
 
@@ -421,6 +457,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     email: input.email?.trim() || null,
     mode: config.aiMode,
   });
+  tracer?.mark("ensure_session", "ok", `session=${session.id}`);
 
   // Prior turns only (before this message) — used for follow-up LLM routing
   const priorTurns = buildConversationTurns(session.id);
@@ -443,9 +480,53 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     email: input.email?.trim() || null,
     saveQuery: true,
   });
+  tracer?.mark("persist_user_message", "ok", undefined, {
+    messageId: userMsg.id,
+    conversationId: conversation.id,
+  });
+
+  const finishTrace = async (partial: {
+    replyText: string;
+    provider: string | null;
+    intent?: string | null;
+    usedFallback?: boolean;
+    hits?: SearchHit[];
+    intelligenceTraceId?: string | null;
+    messageId?: string | null;
+  }): Promise<ChatWorkflowTrace | null> => {
+    if (!tracer) return null;
+    const packageSummaries = buildPackageSummaries(partial.hits ?? []);
+    const providerSlot = platform.providers.find((p) => p.providerId === partial.provider);
+    tracer.mark("complete", "ok", `total=${Date.now() - started}ms`);
+    const trace: ChatWorkflowTrace = {
+      id: tracer.id,
+      sessionId: session.id,
+      conversationId: conversation.id,
+      websiteId: site.id,
+      messageId: partial.messageId ?? userMsg.id,
+      userMessage: input.message.trim(),
+      replyPreview: partial.replyText.slice(0, 280),
+      provider: partial.provider,
+      modelId: providerSlot?.modelId ?? null,
+      intent: partial.intent ?? null,
+      usedFallback: partial.usedFallback ?? false,
+      aiMode: config.aiMode,
+      packageHitCount: packageSummaries.length,
+      totalHitCount: (partial.hits ?? []).length,
+      packageIds: packageSummaries.map((p) => p.package_id),
+      packageSummaries,
+      steps: tracer.steps,
+      durationMs: Date.now() - started,
+      traceId: partial.intelligenceTraceId ?? tracer.id,
+      createdAt: tracer.createdAt,
+    };
+    void persistWorkflowTrace(trace);
+    return trace;
+  };
 
   // Human agent owns the thread — queue visitor message, no AI reply
   if (conversation.humanTakeover) {
+    tracer?.mark("route", "skip", "human_takeover");
     const replyText =
       "Thanks — a Travel Days agent has this chat and will reply to you shortly.";
     const analytics: ChatTurnAnalytics = {
@@ -457,6 +538,11 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       sessionId: session.id,
     };
     logAnalytics(analytics);
+    const workflow = await finishTrace({
+      replyText,
+      provider: "human",
+      intent: "human_handoff",
+    });
     return {
       mode: config.aiMode,
       sessionId: session.id,
@@ -477,11 +563,13 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       intelligence: null,
       analytics,
       humanTakeover: true,
+      workflow,
     };
   }
 
   // Offline mode — leave a message only
   if (config.aiMode === "offline") {
+    tracer?.mark("route", "skip", "offline_leave_message");
     const analytics: ChatTurnAnalytics = {
       responseTimeMs: Date.now() - started,
       usedFallback: false,
@@ -518,6 +606,12 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       createdAt: new Date().toISOString(),
     };
     persistMessage(assistantMsg, { visitorLabel, email: input.email?.trim() || null });
+    const workflow = await finishTrace({
+      replyText,
+      provider: "none",
+      intent: "offline",
+      messageId: assistantMsg.id,
+    });
     return {
       mode: "offline",
       sessionId: session.id,
@@ -526,22 +620,30 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       intelligence: null,
       analytics,
       offlineQueued: true,
+      workflow,
     };
   }
 
   // AI mode — Intelligence → Renderer (Ollama/local when available)
+  tracer?.mark("route", "ok", "ai_path");
   const scope = site.knowledgeScope;
   const regionCode = scopeRegionCode(scope);
   const enrichedText = enrichTravelQuery(input.message.trim());
   const conversationTurns = priorTurns;
+  const preferred = preferredLocalProvider();
+  tracer?.mark("select_provider", "ok", preferred, {
+    preferredProvider: preferred,
+    hasKey: preferred === "local" ? true : hasProviderApiKey(preferred),
+  });
 
+  const intelligenceStarted = Date.now();
   const intelligence = await runIntelligence({
     text: enrichedText,
     surface: "website",
     sessionId: session.id,
     locale: null,
     regionCode,
-    preferredProvider: preferredLocalProvider(),
+    preferredProvider: preferred,
     conversationTurns,
     extras: {
       knowledgeScope: scope,
@@ -549,8 +651,35 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
       originalText: input.message.trim(),
     },
   });
+  tracer?.mark(
+    "run_intelligence",
+    intelligence.success ? "ok" : "error",
+    `provider=${intelligence.provider} intent=${intelligence.intent}`,
+    {
+      provider: intelligence.provider,
+      intent: intelligence.intent,
+      usedFallback: intelligence.usedFallback,
+      durationMs: Date.now() - intelligenceStarted,
+      warnings: intelligence.warnings.slice(0, 5),
+      rawHitCount: intelligence.facts.hits.length,
+    }
+  );
 
   const filteredHits = filterHitsByScope(intelligence.facts.hits, scope);
+  const packageSummaries = buildPackageSummaries(filteredHits);
+  tracer?.mark(
+    "filter_knowledge_scope",
+    "ok",
+    `${filteredHits.length} hits · ${packageSummaries.length} packages`,
+    {
+      totalHits: filteredHits.length,
+      packageHitCount: packageSummaries.length,
+      packageIds: packageSummaries.map((p) => p.package_id),
+      includePackages: scope.includePackages,
+      includeDestinations: scope.includeDestinations,
+    }
+  );
+
   const scopedIntelligence: IntelligenceResult = {
     ...intelligence,
     facts: { ...intelligence.facts, hits: filteredHits },
@@ -561,6 +690,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     { blocks: scopedIntelligence.blocks, traceId: scopedIntelligence.traceId },
     { outputType: "json", surface: "chat", mode: "light" }
   );
+  tracer?.mark("render_reply", "ok");
 
   const presentation = "blocks" in rendered ? rendered.blocks : [];
   const replyText = presentationToReplyText(presentation as unknown[]);
@@ -589,6 +719,17 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     createdAt: new Date().toISOString(),
   };
   persistMessage(assistantMsg, { visitorLabel, email: input.email?.trim() || null });
+  tracer?.mark("persist_assistant_message", "ok", assistantMsg.id);
+
+  const workflow = await finishTrace({
+    replyText,
+    provider: scopedIntelligence.provider,
+    intent: scopedIntelligence.intent,
+    usedFallback: scopedIntelligence.usedFallback,
+    hits: filteredHits,
+    intelligenceTraceId: scopedIntelligence.traceId,
+    messageId: assistantMsg.id,
+  });
 
   return {
     mode: "ai",
@@ -598,6 +739,7 @@ export async function processChatTurn(input: ChatTurnInput): Promise<ChatTurnRes
     intelligence: scopedIntelligence,
     analytics,
     humanTakeover: false,
+    workflow,
   };
 }
 

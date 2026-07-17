@@ -6,7 +6,7 @@ export default function AiChatDashboardPage() {
     <>
       <Header
         title="AI & Chat"
-        description="Chat Platform management — widget, embed, keys (offline mode)"
+        description="Chat Platform management — widget, embed, keys (online AI)"
       />
       <ChatPlatformShell section="dashboard" />
     </>

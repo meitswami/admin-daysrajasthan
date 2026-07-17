@@ -18,10 +18,21 @@ const g = globalThis as typeof globalThis & {
 };
 
 function migrateAiMode(mode: string | undefined): ChatAiMode {
-  if (mode === "ai" || mode === "offline" || mode === "disabled") return mode;
-  if (mode === "ai_ready_future") return "ai";
-  if (mode === "manual") return "offline";
+  // Product default: always online AI. Keep explicit "disabled" only.
+  if (mode === "disabled") return "disabled";
+  if (mode === "ai" || mode === "ai_ready_future") return "ai";
+  if (mode === "offline" || mode === "manual") return "ai";
   return "ai";
+}
+
+function migrateAppearance(
+  appearance: ChatWebsite["appearance"] | undefined
+): ChatWebsite["appearance"] {
+  const merged = { ...DEFAULT_APPEARANCE, ...appearance };
+  if (/offline mode is on/i.test(merged.welcomeBody ?? "")) {
+    merged.welcomeBody = DEFAULT_APPEARANCE.welcomeBody;
+  }
+  return merged;
 }
 
 function bootstrapState(): ChatPlatformState {
@@ -61,7 +72,7 @@ function normalizeState(state: ChatPlatformState): ChatPlatformState {
     websites: (state.websites ?? []).map((w: ChatWebsite) => ({
       ...w,
       aiMode: migrateAiMode(w.aiMode as string),
-      appearance: { ...DEFAULT_APPEARANCE, ...w.appearance },
+      appearance: migrateAppearance(w.appearance),
       behaviour: { ...DEFAULT_BEHAVIOUR, ...w.behaviour },
       knowledgeScope: { ...DEFAULT_KNOWLEDGE_SCOPE, ...w.knowledgeScope },
     })),
@@ -81,17 +92,31 @@ function normalizeState(state: ChatPlatformState): ChatPlatformState {
     })),
     settings: { ...DEFAULT_SETTINGS, ...state.settings },
     providers: state.providers?.length
-      ? state.providers.map((p) => ({
-          ...DEFAULT_PROVIDERS.find((d) => d.providerId === p.providerId),
-          ...p,
-          modelId: p.modelId ?? null,
-          apiKeyMasked: p.apiKeyMasked ?? null,
-          hasApiKey: p.hasApiKey ?? false,
-          status: p.status ?? "idle",
-          lastSuccessAt: p.lastSuccessAt ?? null,
-          lastError: p.lastError ?? null,
-          lastTestedAt: p.lastTestedAt ?? null,
-        }))
+      ? state.providers.map((p) => {
+          const def = DEFAULT_PROVIDERS.find((d) => d.providerId === p.providerId);
+          const enabled =
+            p.providerId === "none"
+              ? false
+              : p.providerId === "local" ||
+                  p.providerId === "github-models" ||
+                  p.providerId === "groq" ||
+                  p.providerId === "huggingface" ||
+                  p.providerId === "openrouter"
+                ? true
+                : (p.enabled ?? def?.enabled ?? false);
+          return {
+            ...def,
+            ...p,
+            enabled,
+            modelId: p.modelId ?? null,
+            apiKeyMasked: p.apiKeyMasked ?? null,
+            hasApiKey: p.hasApiKey ?? false,
+            status: p.status ?? "idle",
+            lastSuccessAt: p.lastSuccessAt ?? null,
+            lastError: p.lastError ?? null,
+            lastTestedAt: p.lastTestedAt ?? null,
+          };
+        })
       : DEFAULT_PROVIDERS,
   };
 }

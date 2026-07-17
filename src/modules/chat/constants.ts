@@ -29,7 +29,8 @@ export const DEFAULT_APPEARANCE: WidgetAppearance = {
   colorMode: "light",
   showBranding: true,
   welcomeTitle: "Travel Days",
-  welcomeBody: "Ask about packages and destinations. Offline mode is on — leave a message anytime.",
+  welcomeBody:
+    "Ask about packages and destinations. I'm online — tell me your dates, cities, or trip style.",
 };
 
 export const DEFAULT_BEHAVIOUR: WidgetBehaviour = {
@@ -51,7 +52,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScopeConfig = {
   includeFaqs: true,
   includeBlogs: false,
   regionCodes: [],
-  notes: "Scope applied when AI mode is enabled later.",
+  notes: "Packages load live from Supabase itineraries for AI answers.",
 };
 
 export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
@@ -59,7 +60,7 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
     id: "prov_github",
     providerId: "github-models",
     label: "GitHub Models (Mistral 3.1)",
-    enabled: false,
+    enabled: true,
     envKeyHint: "GITHUB_TOKEN",
     priority: 0,
     modelId: "mistral-ai/mistral-small-2503",
@@ -74,7 +75,7 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
     id: "prov_groq",
     providerId: "groq",
     label: "Groq (Fallback)",
-    enabled: false,
+    enabled: true,
     envKeyHint: "GROQ_API_KEY",
     priority: 1,
     modelId: "llama-3.1-8b-instant",
@@ -104,7 +105,7 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
     id: "prov_hf",
     providerId: "huggingface",
     label: "HuggingFace (Qwen 2.5)",
-    enabled: false,
+    enabled: true,
     envKeyHint: "HF_TOKEN",
     priority: 10,
     modelId: "Qwen/Qwen2.5-3B-Instruct:featherless-ai",
@@ -118,8 +119,8 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
   {
     id: "prov_or",
     providerId: "openrouter",
-    label: "OpenRouter (Future)",
-    enabled: false,
+    label: "OpenRouter",
+    enabled: true,
     envKeyHint: "OPENROUTER_API_KEY",
     priority: 11,
     modelId: null,
@@ -133,7 +134,7 @@ export const DEFAULT_PROVIDERS: AiProviderSlot[] = [
   {
     id: "prov_none",
     providerId: "none",
-    label: "None (offline / manual)",
+    label: "None (disabled)",
     enabled: false,
     envKeyHint: null,
     priority: 99,
@@ -168,6 +169,7 @@ export const DEFAULT_SETTINGS: ChatPlatformSettings = {
   handoffMode: "admin_assign",
   defaultAgentTeamMemberId: "tm-vandana",
   leadAcceptSeconds: 20,
+  testingWorkflowTrace: false,
 };
 
 /** Accept window before rotating an offered chat lead */

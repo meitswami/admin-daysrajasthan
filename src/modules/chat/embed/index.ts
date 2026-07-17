@@ -99,7 +99,7 @@ export function generateEmbedSnippets(input: {
       format: "api_endpoint",
       label: "API Endpoint",
       language: "text",
-      code: `GET ${configUrl}\nHeader (optional future): x-td-widget-key: ${key}\n\nReturns public widget config (offline/manual). AI conversations not enabled yet.`,
+      code: `GET ${configUrl}\nHeader (optional future): x-td-widget-key: ${key}\n\nReturns public widget config for the live AI travel assistant.`,
     },
   ];
 }

@@ -39,6 +39,7 @@ import {
 import { getCurrentTeamMember, listTeamMembers } from "@/lib/rbac/current-user";
 import { cn } from "@/lib/utils";
 import { Copy, Plus, Trash2 } from "lucide-react";
+import type { ChatWorkflowTrace } from "@/modules/chat/workflow-trace";
 
 export type ChatPlatformSectionId =
   (typeof CHAT_PLATFORM_SECTIONS)[number]["id"];
@@ -65,6 +66,140 @@ function CopyBlock({ title, code }: { title: string; code: string }) {
       <pre className="max-h-64 overflow-auto p-3 text-[11px] leading-relaxed text-stone-700 whitespace-pre-wrap">
         {code}
       </pre>
+    </div>
+  );
+}
+
+function WorkflowTracePanel({
+  sessionId,
+  conversationId,
+  testingEnabled,
+}: {
+  sessionId: string;
+  conversationId: string;
+  testingEnabled: boolean;
+}) {
+  const [traces, setTraces] = useState<ChatWorkflowTrace[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!testingEnabled || !sessionId) {
+      setTraces([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const qs = new URLSearchParams({
+        sessionId,
+        conversationId,
+        limit: "20",
+      });
+      const res = await fetch(`/api/chat/platform/workflow-traces?${qs}`);
+      const json = (await res.json()) as { data?: { traces?: ChatWorkflowTrace[] } };
+      setTraces(json.data?.traces ?? []);
+    } catch {
+      setTraces([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [sessionId, conversationId, testingEnabled]);
+
+  useEffect(() => {
+    void load();
+    if (!testingEnabled) return;
+    const id = window.setInterval(() => void load(), 4000);
+    return () => window.clearInterval(id);
+  }, [load, testingEnabled]);
+
+  if (!testingEnabled) {
+    return (
+      <div className="rounded-lg border border-dashed border-stone-200 px-3 py-3 text-xs text-stone-500">
+        Workflow testing is OFF. Enable it under Settings → &quot;Testing: conversation workflow
+        trace&quot;.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <Label>Testing workflow (live)</Label>
+          <p className="text-[11px] text-stone-500">
+            Model path · DB package hits · package_id · timestamps
+          </p>
+        </div>
+        <Button type="button" size="sm" variant="outline" onClick={() => void load()}>
+          {loading ? "Refreshing…" : "Refresh"}
+        </Button>
+      </div>
+      {traces.length === 0 && (
+        <p className="text-xs text-stone-500">
+          No traces yet. Ask the widget a question while Testing mode is ON.
+        </p>
+      )}
+      {traces.map((t) => (
+        <div key={t.id} className="rounded-lg border border-amber-100 bg-amber-50/40 p-3 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="info">{t.provider || "—"}</Badge>
+            {t.modelId && <Badge>{t.modelId}</Badge>}
+            {t.usedFallback && <Badge variant="success">fallback</Badge>}
+            <span className="text-stone-500">{new Date(t.createdAt).toLocaleString()}</span>
+            <span className="text-stone-500">{t.durationMs}ms</span>
+          </div>
+          <p className="mt-2 font-medium text-stone-800">Q: {t.userMessage}</p>
+          {t.replyPreview && <p className="mt-1 text-stone-600">A: {t.replyPreview}</p>}
+          <p className="mt-2 text-stone-700">
+            Packages from DB: <strong>{t.packageHitCount}</strong> / total hits{" "}
+            <strong>{t.totalHitCount}</strong>
+            {t.intent ? ` · intent ${t.intent}` : ""}
+          </p>
+          {t.packageIds.length > 0 && (
+            <p className="mt-1 break-all text-[11px] text-stone-600">
+              package_ids: {t.packageIds.join(", ")}
+            </p>
+          )}
+          {t.packageSummaries.length > 0 && (
+            <ul className="mt-2 space-y-1">
+              {t.packageSummaries.map((p) => (
+                <li
+                  key={p.package_id}
+                  className="rounded border border-white bg-white/80 px-2 py-1"
+                >
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-stone-500">
+                    {" "}
+                    · {p.destination || "—"} · {p.duration || "—"} · id {p.package_id}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <ol className="mt-3 space-y-1 border-t border-amber-100 pt-2">
+            {t.steps.map((s, i) => (
+              <li key={`${t.id}_${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                <span className="font-mono text-[10px] text-stone-500">
+                  {new Date(s.at).toLocaleTimeString()}
+                </span>
+                <span className="font-medium">{s.name}</span>
+                <span
+                  className={cn(
+                    s.status === "ok"
+                      ? "text-emerald-700"
+                      : s.status === "error"
+                        ? "text-red-700"
+                        : "text-stone-500"
+                  )}
+                >
+                  {s.status}
+                </span>
+                <span className="text-stone-500">{s.durationMs}ms</span>
+                {s.detail && <span className="text-stone-600">{s.detail}</span>}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
     </div>
   );
 }
@@ -161,7 +296,7 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
             AI & Chat · Website Platform
           </p>
           <p className="mt-1 text-sm text-stone-600">
-            Configure, embed, and deploy the widget in offline/manual mode. AI conversations not enabled yet.
+            Configure the live AI travel assistant — packages load from Supabase, providers run online.
           </p>
         </div>
         <div className="w-full max-w-xs">
@@ -218,7 +353,7 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
             <CardHeader>
               <CardTitle className="text-base">Quick start</CardTitle>
               <CardDescription>
-                1) Create an API key · 2) Add allowed domains · 3) Copy embed from Embed tab · 4) Test offline widget
+                1) Set AI mode to AI · 2) Enable a provider + API key · 3) Create API key · 4) Add domains · 5) Embed & test
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
@@ -239,7 +374,9 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Widget Settings</CardTitle>
-            <CardDescription>Enable website widget and AI mode (offline until Intelligence wired).</CardDescription>
+            <CardDescription>
+              Enable the website widget. Keep AI mode on &quot;AI&quot; so visitors get live package answers.
+            </CardDescription>
           </CardHeader>
           <CardContent className="mx-auto max-w-xl space-y-4">
             <div>
@@ -1130,6 +1267,12 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                       ))}
                     </div>
 
+                    <WorkflowTracePanel
+                      sessionId={selected.sessionId}
+                      conversationId={selected.id}
+                      testingEnabled={state.settings.testingWorkflowTrace === true}
+                    />
+
                     <div className="flex flex-wrap items-end gap-2">
                       <div className="min-w-[180px] flex-1">
                         <Label>Assign to team member</Label>
@@ -1257,6 +1400,20 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
                 onChange={(v) => updatePlatformSettings({ allowIframeEmbed: v })}
               />
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-3">
+              <div className="min-w-0 pr-3">
+                <p className="text-sm font-medium text-amber-950">Testing: conversation workflow trace</p>
+                <p className="mt-0.5 text-xs text-amber-900/80">
+                  When ON, each chat turn records AI model path, DB package hits, package_ids, and timestamps.
+                  View live under Conversations. Keep OFF in production to avoid extra DB load.
+                </p>
+              </div>
+              <Toggle
+                checked={state.settings.testingWorkflowTrace === true}
+                onChange={(v) => updatePlatformSettings({ testingWorkflowTrace: v })}
+              />
+            </div>
+
             <div className="flex items-center justify-between rounded-lg border border-stone-100 px-3 py-3">
               <div className="min-w-0 pr-3">
                 <p className="text-sm font-medium">Save all queries to Superadmin</p>

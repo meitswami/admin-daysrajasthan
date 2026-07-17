@@ -1,6 +1,6 @@
 /**
- * Data access layer — uses mock data now.
- * Replace implementations with Supabase queries when connecting (see lib/supabase/queries.ts).
+ * Data access layer — Supabase is the live source for packages / leads / blogs.
+ * Mock exports remain available for local UI demos only.
  */
 export {
   itineraries,
@@ -37,10 +37,12 @@ export { globalSearch, getLeadScore, summarizeInquiry, generateBlogSeo, activity
 
 import { getDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 
-export const DATA_SOURCE = "mock" as "mock" | "supabase";
+/** Chat Knowledge, admin lists, and server APIs read from Supabase when configured. */
+export const DATA_SOURCE = "supabase" as "mock" | "supabase";
 
 /** Use getDataSource() client-side for Dummy/Real toggle */
 export function getDataSource(): "mock" | "supabase" {
+  if (!isSupabaseConfigured()) return "mock";
   if (typeof window === "undefined") return DATA_SOURCE;
-  return getDataMode() === "real" && isSupabaseConfigured() ? "supabase" : "mock";
+  return getDataMode() === "dummy" ? "mock" : "supabase";
 }

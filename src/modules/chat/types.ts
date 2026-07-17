@@ -231,6 +231,11 @@ export type ChatPlatformSettings = {
   defaultAgentTeamMemberId: string | null;
   /** Seconds an offered agent has to Accept before rotation (default 20) */
   leadAcceptSeconds: number;
+  /**
+   * Testing only: record per-turn AI/DB workflow traces (model path, package ids, timestamps).
+   * Keep OFF in production to avoid extra DB writes.
+   */
+  testingWorkflowTrace: boolean;
 };
 
 export type ChatPlatformState = {

@@ -124,7 +124,7 @@ export const websiteNav: NavGroup = {
   ],
 };
 
-/** Chat Platform — widget management (offline before AI) */
+/** Chat Platform — live AI travel assistant widget */
 export const aiChatNav: NavGroup = {
   label: "AI & Chat",
   items: [
@@ -132,7 +132,7 @@ export const aiChatNav: NavGroup = {
       label: "Chat Platform",
       href: "/ai-chat",
       icon: Bot,
-      description: "Widget, embed, keys, domains & offline chat",
+      description: "Widget, embed, keys, domains & online AI chat",
     },
   ],
 };

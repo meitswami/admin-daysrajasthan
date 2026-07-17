@@ -16,10 +16,21 @@ import {
 import type { AiProviderSlot, ChatAiMode, ChatPlatformState, ChatWebsite } from "./types";
 
 function migrateAiMode(mode: string | undefined): ChatAiMode {
-  if (mode === "ai" || mode === "offline" || mode === "disabled") return mode;
-  if (mode === "ai_ready_future") return "ai";
-  if (mode === "manual") return "offline";
+  // Product default: always online AI. Keep explicit "disabled" only.
+  if (mode === "disabled") return "disabled";
+  if (mode === "ai" || mode === "ai_ready_future") return "ai";
+  if (mode === "offline" || mode === "manual") return "ai";
   return "ai";
+}
+
+function migrateAppearance(
+  appearance: ChatWebsite["appearance"] | undefined
+): ChatWebsite["appearance"] {
+  const merged = { ...DEFAULT_APPEARANCE, ...appearance };
+  if (/offline mode is on/i.test(merged.welcomeBody ?? "")) {
+    merged.welcomeBody = DEFAULT_APPEARANCE.welcomeBody;
+  }
+  return merged;
 }
 
 function normalizeStoredHfModel(modelId: string | null | undefined): string | null {
@@ -48,6 +59,17 @@ function migrateProviders(providers: AiProviderSlot[] | undefined): AiProviderSl
       ...def,
       ...prev,
       modelId,
+      // Keep cloud + local providers online by default after platform upgrade
+      enabled:
+        def.providerId === "none"
+          ? false
+          : def.providerId === "local" ||
+              def.providerId === "github-models" ||
+              def.providerId === "groq" ||
+              def.providerId === "huggingface" ||
+              def.providerId === "openrouter"
+            ? true
+            : (prev.enabled ?? def.enabled),
       apiKeyMasked: prev.apiKeyMasked ?? null,
       hasApiKey: prev.hasApiKey ?? false,
       status: prev.status ?? def.status,
@@ -78,7 +100,7 @@ function migrateWebsites(websites: ChatWebsite[]): ChatWebsite[] {
   return websites.map((w) => ({
     ...w,
     aiMode: migrateAiMode(w.aiMode as string),
-    appearance: { ...DEFAULT_APPEARANCE, ...w.appearance },
+    appearance: migrateAppearance(w.appearance),
     behaviour: { ...DEFAULT_BEHAVIOUR, ...w.behaviour },
     knowledgeScope: { ...DEFAULT_KNOWLEDGE_SCOPE, ...w.knowledgeScope },
   }));
