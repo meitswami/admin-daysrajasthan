@@ -35,13 +35,6 @@ function parseFactLines(factsBlock: string): FactLine[] {
     .filter((f) => f.title.length > 0);
 }
 
-function labelForKind(kind: string): string {
-  if (kind === "package") return "Package";
-  if (kind === "destination") return "Destination";
-  if (kind === "knowledge") return "Guide";
-  return "Match";
-}
-
 function buildMockNarrative(prompt: ProviderPrompt): string {
   const user = [...prompt.messages].reverse().find((m) => m.role === "user")?.content ?? "";
   const factsBlock = user.includes("RETRIEVED FACTS")
@@ -53,20 +46,19 @@ function buildMockNarrative(prompt: ProviderPrompt): string {
     return "I looked through our Travel Days catalog but did not find a strong match yet. Try a destination name, trip length, or travel style — I only use real packages and destinations from Search + Knowledge.";
   }
 
-  const bullets = facts
-    .map((f) => {
-      const label = labelForKind(f.kind);
-      return f.subtitle
-        ? `• ${label}: ${f.title} — ${f.subtitle}`
-        : `• ${label}: ${f.title}`;
-    })
-    .join("\n");
+  const packages = facts.filter((f) => f.kind === "package").length;
+  const destinations = facts.filter((f) => f.kind === "destination").length;
+  const focus =
+    packages > 0
+      ? `${packages} package${packages === 1 ? "" : "s"}`
+      : destinations > 0
+        ? `${destinations} destination${destinations === 1 ? "" : "s"}`
+        : "catalog matches";
 
   return [
-    "Here is what I found in our Travel Days catalog:",
-    bullets,
-    "",
-    "I can refine by budget, days, or travel style. Ask for a quote anytime — pricing comes from our Quotation Engine.",
+    `I found ${focus} in our Travel Days catalog.`,
+    "Open a card below for the full itinerary on the website.",
+    "I can refine by budget, days, or travel style — ask for a quote anytime.",
   ].join("\n");
 }
 

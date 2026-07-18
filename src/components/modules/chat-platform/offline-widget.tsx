@@ -258,12 +258,15 @@ export function OfflineChatWidget() {
                         href={pkg.href}
                         target="_blank"
                         rel="noreferrer"
-                        className="block rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 transition hover:border-stone-300 hover:bg-stone-50"
+                        className="block rounded-lg border border-stone-200 bg-white px-3 py-2 text-sm text-stone-800 transition hover:border-[#7A1F1F]/40 hover:bg-stone-50"
                       >
                         <span className="font-medium text-[#7A1F1F]">{pkg.name}</span>
                         {pkg.summary ? (
                           <span className="mt-0.5 block text-xs text-stone-500">{pkg.summary}</span>
                         ) : null}
+                        <span className="mt-1.5 block text-xs font-medium text-[#7A1F1F]">
+                          View details →
+                        </span>
                       </a>
                     ) : (
                       <div

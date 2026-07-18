@@ -35,16 +35,19 @@ function searchOnlyNarrative(
   hits: Array<{ title: string; subtitle: string | null; kind: string }>
 ): string | null {
   if (!hits.length) return null;
-  const lines = hits.slice(0, 6).map((h) => {
-    const label =
-      h.kind === "package"
-        ? "Package"
-        : h.kind === "destination"
-          ? "Destination"
-          : "Info";
-    return h.subtitle ? `• ${label}: ${h.title} — ${h.subtitle}` : `• ${label}: ${h.title}`;
-  });
-  return ["Here is what I found in our catalog:", ...lines].join("\n");
+  const packages = hits.filter((h) => h.kind === "package").length;
+  const destinations = hits.filter((h) => h.kind === "destination").length;
+  // Keep copy short — package/destination cards carry the clickable links.
+  if (packages > 0 && destinations > 0) {
+    return `I found ${packages} package${packages === 1 ? "" : "s"} and ${destinations} destination${destinations === 1 ? "" : "s"} in our catalog. Open any card below for full details on the website.`;
+  }
+  if (packages > 0) {
+    return `I found ${packages} matching package${packages === 1 ? "" : "s"} in our Travel Days catalog. Tap a card below to open the full itinerary on the website.`;
+  }
+  if (destinations > 0) {
+    return `I found ${destinations} destination${destinations === 1 ? "" : "s"} in our catalog. Open a card below for more details.`;
+  }
+  return "Here is what I found in our catalog — see the cards below.";
 }
 
 /**

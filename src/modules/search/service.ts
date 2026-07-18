@@ -3,6 +3,7 @@
  * Never queries Supabase; loads via Knowledge / CRP / Quotation repositories.
  */
 
+import { publicDestinationHref, publicPackageHref } from "@/lib/website-url";
 import type { KnowledgeDomain } from "@/modules/knowledge";
 
 import {
@@ -220,7 +221,7 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
       title: pkg.name,
       subtitle: pkg.destination,
       score: r.score,
-      href: pkg.slug ? `/packages/${pkg.slug}` : null,
+      href: publicPackageHref(pkg.slug),
       matchMode: mode,
       highlights: extractHighlights(`${pkg.name} ${pkg.destination ?? ""}`, query.text),
       record: pkg,
@@ -270,7 +271,7 @@ export async function searchDestinations(input: SearchQuery | string): Promise<S
       title: d.name,
       subtitle: d.subtitle,
       score: r.score,
-      href: `/destinations/${d.slug}`,
+      href: publicDestinationHref(d.slug),
       matchMode: mode,
       highlights: extractHighlights(`${d.name} ${d.subtitle ?? ""}`, query.text),
       record: d,
@@ -586,7 +587,7 @@ export async function getSuggestions(input: SearchQuery | string = { text: "" })
         label: pkg.name,
         value: pkg.name,
         score: pkg.isTrending ? 0.9 : 0.7,
-        href: pkg.slug ? `/packages/${pkg.slug}` : null,
+        href: publicPackageHref(pkg.slug),
       });
     }
   }
@@ -599,7 +600,7 @@ export async function getSuggestions(input: SearchQuery | string = { text: "" })
         label: d.name,
         value: d.name,
         score: d.isTrending ? 0.85 : 0.65,
-        href: `/destinations/${d.slug}`,
+        href: publicDestinationHref(d.slug),
       });
     }
   }
@@ -612,7 +613,7 @@ export async function getSuggestions(input: SearchQuery | string = { text: "" })
       label: `Related: ${pkg.name}`,
       value: pkg.name,
       score: 0.55,
-      href: pkg.slug ? `/packages/${pkg.slug}` : null,
+      href: publicPackageHref(pkg.slug),
     });
     items.push({
       id: `frequent:${pkg.id}`,
@@ -620,7 +621,7 @@ export async function getSuggestions(input: SearchQuery | string = { text: "" })
       label: `Frequently booked: ${pkg.name}`,
       value: pkg.name,
       score: 0.6,
-      href: pkg.slug ? `/packages/${pkg.slug}` : null,
+      href: publicPackageHref(pkg.slug),
     });
   }
 
