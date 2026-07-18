@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { PublicWidgetConfig } from "@/modules/chat";
 import { buildChatSuggestionTips } from "@/modules/chat/suggestion-tips";
 
@@ -64,6 +64,7 @@ export function OfflineChatWidget() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [detailsCaptured, setDetailsCaptured] = useState(false);
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   const key = useMemo(() => {
     if (typeof window === "undefined") return "";
@@ -92,9 +93,15 @@ export function OfflineChatWidget() {
       buildChatSuggestionTips({
         lastUserText,
         packageTitles: lastAssistantPackages,
-      }),
+      }).slice(0, 3),
     [lastUserText, lastAssistantPackages]
   );
+
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, sending]);
 
   useEffect(() => {
     if (!key) {
@@ -268,12 +275,15 @@ export function OfflineChatWidget() {
       className="flex h-[560px] flex-col overflow-hidden border border-stone-200 bg-white shadow-xl"
       style={{ borderRadius: a.borderRadiusPx }}
     >
-      <header className="px-4 py-3 text-white" style={{ background: a.primaryColor }}>
-        <p className="text-sm font-semibold">{a.welcomeTitle}</p>
-        <p className="mt-0.5 text-xs opacity-90">{headerSub}</p>
+      <header className="shrink-0 px-4 py-2.5 text-white" style={{ background: a.primaryColor }}>
+        <p className="text-sm font-semibold leading-tight">{a.welcomeTitle}</p>
+        <p className="mt-0.5 text-[11px] opacity-90">{headerSub}</p>
       </header>
 
-      <div className="flex-1 space-y-3 overflow-y-auto p-4 text-sm text-stone-700">
+      <div
+        ref={transcriptRef}
+        className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3 text-sm text-stone-700"
+      >
         {disabled ? (
           <div className="rounded-xl bg-stone-100 px-3 py-2">
             Chat is currently disabled for this website.
@@ -329,6 +339,9 @@ export function OfflineChatWidget() {
             </div>
           ))
         )}
+        {sending && (
+          <p className="text-xs text-stone-400">Thinking…</p>
+        )}
         {!disabled && config.aiMode === "offline" && (
           <p className="text-xs text-stone-500">{config.behaviour.businessHoursNote}</p>
         )}
@@ -343,12 +356,15 @@ export function OfflineChatWidget() {
       </div>
 
       {!disabled && (
-        <form onSubmit={onSubmit} className="space-y-2 border-t border-stone-100 p-3">
+        <form
+          onSubmit={onSubmit}
+          className="shrink-0 space-y-1.5 border-t border-stone-100 bg-white px-3 py-2"
+        >
           {collectDetails && !detailsCaptured ? (
             <>
               {config.behaviour.collectEmail && (
                 <input
-                  className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm"
                   placeholder="Email"
                   type="email"
                   value={email}
@@ -356,7 +372,7 @@ export function OfflineChatWidget() {
                 />
               )}
               <input
-                className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
+                className="w-full rounded-lg border border-stone-200 px-3 py-1.5 text-sm"
                 placeholder="Your name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -365,61 +381,56 @@ export function OfflineChatWidget() {
           ) : (
             collectDetails &&
             (name.trim() || email.trim()) && (
-              <p className="truncate text-[11px] text-stone-500">
+              <p className="truncate text-[10px] text-stone-500">
                 Chatting as {[name.trim(), email.trim()].filter(Boolean).join(" · ")}
               </p>
             )
           )}
 
           {showTips && (
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
-                {lastUserText ? "Suggested next" : "Try asking"}
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {suggestionTips.map((tip) => (
-                  <button
-                    key={tip}
-                    type="button"
-                    disabled={sending}
-                    onClick={() => void sendText(tip)}
-                    className="max-w-full rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-left text-[11px] leading-snug text-stone-700 transition hover:border-[#7A1F1F]/35 hover:bg-white hover:text-[#7A1F1F] disabled:opacity-60"
-                  >
-                    {tip}
-                  </button>
-                ))}
-              </div>
+            <div className="-mx-0.5 flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {suggestionTips.map((tip) => (
+                <button
+                  key={tip}
+                  type="button"
+                  disabled={sending}
+                  title={tip}
+                  onClick={() => void sendText(tip)}
+                  className="shrink-0 max-w-[200px] truncate rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-[10px] leading-none text-stone-600 transition hover:border-[#7A1F1F]/35 hover:bg-white hover:text-[#7A1F1F] disabled:opacity-60"
+                >
+                  {tip}
+                </button>
+              ))}
             </div>
           )}
 
-          <textarea
-            required
-            rows={collectDetails && !detailsCaptured ? 3 : 2}
-            className="w-full rounded-lg border border-stone-200 px-3 py-2 text-sm"
-            placeholder={
-              config.aiMode === "ai"
-                ? "Ask about packages, destinations, or a trip plan…"
-                : "Type your message…"
-            }
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={onComposerKeyDown}
-          />
-          <p className="text-[10px] text-stone-400">Enter to send · Shift+Enter for a new line</p>
-          <button
-            type="submit"
-            disabled={sending}
-            className="w-full rounded-lg px-3 py-2.5 text-sm font-medium text-white disabled:opacity-60"
-            style={{ background: a.primaryColor }}
-          >
-            {sending
-              ? "Sending…"
-              : config.aiMode === "ai"
-                ? "Send"
-                : "Send message"}
-          </button>
+          <div className="flex items-end gap-2">
+            <textarea
+              required
+              rows={1}
+              className="max-h-20 min-h-[38px] w-full flex-1 resize-none rounded-lg border border-stone-200 px-3 py-2 text-sm leading-snug"
+              placeholder={
+                config.aiMode === "ai"
+                  ? "Ask about packages or destinations…"
+                  : "Type your message…"
+              }
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={onComposerKeyDown}
+            />
+            <button
+              type="submit"
+              disabled={sending || !message.trim()}
+              className="shrink-0 rounded-lg px-3.5 py-2 text-sm font-medium text-white disabled:opacity-60"
+              style={{ background: a.primaryColor }}
+            >
+              {sending ? "…" : "Send"}
+            </button>
+          </div>
           {a.showBranding && (
-            <p className="text-center text-[10px] text-stone-400">Powered by Travel Days</p>
+            <p className="text-center text-[9px] leading-none text-stone-400">
+              Powered by Travel Days
+            </p>
           )}
         </form>
       )}

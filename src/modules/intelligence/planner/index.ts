@@ -8,14 +8,40 @@
 } from "../types";
 import { INTENT_CUES } from "../constants";
 
+function cueMatches(haystack: string, cue: string): boolean {
+  const c = cue.toLowerCase();
+  // Short cues ("hi", "hey") must be whole words — "hi" must not match "which"
+  if (c.length <= 3) {
+    return new RegExp(`(?:^|[^a-z0-9])${c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:$|[^a-z0-9])`, "i").test(
+      haystack
+    );
+  }
+  return haystack.includes(c);
+}
+
 function detectIntent(text: string): { intent: IntelligenceIntent; confidence: number } {
   const lower = text.toLowerCase();
+
+  // Conversational follow-ups about prior package results
+  if (
+    /\b(which of these|any of these|best for (a )?(family|couple|friends?|seniors?|solo))\b/i.test(
+      lower
+    ) ||
+    (/\b(family|families|couple|couples|honeymoon|solo|senior|friends)\b/i.test(lower) &&
+      /\b(best|better|recommend|suitable|good for)\b/i.test(lower))
+  ) {
+    if (/\bcompare|vs|versus|difference\b/i.test(lower)) {
+      return { intent: "compare_packages", confidence: 0.85 };
+    }
+    return { intent: "package_recommend", confidence: 0.85 };
+  }
+
   let best: IntelligenceIntent = "unknown";
   let score = 0;
   for (const [intent, cues] of Object.entries(INTENT_CUES)) {
     let hits = 0;
     for (const cue of cues) {
-      if (lower.includes(cue)) hits += 1;
+      if (cueMatches(lower, cue)) hits += 1;
     }
     if (hits > score) {
       score = hits;
@@ -23,7 +49,10 @@ function detectIntent(text: string): { intent: IntelligenceIntent; confidence: n
     }
   }
   if (score === 0) {
-    if (lower.length < 24) return { intent: "greet", confidence: 0.4 };
+    if (lower.length < 24 && /^(hi|hey|hello|namaste)\b/i.test(lower.trim())) {
+      return { intent: "greet", confidence: 0.4 };
+    }
+    if (lower.length < 18) return { intent: "greet", confidence: 0.35 };
     return { intent: "fallback_browse", confidence: 0.35 };
   }
   return { intent: best, confidence: Math.min(0.95, 0.45 + score * 0.15) };
@@ -65,12 +94,56 @@ function extractEntities(text: string, memory: TravelMemoryProfile | null): Extr
     });
   }
 
-  const styles = ["luxury", "adventure", "family", "couple", "group", "pilgrimage", "vegetarian"];
+  const styles = [
+    "luxury",
+    "adventure",
+    "family",
+    "families",
+    "couple",
+    "couples",
+    "honeymoon",
+    "romantic",
+    "group",
+    "friends",
+    "solo",
+    "senior",
+    "pilgrimage",
+    "spiritual",
+    "desert",
+    "wildlife",
+    "heritage",
+    "vegetarian",
+  ];
   for (const style of styles) {
     if (lower.includes(style)) {
+      const normalized =
+        style === "families"
+          ? "family"
+          : style === "couples"
+            ? "couple"
+            : style === "romantic" || style === "honeymoon"
+              ? "couple"
+              : style === "friends"
+                ? "group"
+                : style === "spiritual"
+                  ? "pilgrimage"
+                  : style === "desert" || style === "wildlife" || style === "heritage"
+                    ? style === "heritage"
+                      ? "luxury"
+                      : "adventure"
+                    : style === "senior"
+                      ? "family"
+                      : style === "solo"
+                        ? "group"
+                        : style;
       entities.push({
-        kind: style === "vegetarian" ? "dietary" : style === "family" || style === "couple" ? "party" : "travel_style",
-        value: style,
+        kind:
+          style === "vegetarian"
+            ? "dietary"
+            : normalized === "family" || normalized === "couple"
+              ? "party"
+              : "travel_style",
+        value: normalized === "group" && style === "solo" ? "solo" : normalized,
         confidence: 0.8,
       });
     }
@@ -123,13 +196,39 @@ const LLM_INTENTS = new Set<IntelligenceIntent>([
   "quotation_assist",
 ]);
 
+function mergeSearchQueryFromTurns(
+  currentText: string,
+  turns: IntelligenceRequest["conversationTurns"] | undefined,
+  intent: IntelligenceIntent
+): string {
+  const current = currentText.trim();
+  if (!turns?.length) return current;
+
+  const priorUsers = turns
+    .filter((t) => t.role === "user")
+    .map((t) => t.text.trim())
+    .filter(Boolean);
+  if (!priorUsers.length) return current;
+
+  const lastPrior = priorUsers[priorUsers.length - 1] ?? "";
+  const lower = current.toLowerCase();
+  const isRefine =
+    intent === "package_recommend" &&
+    (/\b(these|those|them|above|best|which|family|couple|friend|senior|solo|theme)\b/.test(lower) ||
+      current.split(/\s+/).length <= 12);
+
+  if (!isRefine) return current;
+  if (!lastPrior || lastPrior.toLowerCase() === lower) return current;
+  return `${lastPrior} ${current}`.trim();
+}
+
 function buildNeeds(
   intent: IntelligenceIntent,
   text: string,
   surface: IntelligenceRequest["surface"],
-  conversationTurnCount: number
+  conversationTurnCount: number,
+  searchQueryText: string
 ): PlannerNeeds {
-  const baseQuery = text.trim();
   const needs: PlannerNeeds = {
     needAi: true,
     needSearch: true,
@@ -138,7 +237,7 @@ function buildNeeds(
     needCustomerData: false,
     needTravelMemory: true,
     searchKinds: ["package", "destination", "knowledge"],
-    searchQueryText: baseQuery,
+    searchQueryText,
     reason: `Intent ${intent} on surface ${surface}`,
   };
 
@@ -204,8 +303,17 @@ function buildNeeds(
       break;
   }
 
-  // Conversational follow-up / personalized turns always use LLM (except pure greet)
-  if (conversationTurnCount > 0 && intent !== "greet") {
+  // Conversational follow-ups use LLM except package/destination refinements
+  // (those stay Search → Renderer with merged prior query context).
+  if (
+    conversationTurnCount > 0 &&
+    intent !== "greet" &&
+    intent !== "package_recommend" &&
+    intent !== "destination_recommend" &&
+    intent !== "explain_destination" &&
+    intent !== "faq" &&
+    intent !== "fallback_browse"
+  ) {
     needs.needAi = true;
     needs.reason = `${needs.reason} · conversational follow-up`;
   }
@@ -227,8 +335,23 @@ export function planIntelligence(
   const { intent, confidence } = detectIntent(request.text);
   const entities = extractEntities(request.text, memory);
   const turnCount = request.conversationTurns?.length ?? 0;
-  const needs = buildNeeds(intent, request.text, request.surface, turnCount);
-  return { intent, entities, needs, confidence };
+  const searchQueryText = mergeSearchQueryFromTurns(
+    request.text,
+    request.conversationTurns,
+    intent
+  );
+  // Also extract entities from merged query so places from prior turn apply
+  const mergedEntities =
+    searchQueryText !== request.text.trim()
+      ? [
+          ...entities,
+          ...extractEntities(searchQueryText, memory).filter(
+            (e) => !entities.some((x) => x.kind === e.kind && x.value === e.value)
+          ),
+        ]
+      : entities;
+  const needs = buildNeeds(intent, request.text, request.surface, turnCount, searchQueryText);
+  return { intent, entities: mergedEntities, needs, confidence };
 }
 
 export const SUBMODULE = {

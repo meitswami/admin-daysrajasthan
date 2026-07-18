@@ -147,7 +147,7 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
   let packages = filterPackages(allPackages, query.filters);
 
   const matchHay = (pkg: (typeof packages)[number]) =>
-    `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""} ${pkg.duration ?? ""}`;
+    `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""} ${pkg.duration ?? ""} ${(pkg.cities ?? []).join(" ")} ${(pkg.themes ?? []).join(" ")} ${(pkg.travelerStyles ?? []).join(" ")}`;
 
   let matched = packages.filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
 
@@ -181,6 +181,14 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
     }).filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
   }
 
+  // Style-only refine with no place hits: drop hard style filter and re-match places from text.
+  if (matched.length === 0 && query.filters?.travelStyle) {
+    matched = filterPackages(allPackages, {
+      ...query.filters,
+      travelStyle: undefined,
+    }).filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
+  }
+
   const ranked = rankCandidates(
     matched.map((pkg) => {
       const hay = matchHay(pkg);
@@ -192,6 +200,19 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
             ? 1
             : Math.max(0, 1 - Math.abs(days - requestedDays) / 5)
           : 0.4;
+      const styleBoost =
+        query.filters?.travelStyle === "family"
+          ? (pkg.travelerStyles?.some((s) => /family/i.test(s)) ? 0.2 : 0) +
+            (days != null && days >= 4 && days <= 8 ? 0.2 : days != null && days <= 10 ? 0.1 : 0)
+          : query.filters?.travelStyle === "couple"
+            ? pkg.themes?.some((t) => /romantic|honeymoon/i.test(t))
+              ? 0.3
+              : 0
+            : query.filters?.travelStyle === "adventure"
+              ? pkg.themes?.some((t) => /desert|wildlife|adventure/i.test(t))
+                ? 0.25
+                : 0
+              : 0;
       return {
         id: pkg.id,
         kind: "package" as const,
@@ -200,7 +221,7 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
         popularity: pkg.downloadCount,
         updatedAt: pkg.updatedAt,
         featured: pkg.isTrending ?? false,
-        businessWeight: (pkg.showOnWebsite ? 0.8 : 0.4) * (0.5 + 0.5 * coverage),
+        businessWeight: (pkg.showOnWebsite ? 0.8 : 0.4) * (0.5 + 0.5 * coverage) + styleBoost,
         quality: (pkg.status === "active" ? 0.8 : 0.3) * (0.4 + 0.6 * coverage),
         seasonBoost: durationBoost,
       };
@@ -215,7 +236,7 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
       title: pkg.name,
       subtitle: pkg.destination,
       score: r.score,
-      href: publicPackageHref(pkg.slug),
+      href: pkg.websiteUrl ?? publicPackageHref(pkg.slug),
       matchMode: mode,
       highlights: extractHighlights(`${pkg.name} ${pkg.destination ?? ""}`, query.text),
       record: pkg,

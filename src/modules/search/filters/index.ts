@@ -155,26 +155,66 @@ export function parseDurationDaysFromQuery(text: string): {
 }
 
 /**
- * Apply travel-style heuristics from package type / name (deterministic).
+ * Apply travel-style heuristics from package tags / type / name (deterministic).
+ * Maps chat filters to website traveler styles + themes.
  */
 export function packageMatchesTravelStyle(
   pkg: PackageRecord,
   style: NonNullable<SearchFilters["travelStyle"]>
 ): boolean {
-  const hay = `${pkg.name} ${pkg.packageType ?? ""}`.toLowerCase();
+  const styles = (pkg.travelerStyles ?? []).map((s) => s.toLowerCase());
+  const themes = (pkg.themes ?? []).map((t) => t.toLowerCase());
+  const hay = `${pkg.name} ${pkg.packageType ?? ""} ${styles.join(" ")} ${themes.join(" ")}`.toLowerCase();
+
   switch (style) {
     case "family":
-      return hay.includes("family") || hay.includes("kids");
+      return (
+        styles.some((s) => s.includes("family")) ||
+        hay.includes("family") ||
+        hay.includes("kids") ||
+        // Untagged catalog packages still suit multi-gen trips
+        (styles.length === 0 && themes.length === 0)
+      );
     case "couple":
-      return hay.includes("honeymoon") || hay.includes("couple") || hay.includes("romantic");
+      return (
+        styles.some((s) => s.includes("couple")) ||
+        themes.some((t) => t.includes("romantic") || t.includes("honeymoon")) ||
+        hay.includes("honeymoon") ||
+        hay.includes("couple") ||
+        hay.includes("romantic")
+      );
     case "group":
-      return hay.includes("group") || hay.includes("friends");
+      return (
+        styles.some((s) => s.includes("friend") || s.includes("solo")) ||
+        hay.includes("group") ||
+        hay.includes("friends") ||
+        hay.includes("solo")
+      );
     case "luxury":
-      return hay.includes("luxury") || hay.includes("heritage");
+      return (
+        themes.some((t) => t.includes("luxury") || t.includes("heritage")) ||
+        hay.includes("luxury") ||
+        hay.includes("heritage")
+      );
     case "adventure":
-      return hay.includes("safari") || hay.includes("trek") || hay.includes("wildlife");
+      return (
+        themes.some(
+          (t) => t.includes("desert") || t.includes("adventure") || t.includes("wildlife")
+        ) ||
+        hay.includes("safari") ||
+        hay.includes("trek") ||
+        hay.includes("wildlife") ||
+        hay.includes("desert")
+      );
     case "pilgrimage":
-      return hay.includes("tirth") || hay.includes("yatra") || hay.includes("temple");
+      return (
+        themes.some((t) => t.includes("spiritual") || t.includes("mystical")) ||
+        hay.includes("tirth") ||
+        hay.includes("yatra") ||
+        hay.includes("temple") ||
+        hay.includes("pushkar") ||
+        hay.includes("ajmer")
+      );
     default:
       return true;
   }

@@ -28,6 +28,20 @@ function buildSearchFilters(
     filters.durationDaysMax = fromEntity;
   }
 
+  const styleEntity = plan.entities.find(
+    (e) => e.kind === "party" || e.kind === "travel_style"
+  );
+  if (styleEntity) {
+    const v = styleEntity.value.toLowerCase();
+    if (v === "family" || v === "families") filters.travelStyle = "family";
+    else if (v === "couple" || v === "couples" || v === "honeymoon") filters.travelStyle = "couple";
+    else if (v === "group" || v === "friends" || v === "solo") filters.travelStyle = "group";
+    else if (v === "luxury" || v === "heritage") filters.travelStyle = "luxury";
+    else if (v === "adventure" || v === "desert" || v === "wildlife") filters.travelStyle = "adventure";
+    else if (v === "pilgrimage" || v === "spiritual") filters.travelStyle = "pilgrimage";
+    else if (v === "senior") filters.travelStyle = "family";
+  }
+
   return Object.keys(filters).length ? filters : undefined;
 }
 

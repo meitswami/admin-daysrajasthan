@@ -38,6 +38,14 @@ export type PackageRecord = {
   regionCode: RegionCode | null;
   duration: string | null;
   packageType: string | null;
+  /** Website package themes (Romantic & Honeymoon, Desert & Adventure, …) */
+  themes: string[];
+  /** Website traveler styles (Solo Traveller, Couples, Family, Friends, Senior Citizens) */
+  travelerStyles: string[];
+  /** Normalized city tags */
+  cities: string[];
+  /** Public package URL on the marketing site */
+  websiteUrl: string | null;
   coverImageUrl: string | null;
   pdfUrl: string | null;
   status: "active" | "inactive";

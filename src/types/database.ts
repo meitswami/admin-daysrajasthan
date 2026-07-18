@@ -22,6 +22,14 @@ export interface Itinerary {
   cover_image_url: string | null;
   package_type: PackageType | null;
   package_duration: string | null;
+  /** Website themes: Romantic & Honeymoon, Luxury & Heritage, etc. */
+  themes?: string[];
+  /** Website traveler styles: Solo Traveller, Couples, Family, Friends, Senior Citizens */
+  traveler_styles?: string[];
+  /** Normalized city tags from the public packages catalog */
+  cities?: string[];
+  /** Public detail URL on daysrajasthan.com */
+  website_url?: string | null;
   show_on_website: boolean;
   is_trending: boolean;
   display_mode: DisplayMode;

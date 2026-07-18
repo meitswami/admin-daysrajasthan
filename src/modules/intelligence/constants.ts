@@ -46,7 +46,16 @@ export const EMPTY_TRAVEL_MEMORY = (customerId: string | null = null): TravelMem
 /** Soft cues for rule-based intent detection (not facts). */
 export const INTENT_CUES: Record<string, string[]> = {
   greet: ["hello", "hi", "namaste", "hey"],
-  package_recommend: ["package", "tour", "trip package", "recommend package"],
+  package_recommend: [
+    "package",
+    "tour",
+    "trip package",
+    "recommend package",
+    "tour options",
+    "family",
+    "honeymoon",
+    "best for",
+  ],
   destination_recommend: ["destination", "where to go", "place to visit", "city"],
   travel_plan: ["itinerary", "plan", "days", "schedule", "route"],
   compare_packages: ["compare", "vs", "versus", "difference between"],
