@@ -1,4 +1,56 @@
-import { extractQueryTokens, parseDurationDaysFromQuery } from "@/modules/search";
+/**
+ * Client-safe follow-up tip helpers (no server / Supabase imports).
+ */
+
+const PLACE_TOKENS = new Set([
+  "jaipur",
+  "udaipur",
+  "jodhpur",
+  "jaisalmer",
+  "pushkar",
+  "ajmer",
+  "bikaner",
+  "mount",
+  "abu",
+  "ranthambore",
+  "ranthambhore",
+  "chittorgarh",
+  "kumbhalgarh",
+  "delhi",
+  "agra",
+]);
+
+const STOP = new Set([
+  "a",
+  "an",
+  "the",
+  "to",
+  "for",
+  "in",
+  "on",
+  "of",
+  "and",
+  "or",
+  "want",
+  "with",
+  "from",
+  "explore",
+  "looking",
+  "please",
+  "days",
+  "day",
+  "nights",
+  "night",
+  "trip",
+  "tour",
+  "package",
+  "packages",
+  "rajasthan",
+  "around",
+  "about",
+  "exactly",
+  "exact",
+]);
 
 const STARTER_TIPS = [
   "Want to explore for 5 Days in Rajasthan",
@@ -6,6 +58,23 @@ const STARTER_TIPS = [
   "Jaipur & Pushkar tour options",
   "Best desert safari packages",
 ];
+
+function extractPlaces(text: string): string[] {
+  const places: string[] = [];
+  for (const p of text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)) {
+    if (STOP.has(p) || /^\d+$/.test(p)) continue;
+    if (PLACE_TOKENS.has(p) && !places.includes(p)) places.push(p);
+  }
+  if (places.includes("mount") && !places.includes("abu")) {
+    places.splice(places.indexOf("mount"), 1);
+  }
+  return places;
+}
+
+function extractDays(text: string): number | null {
+  const m = text.match(/(\d+)\s*-?\s*days?/i);
+  return m ? Number(m[1]) : null;
+}
 
 /**
  * Ready-made follow-up tips from the latest user query (+ optional package context).
@@ -29,10 +98,8 @@ export function buildChatSuggestionTips(input: {
     return tips.slice(0, 4);
   }
 
-  const tokens = extractQueryTokens(last);
-  const duration = parseDurationDaysFromQuery(last);
-  const places = tokens.places;
-  const days = duration.min;
+  const places = extractPlaces(last);
+  const days = extractDays(last);
 
   if (places.length >= 2) {
     const label = places.map(titleCase).join(" & ");
