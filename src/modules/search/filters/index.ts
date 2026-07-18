@@ -7,12 +7,55 @@ import type { PackageRecord } from "@/modules/knowledge";
 import type { SearchFilters, SearchMatchMode } from "../types";
 
 /**
- * Parse approximate night/day count from duration labels like "3 Days 2 Nights".
+ * Parse day count from catalog labels like "3 Days 2 Nights", "04 Night / 05 Days",
+ * or package titles like "05 Days Jaipur Tour Package".
  */
 export function parseDurationDays(label: string | null | undefined): number | null {
   if (!label) return null;
-  const m = label.match(/(\d+)\s*Days?/i);
-  return m ? Number(m[1]) : null;
+  const days = label.match(/(\d+)\s*Days?/i);
+  if (days) return Number(days[1]);
+  const nights = label.match(/(\d+)\s*Nights?/i);
+  if (nights) return Number(nights[1]) + 1;
+  return null;
+}
+
+/**
+ * Extract requested trip length from natural-language search text.
+ * Supports "5 days", "5-7 days", "05 Days", "4 nights" (→ 5 days).
+ */
+export function parseDurationDaysFromQuery(text: string): {
+  min: number | null;
+  max: number | null;
+  exact: boolean;
+} {
+  const lower = text.toLowerCase();
+  const exact = /\bexact(?:ly)?\b/.test(lower);
+
+  const range = text.match(/(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*-?\s*days?/i);
+  if (range) {
+    const a = Number(range[1]);
+    const b = Number(range[2]);
+    return { min: Math.min(a, b), max: Math.max(a, b), exact: false };
+  }
+
+  const days = text.match(/(\d+)\s*-?\s*days?/i);
+  if (days) {
+    const n = Number(days[1]);
+    if (exact) return { min: n, max: n, exact: true };
+    // "around / about N days" → soft ±1 window
+    if (/\b(?:around|about|approx(?:imately)?|~)\b/.test(lower)) {
+      return { min: Math.max(1, n - 1), max: n + 1, exact: false };
+    }
+    return { min: n, max: n, exact: true };
+  }
+
+  const nights = text.match(/(\d+)\s*-?\s*nights?/i);
+  if (nights) {
+    const n = Number(nights[1]) + 1;
+    return exact ? { min: n, max: n, exact: true } : { min: n, max: n, exact: true };
+  }
+
+  return { min: null, max: null, exact: false };
 }
 
 /**
@@ -62,12 +105,13 @@ export function filterPackages(
     }
     if (filters.travelStyle && !packageMatchesTravelStyle(pkg, filters.travelStyle)) return false;
 
-    const days = parseDurationDays(pkg.duration);
-    if (filters.durationDaysMin != null && days != null && days < filters.durationDaysMin) {
-      return false;
+    const days =
+      parseDurationDays(pkg.duration) ?? parseDurationDays(pkg.name);
+    if (filters.durationDaysMin != null) {
+      if (days == null || days < filters.durationDaysMin) return false;
     }
-    if (filters.durationDaysMax != null && days != null && days > filters.durationDaysMax) {
-      return false;
+    if (filters.durationDaysMax != null) {
+      if (days == null || days > filters.durationDaysMax) return false;
     }
     // Budget filters reserved: PackageRecord has no price — no-op until Knowledge exposes list price
     return true;
@@ -119,9 +163,12 @@ export function textMatches(
         "from",
         "into",
         "about",
+        "around",
         "explore",
         "looking",
         "please",
+        "exactly",
+        "exact",
         "days",
         "day",
         "nights",
@@ -131,9 +178,19 @@ export function textMatches(
         "package",
         "packages",
       ]);
-      const parts = q.split(/[^a-z0-9]+/).filter((p) => p.length > 2 && !stop.has(p));
+      const parts = q.split(/[^a-z0-9]+/).filter((p) => {
+        if (stop.has(p)) return false;
+        if (/^\d{1,2}$/.test(p)) return true; // keep duration digits ("5", "05")
+        return p.length > 2;
+      });
       if (!parts.length) return false;
-      return parts.some((p) => hay.includes(p));
+      return parts.some((p) => {
+        if (/^\d{1,2}$/.test(p)) {
+          const n = Number(p);
+          return new RegExp(`\\b0?${n}\\s*days?\\b`, "i").test(hay);
+        }
+        return hay.includes(p);
+      });
     }
   }
 }

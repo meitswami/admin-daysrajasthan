@@ -14,6 +14,7 @@ import {
 import {
   extractHighlights,
   filterPackages,
+  parseDurationDays,
   textMatches,
 } from "./filters";
 import { rankCandidates } from "./ranking";
@@ -137,26 +138,78 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
     query.filters
   );
 
-  const matched = packages.filter((pkg) =>
-    textMatches(
-      `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""}`,
-      query.text,
-      mode
-    )
-  );
+  const hasDurationFilter =
+    query.filters?.durationDaysMin != null || query.filters?.durationDaysMax != null;
+
+  const matched = packages.filter((pkg) => {
+    const hay = `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""} ${pkg.duration ?? ""}`;
+    if (textMatches(hay, query.text, mode)) return true;
+    // Duration-filtered catalogs: keep rows when the NL query has no place/style tokens left
+    if (hasDurationFilter && !query.text.trim()) return true;
+    if (hasDurationFilter) {
+      const placeLike = query.text
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((p) => p.length > 2)
+        .some((p) =>
+          ![
+            "want",
+            "explore",
+            "looking",
+            "please",
+            "exactly",
+            "exact",
+            "days",
+            "day",
+            "nights",
+            "night",
+            "trip",
+            "tour",
+            "package",
+            "packages",
+            "around",
+            "about",
+            "for",
+            "the",
+            "and",
+            "with",
+            "from",
+            "into",
+          ].includes(p)
+        );
+      if (!placeLike) return true;
+    }
+    return false;
+  });
+
+  const targetDays =
+    query.filters?.durationDaysMin != null &&
+    query.filters.durationDaysMin === query.filters.durationDaysMax
+      ? query.filters.durationDaysMin
+      : null;
 
   const ranked = rankCandidates(
-    matched.map((pkg) => ({
-      id: pkg.id,
-      kind: "package" as const,
-      title: pkg.name,
-      text: `${pkg.name} ${pkg.destination ?? ""}`,
-      popularity: pkg.downloadCount,
-      updatedAt: pkg.updatedAt,
-      featured: pkg.isTrending ?? false,
-      businessWeight: pkg.showOnWebsite ? 0.8 : 0.4,
-      quality: pkg.status === "active" ? 0.8 : 0.3,
-    }))
+    matched.map((pkg) => {
+      const days = parseDurationDays(pkg.duration) ?? parseDurationDays(pkg.name);
+      const durationBoost =
+        targetDays != null && days != null
+          ? days === targetDays
+            ? 1
+            : Math.max(0, 1 - Math.abs(days - targetDays) / 5)
+          : 0.4;
+      return {
+        id: pkg.id,
+        kind: "package" as const,
+        title: pkg.name,
+        text: `${pkg.name} ${pkg.destination ?? ""}`,
+        popularity: pkg.downloadCount,
+        updatedAt: pkg.updatedAt,
+        featured: pkg.isTrending ?? false,
+        businessWeight: pkg.showOnWebsite ? 0.8 : 0.4,
+        quality: pkg.status === "active" ? 0.8 : 0.3,
+        seasonBoost: durationBoost,
+      };
+    })
   );
 
   const hits: PackageSearchHit[] = ranked.map((r) => {

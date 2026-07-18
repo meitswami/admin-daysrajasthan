@@ -63,6 +63,7 @@ export {
   filterPackages,
   packageMatchesTravelStyle,
   parseDurationDays,
+  parseDurationDaysFromQuery,
   textMatches,
 } from "./filters";
 

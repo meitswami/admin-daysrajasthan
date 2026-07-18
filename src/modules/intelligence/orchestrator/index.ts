@@ -1,7 +1,35 @@
-import { searchCustomers, searchForAiContext, searchQuotations } from "@/modules/search";
+import {
+  parseDurationDaysFromQuery,
+  searchCustomers,
+  searchForAiContext,
+  searchQuotations,
+  type SearchFilters,
+} from "@/modules/search";
 
 import { MAX_RETRIEVED_HITS } from "../constants";
 import type { PlannerDecision, RetrievedFacts } from "../types";
+
+function buildSearchFilters(
+  plan: PlannerDecision,
+  regionCode?: string | null
+): SearchFilters | undefined {
+  const filters: SearchFilters = {};
+  if (regionCode) filters.regionCode = regionCode;
+
+  const durationEntity = plan.entities.find((e) => e.kind === "duration_days");
+  const fromQuery = parseDurationDaysFromQuery(plan.needs.searchQueryText);
+  const fromEntity = durationEntity ? Number(durationEntity.value) : null;
+
+  if (fromQuery.min != null || fromQuery.max != null) {
+    if (fromQuery.min != null) filters.durationDaysMin = fromQuery.min;
+    if (fromQuery.max != null) filters.durationDaysMax = fromQuery.max;
+  } else if (fromEntity && Number.isFinite(fromEntity) && fromEntity > 0) {
+    filters.durationDaysMin = fromEntity;
+    filters.durationDaysMax = fromEntity;
+  }
+
+  return Object.keys(filters).length ? filters : undefined;
+}
 
 /**
  * Orchestrates Search only. Never calls Knowledge or Supabase.
@@ -17,9 +45,11 @@ export async function retrieveViaSearch(input: {
     return { search: null, hits: [], retrievedAt };
   }
 
+  const filters = buildSearchFilters(plan, regionCode);
+
   const base = {
     text: plan.needs.searchQueryText,
-    filters: regionCode ? { regionCode } : undefined,
+    filters,
     limit: MAX_RETRIEVED_HITS,
     kinds: plan.needs.searchKinds,
   };

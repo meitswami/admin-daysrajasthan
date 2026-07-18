@@ -126,8 +126,13 @@ function enrichTravelQuery(text: string): string {
       }
     }
   }
-  if (/\b3\s*-?\s*days?\b/i.test(text) && !lower.includes("3 days")) {
-    extras.push("3 Days");
+  // Catalog titles use padded day counts ("05 Days …"); keep both forms for matching.
+  const dayMatch = text.match(/\b(\d{1,2})\s*-?\s*days?\b/i);
+  if (dayMatch) {
+    const n = Number(dayMatch[1]);
+    if (Number.isFinite(n) && n > 0) {
+      extras.push(`${n} Days`, `${String(n).padStart(2, "0")} Days`);
+    }
   }
   if (!extras.length) return text;
   return `${text} ${extras.join(" ")}`;

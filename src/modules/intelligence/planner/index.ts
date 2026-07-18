@@ -45,6 +45,24 @@ function extractEntities(text: string, memory: TravelMemoryProfile | null): Extr
   const days = text.match(/(\d+)\s*-?\s*days?/i);
   if (days) {
     entities.push({ kind: "duration_days", value: days[1], confidence: 0.75 });
+  } else {
+    const nights = text.match(/(\d+)\s*-?\s*nights?/i);
+    if (nights) {
+      entities.push({
+        kind: "duration_days",
+        value: String(Number(nights[1]) + 1),
+        confidence: 0.7,
+      });
+    }
+  }
+
+  const range = text.match(/(\d+)\s*(?:-|to|–|—)\s*(\d+)\s*-?\s*days?/i);
+  if (range) {
+    entities.push({
+      kind: "duration_days",
+      value: `${range[1]}-${range[2]}`,
+      confidence: 0.8,
+    });
   }
 
   const styles = ["luxury", "adventure", "family", "couple", "group", "pilgrimage", "vegetarian"];
