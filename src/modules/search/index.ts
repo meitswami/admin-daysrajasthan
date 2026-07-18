@@ -60,11 +60,14 @@ export { rankCandidates, scoreCandidate } from "./ranking";
 
 export {
   extractHighlights,
+  extractQueryTokens,
   filterPackages,
   packageMatchesTravelStyle,
   parseDurationDays,
   parseDurationDaysFromQuery,
+  placeCoverage,
   textMatches,
+  PLACE_TOKENS,
 } from "./filters";
 
 export {

@@ -6,6 +6,102 @@ import type { PackageRecord } from "@/modules/knowledge";
 
 import type { SearchFilters, SearchMatchMode } from "../types";
 
+/** Known destination tokens used for AND-matching multi-city queries. */
+export const PLACE_TOKENS = [
+  "jaipur",
+  "udaipur",
+  "jodhpur",
+  "jaisalmer",
+  "pushkar",
+  "ajmer",
+  "bikaner",
+  "mount",
+  "abu",
+  "ranthambore",
+  "ranthambhore",
+  "chittorgarh",
+  "kumbhalgarh",
+  "delhi",
+  "agra",
+  "nathdwara",
+  "haldighati",
+  "ranakpur",
+  "salasar",
+  "khatushyam",
+] as const;
+
+const QUERY_STOP = new Set([
+  "a",
+  "an",
+  "the",
+  "to",
+  "for",
+  "in",
+  "on",
+  "of",
+  "and",
+  "or",
+  "want",
+  "with",
+  "from",
+  "into",
+  "about",
+  "around",
+  "explore",
+  "looking",
+  "please",
+  "exactly",
+  "exact",
+  "days",
+  "day",
+  "nights",
+  "night",
+  "trip",
+  "tour",
+  "package",
+  "packages",
+  "rajasthan",
+]);
+
+export type QueryTokenParts = {
+  places: string[];
+  durationDigits: number[];
+  other: string[];
+};
+
+/**
+ * Split a natural-language query into place / duration / other tokens.
+ */
+export function extractQueryTokens(query: string): QueryTokenParts {
+  const q = query.trim().toLowerCase();
+  const raw = q.split(/[^a-z0-9]+/).filter(Boolean);
+  const places: string[] = [];
+  const durationDigits: number[] = [];
+  const other: string[] = [];
+  const placeSet = new Set<string>(PLACE_TOKENS);
+
+  for (const p of raw) {
+    if (QUERY_STOP.has(p)) continue;
+    if (/^\d{1,2}$/.test(p)) {
+      durationDigits.push(Number(p));
+      continue;
+    }
+    if (placeSet.has(p)) {
+      if (!places.includes(p)) places.push(p);
+      continue;
+    }
+    if (p.length > 2) other.push(p);
+  }
+
+  // Lone "mount" is weak without abu
+  if (places.includes("mount") && !places.includes("abu")) {
+    const i = places.indexOf("mount");
+    if (i >= 0) places.splice(i, 1);
+  }
+
+  return { places, durationDigits, other };
+}
+
 /**
  * Parse day count from catalog labels like "3 Days 2 Nights", "04 Night / 05 Days",
  * or package titles like "05 Days Jaipur Tour Package".
@@ -119,7 +215,20 @@ export function filterPackages(
 }
 
 /**
- * Text match against a haystack using the requested mode.
+ * How well a package covers requested place tokens (0–1).
+ */
+export function placeCoverage(haystack: string, places: string[]): number {
+  if (!places.length) return 1;
+  const hay = haystack.toLowerCase();
+  const hits = places.filter((p) => hay.includes(p)).length;
+  return hits / places.length;
+}
+
+/**
+ * Package/destination text match:
+ * - Place tokens use AND (all named cities should appear)
+ * - Duration digits alone never match when places are present (duration is a structured filter)
+ * - Without places, fall back to any meaningful token / duration digit
  */
 export function textMatches(
   haystack: string,
@@ -144,53 +253,26 @@ export function textMatches(
     case "contains":
     case "semantic_future":
     default: {
-      // Natural-language queries: match if any meaningful token appears
-      // (full-string includes fails for "explore rajasthan" vs "Jaipur Heritage Tour").
       if (hay.includes(q)) return true;
-      const stop = new Set([
-        "a",
-        "an",
-        "the",
-        "to",
-        "for",
-        "in",
-        "on",
-        "of",
-        "and",
-        "or",
-        "want",
-        "with",
-        "from",
-        "into",
-        "about",
-        "around",
-        "explore",
-        "looking",
-        "please",
-        "exactly",
-        "exact",
-        "days",
-        "day",
-        "nights",
-        "night",
-        "trip",
-        "tour",
-        "package",
-        "packages",
-      ]);
-      const parts = q.split(/[^a-z0-9]+/).filter((p) => {
-        if (stop.has(p)) return false;
-        if (/^\d{1,2}$/.test(p)) return true; // keep duration digits ("5", "05")
-        return p.length > 2;
-      });
-      if (!parts.length) return false;
-      return parts.some((p) => {
-        if (/^\d{1,2}$/.test(p)) {
-          const n = Number(p);
-          return new RegExp(`\\b0?${n}\\s*days?\\b`, "i").test(hay);
-        }
-        return hay.includes(p);
-      });
+      const { places, durationDigits, other } = extractQueryTokens(q);
+
+      if (places.length > 0) {
+        // Multi-city / named destinations: require every place token.
+        return places.every((p) => hay.includes(p));
+      }
+
+      if (other.length > 0) {
+        return other.some((p) => hay.includes(p));
+      }
+
+      // Duration-only query (no places): match padded day labels in title/duration.
+      if (durationDigits.length > 0) {
+        return durationDigits.some((n) =>
+          new RegExp(`\\b0?${n}\\s*days?\\b`, "i").test(hay)
+        );
+      }
+
+      return false;
     }
   }
 }

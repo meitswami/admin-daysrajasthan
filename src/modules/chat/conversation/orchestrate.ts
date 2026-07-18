@@ -110,22 +110,9 @@ function scopeRegionCode(scope: KnowledgeScopeConfig): string | null {
   return raw.trim();
 }
 
-/** Expand regional travel language so Search can match city package titles. */
+/** Expand travel language so Search can match catalog titles (padded day counts). */
 function enrichTravelQuery(text: string): string {
-  const lower = text.toLowerCase();
   const extras: string[] = [];
-  const expansions: Record<string, string[]> = {
-    rajasthan: ["jaipur", "udaipur", "jodhpur", "jaisalmer", "ranthambore", "pushkar", "heritage"],
-    himachal: ["manali", "shimla", "dharamshala"],
-    goa: ["goa beach", "north goa"],
-  };
-  for (const [region, cities] of Object.entries(expansions)) {
-    if (lower.includes(region)) {
-      for (const city of cities) {
-        if (!lower.includes(city)) extras.push(city);
-      }
-    }
-  }
   // Catalog titles use padded day counts ("05 Days …"); keep both forms for matching.
   const dayMatch = text.match(/\b(\d{1,2})\s*-?\s*days?\b/i);
   if (dayMatch) {
@@ -134,6 +121,8 @@ function enrichTravelQuery(text: string): string {
       extras.push(`${n} Days`, `${String(n).padStart(2, "0")} Days`);
     }
   }
+  // Do not inject sibling cities for "Rajasthan" — place tokens AND-match;
+  // region scope already limits catalog to IN-RJ via knowledgeScope.
   if (!extras.length) return text;
   return `${text} ${extras.join(" ")}`;
 }

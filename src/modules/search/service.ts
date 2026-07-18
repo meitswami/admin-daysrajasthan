@@ -16,6 +16,8 @@ import {
   extractHighlights,
   filterPackages,
   parseDurationDays,
+  extractQueryTokens,
+  placeCoverage,
   textMatches,
 } from "./filters";
 import { rankCandidates } from "./ranking";
@@ -134,69 +136,61 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
   const query = parseSearchQuery(typeof input === "string" ? { text: input } : input);
   const mode = resolveMode(query);
   const { page, pageSize } = resolvePage(query);
-  const packages = filterPackages(
-    await repoLoadPackages(query.filters?.regionCode),
-    query.filters
-  );
-
-  const hasDurationFilter =
-    query.filters?.durationDaysMin != null || query.filters?.durationDaysMax != null;
-
-  const matched = packages.filter((pkg) => {
-    const hay = `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""} ${pkg.duration ?? ""}`;
-    if (textMatches(hay, query.text, mode)) return true;
-    // Duration-filtered catalogs: keep rows when the NL query has no place/style tokens left
-    if (hasDurationFilter && !query.text.trim()) return true;
-    if (hasDurationFilter) {
-      const placeLike = query.text
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((p) => p.length > 2)
-        .some((p) =>
-          ![
-            "want",
-            "explore",
-            "looking",
-            "please",
-            "exactly",
-            "exact",
-            "days",
-            "day",
-            "nights",
-            "night",
-            "trip",
-            "tour",
-            "package",
-            "packages",
-            "around",
-            "about",
-            "for",
-            "the",
-            "and",
-            "with",
-            "from",
-            "into",
-          ].includes(p)
-        );
-      if (!placeLike) return true;
-    }
-    return false;
-  });
-
-  const targetDays =
+  const allPackages = await repoLoadPackages(query.filters?.regionCode);
+  const tokens = extractQueryTokens(query.text);
+  const requestedDays =
     query.filters?.durationDaysMin != null &&
     query.filters.durationDaysMin === query.filters.durationDaysMax
       ? query.filters.durationDaysMin
       : null;
 
+  let packages = filterPackages(allPackages, query.filters);
+
+  const matchHay = (pkg: (typeof packages)[number]) =>
+    `${pkg.name} ${pkg.destination ?? ""} ${pkg.packageType ?? ""} ${pkg.duration ?? ""}`;
+
+  let matched = packages.filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
+
+  // Exact day + cities with no hit → widen duration ±1 (then ±2) while keeping place AND.
+  if (
+    matched.length === 0 &&
+    tokens.places.length > 0 &&
+    requestedDays != null &&
+    !/\bexact(?:ly)?\b/i.test(query.text)
+  ) {
+    for (const pad of [1, 2]) {
+      const soft = filterPackages(allPackages, {
+        ...query.filters,
+        durationDaysMin: Math.max(1, requestedDays - pad),
+        durationDaysMax: requestedDays + pad,
+      }).filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
+      if (soft.length) {
+        matched = soft;
+        packages = soft;
+        break;
+      }
+    }
+  }
+
+  // Still empty with places: show best place matches ignoring duration (nearest days rank first).
+  if (matched.length === 0 && tokens.places.length > 0) {
+    matched = filterPackages(allPackages, {
+      ...query.filters,
+      durationDaysMin: undefined,
+      durationDaysMax: undefined,
+    }).filter((pkg) => textMatches(matchHay(pkg), query.text, mode));
+  }
+
   const ranked = rankCandidates(
     matched.map((pkg) => {
+      const hay = matchHay(pkg);
       const days = parseDurationDays(pkg.duration) ?? parseDurationDays(pkg.name);
+      const coverage = placeCoverage(hay, tokens.places);
       const durationBoost =
-        targetDays != null && days != null
-          ? days === targetDays
+        requestedDays != null && days != null
+          ? days === requestedDays
             ? 1
-            : Math.max(0, 1 - Math.abs(days - targetDays) / 5)
+            : Math.max(0, 1 - Math.abs(days - requestedDays) / 5)
           : 0.4;
       return {
         id: pkg.id,
@@ -206,8 +200,8 @@ export async function searchPackages(input: SearchQuery | string): Promise<Searc
         popularity: pkg.downloadCount,
         updatedAt: pkg.updatedAt,
         featured: pkg.isTrending ?? false,
-        businessWeight: pkg.showOnWebsite ? 0.8 : 0.4,
-        quality: pkg.status === "active" ? 0.8 : 0.3,
+        businessWeight: (pkg.showOnWebsite ? 0.8 : 0.4) * (0.5 + 0.5 * coverage),
+        quality: (pkg.status === "active" ? 0.8 : 0.3) * (0.4 + 0.6 * coverage),
         seasonBoost: durationBoost,
       };
     })
