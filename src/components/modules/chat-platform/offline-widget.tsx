@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { PublicWidgetConfig } from "@/modules/chat";
+import { buildChatSuggestionTips } from "@/modules/chat/suggestion-tips";
 
 type PackageLink = {
   id: string;
@@ -69,6 +70,32 @@ export function OfflineChatWidget() {
     return new URLSearchParams(window.location.search).get("key") ?? "";
   }, []);
 
+  const lastUserText = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "user") return messages[i]!.text;
+    }
+    return null;
+  }, [messages]);
+
+  const lastAssistantPackages = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const m = messages[i];
+      if (m?.role === "assistant" && m.packages?.length) {
+        return m.packages.map((p) => p.name);
+      }
+    }
+    return [];
+  }, [messages]);
+
+  const suggestionTips = useMemo(
+    () =>
+      buildChatSuggestionTips({
+        lastUserText,
+        packageTitles: lastAssistantPackages,
+      }),
+    [lastUserText, lastAssistantPackages]
+  );
+
   useEffect(() => {
     if (!key) {
       setError("Missing widget key");
@@ -109,13 +136,12 @@ export function OfflineChatWidget() {
       .catch(() => setError("Failed to load widget"));
   }, [key]);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!key || !message.trim() || !config) return;
+  async function sendText(raw: string) {
+    if (!key || !raw.trim() || !config || sending) return;
     setSending(true);
     setStatus(null);
 
-    const text = message.trim();
+    const text = raw.trim();
     setMessages((prev) => [
       ...prev,
       { id: `u_${Date.now()}`, role: "user", text },
@@ -196,6 +222,20 @@ export function OfflineChatWidget() {
     }
   }
 
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await sendText(message);
+  }
+
+  function onComposerKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter") return;
+    if (e.shiftKey) return; // Shift+Enter = new line
+    e.preventDefault();
+    if (!sending && message.trim()) {
+      void sendText(message);
+    }
+  }
+
   if (error) {
     return (
       <div className="flex h-[560px] items-center justify-center p-6 text-center text-sm text-stone-600">
@@ -221,6 +261,7 @@ export function OfflineChatWidget() {
       : config.aiMode === "ai"
         ? "AI Travel Assistant"
         : "Offline / leave a message";
+  const showTips = !disabled && config.aiMode === "ai" && !sending && suggestionTips.length > 0;
 
   return (
     <div
@@ -329,6 +370,28 @@ export function OfflineChatWidget() {
               </p>
             )
           )}
+
+          {showTips && (
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-medium uppercase tracking-wide text-stone-400">
+                {lastUserText ? "Suggested next" : "Try asking"}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {suggestionTips.map((tip) => (
+                  <button
+                    key={tip}
+                    type="button"
+                    disabled={sending}
+                    onClick={() => void sendText(tip)}
+                    className="max-w-full rounded-full border border-stone-200 bg-stone-50 px-2.5 py-1 text-left text-[11px] leading-snug text-stone-700 transition hover:border-[#7A1F1F]/35 hover:bg-white hover:text-[#7A1F1F] disabled:opacity-60"
+                  >
+                    {tip}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <textarea
             required
             rows={collectDetails && !detailsCaptured ? 3 : 2}
@@ -340,7 +403,9 @@ export function OfflineChatWidget() {
             }
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={onComposerKeyDown}
           />
+          <p className="text-[10px] text-stone-400">Enter to send · Shift+Enter for a new line</p>
           <button
             type="submit"
             disabled={sending}

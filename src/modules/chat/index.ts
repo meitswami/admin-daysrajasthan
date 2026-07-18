@@ -102,6 +102,7 @@ export {
   resolveRequestPublicOrigin,
 } from "./embed";
 export { generateWidgetSecret, hashWidgetSecret } from "./keys";
+export { buildChatSuggestionTips } from "./suggestion-tips";
 
 export type {
   ChatWorkflowTrace,
