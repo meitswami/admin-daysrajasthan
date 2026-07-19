@@ -5,11 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { canAccessModule } from "@/lib/rbac/permissions";
 import { ensureClientSession } from "@/lib/auth/ensure-client-session";
 import { needsMfaChallenge } from "@/lib/auth/demo-session";
-import { DEMO_TEAM, getCurrentTeamMember, setCurrentTeamMemberId } from "@/lib/rbac/current-user";
+import {
+  findSuperAdminMemberId,
+  getCurrentTeamMember,
+  setCurrentTeamMemberId,
+} from "@/lib/rbac/current-user";
 import { ShieldOff } from "lucide-react";
-
-const SUPERADMIN_DEMO_ID =
-  DEMO_TEAM.find((m) => m.role === "superadmin")?.id ?? "tm-info";
 
 export function DashboardAccessGuard({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -49,7 +50,7 @@ export function DashboardAccessGuard({ children }: { children: ReactNode }) {
   }, [pathname, router]);
 
   function continueAsSuperAdmin() {
-    setCurrentTeamMemberId(SUPERADMIN_DEMO_ID);
+    setCurrentTeamMemberId(findSuperAdminMemberId());
     // Full reload so sidebar + guard pick up the new role
     window.location.assign(pathname || "/settings");
   }
@@ -75,10 +76,10 @@ export function DashboardAccessGuard({ children }: { children: ReactNode }) {
           onClick={continueAsSuperAdmin}
           className="mt-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700"
         >
-          Continue as Super Admin (demo)
+          Continue as Super Admin
         </button>
         <p className="max-w-md text-xs text-stone-500">
-          Demo only — unlocks Settings, Web Settings, and System menu items.
+          Restores the Super Admin session (Real DB admin@daysrajasthan.com when signed in).
         </p>
       </div>
     );

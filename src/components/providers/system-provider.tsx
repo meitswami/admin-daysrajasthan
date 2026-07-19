@@ -18,7 +18,14 @@ import {
   persistDataModeToServer,
   setDataMode,
 } from "@/lib/system/data-mode";
-import { getCurrentTeamMember, setCurrentTeamMemberId, listTeamMembers } from "@/lib/rbac/current-user";
+import {
+  DEMO_TEAM,
+  fetchTeamMembers,
+  getCurrentTeamMember,
+  listTeamMembers,
+  setCurrentTeamMemberId,
+  setExternalTeamMember,
+} from "@/lib/rbac/current-user";
 import { hasPermission } from "@/lib/rbac/permissions";
 
 type SystemContextValue = {
@@ -36,6 +43,7 @@ const SystemContext = createContext<SystemContextValue | null>(null);
 export function SystemProvider({ children }: { children: ReactNode }) {
   const [dataMode, setDataModeState] = useState<DataMode>("dummy");
   const [currentMember, setCurrentMember] = useState<TeamMember>(getCurrentTeamMember());
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => listTeamMembers());
 
   const refresh = useCallback(() => {
     setDataModeState(getDataMode());
@@ -50,9 +58,13 @@ export function SystemProvider({ children }: { children: ReactNode }) {
         refresh();
       }
     });
+    void fetchTeamMembers().then(setTeamMembers);
 
     const onMode = () => refresh();
-    const onMember = () => refresh();
+    const onMember = () => {
+      refresh();
+      void fetchTeamMembers().then(setTeamMembers);
+    };
     window.addEventListener("td-data-mode-change", onMode);
     window.addEventListener("td-team-member-change", onMember);
     return () => {
@@ -81,14 +93,19 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       supabaseConfigured: isSupabaseConfigured(),
       currentMember,
       switchMember: (id: string) => {
-        setCurrentTeamMemberId(id);
+        const member = teamMembers.find((m) => m.id === id);
+        if (member && !DEMO_TEAM.some((d) => d.id === member.id)) {
+          setExternalTeamMember(member);
+        } else {
+          setCurrentTeamMemberId(id);
+        }
         refresh();
       },
-      teamMembers: listTeamMembers(),
+      teamMembers,
       can: (permission: Parameters<typeof hasPermission>[0]) =>
         hasPermission(permission, currentMember.role),
     }),
-    [dataMode, setDataModeAndPersist, currentMember]
+    [dataMode, setDataModeAndPersist, currentMember, teamMembers, refresh]
   );
 
   return <SystemContext.Provider value={value}>{children}</SystemContext.Provider>;

@@ -1,7 +1,23 @@
-import type { TeamMember } from "@/types/rbac";
+import type { TeamMember, TeamRole } from "@/types/rbac";
+import { isSupabaseConfigured } from "@/lib/system/data-mode";
 
 const SESSION_KEY = "td-current-team-member-v1";
 const EXTERNAL_MEMBER_KEY = "td-external-team-member-v1";
+
+const TEAM_ROLES: TeamRole[] = [
+  "superadmin",
+  "admin",
+  "sales",
+  "operations",
+  "accounts",
+  "staff",
+];
+
+function asTeamRole(value: string | null | undefined): TeamRole | null {
+  if (!value) return null;
+  if (value === "super_admin") return "superadmin";
+  return TEAM_ROLES.includes(value as TeamRole) ? (value as TeamRole) : null;
+}
 
 export const DEMO_TEAM: TeamMember[] = [
   {
@@ -92,8 +108,73 @@ export function setExternalTeamMember(member: TeamMember) {
   setCurrentTeamMemberId(member.id);
 }
 
-export function listTeamMembers() {
-  return [...DEMO_TEAM];
+function readExternalMember(): TeamMember | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(EXTERNAL_MEMBER_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as TeamMember;
+  } catch {
+    return null;
+  }
+}
+
+/** Demo roster plus the signed-in Real DB member (if any). */
+export function listTeamMembers(): TeamMember[] {
+  const external = readExternalMember();
+  if (!external) return [...DEMO_TEAM];
+  const email = external.email.toLowerCase();
+  if (DEMO_TEAM.some((m) => m.email.toLowerCase() === email)) return [...DEMO_TEAM];
+  return [external, ...DEMO_TEAM];
+}
+
+/** Prefer Real DB `td_team_members`, then fall back to demo + signed-in member. */
+export async function fetchTeamMembers(): Promise<TeamMember[]> {
+  const fallback = listTeamMembers();
+  if (!isSupabaseConfigured()) return fallback;
+
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("td_team_members")
+      .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at")
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+
+    if (error || !data?.length) return fallback;
+
+    const fromDb: TeamMember[] = [];
+    for (const row of data) {
+      const role = asTeamRole(row.role);
+      if (!role) continue;
+      fromDb.push({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role,
+        mfa_enabled: Boolean(row.mfa_enabled),
+        mfa_locked: Boolean(row.mfa_locked),
+        is_active: row.is_active !== false,
+        created_at: row.created_at ?? new Date().toISOString(),
+      });
+    }
+
+    if (!fromDb.length) return fallback;
+
+    // Keep demo accounts available for role-switch testing alongside Real DB members.
+    const dbEmails = new Set(fromDb.map((m) => m.email.toLowerCase()));
+    const demoExtras = DEMO_TEAM.filter((m) => !dbEmails.has(m.email.toLowerCase()));
+    return [...fromDb, ...demoExtras];
+  } catch {
+    return fallback;
+  }
+}
+
+export function findSuperAdminMemberId(members: TeamMember[] = listTeamMembers()): string {
+  const external = readExternalMember();
+  if (external?.role === "superadmin" && external.is_active) return external.id;
+  return members.find((m) => m.role === "superadmin" && m.is_active)?.id ?? DEMO_TEAM[0].id;
 }
 
 export function updateTeamMemberMfa(

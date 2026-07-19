@@ -1,6 +1,10 @@
 import type { CategoryPricingTier, HotelCategoryKey, ItinerarySnapshot } from "@/types/itinerary-builder";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
-import { applyCostToSnapshot, durationLabelFromDays } from "./cost-engine";
+import {
+  applyCostToSnapshot,
+  durationLabelFromDays,
+  resolveCategoryTierPricing,
+} from "./cost-engine";
 import { emptyDay, emptySnapshot, newUuid } from "./defaults";
 
 export type PackageCatalogLocation = {
@@ -328,16 +332,22 @@ export function buildCategoryPricing(
     const override = packageOverrides[key];
     const package_price = override != null && override > 0 ? override : autoPrice;
     const discount_price = discounts[key] ?? null;
-    const grand_total = discount_price != null && discount_price > 0 ? discount_price : package_price;
+    const manual_override = override != null && override > 0 ? override : null;
+    // package_price already includes override; pass manual_override null to avoid double-applying
+    const { grand_total, booking_amount } = resolveCategoryTierPricing({
+      package_price,
+      discount_price,
+      manual_override: null,
+    });
     return {
       category_key: key,
       label: opt.label,
       room_category: opt.room_category,
       package_price,
       discount_price,
-      booking_amount: null,
+      booking_amount,
       grand_total,
-      manual_override: override != null && override > 0 ? override : null,
+      manual_override,
     };
   });
 }

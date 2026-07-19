@@ -78,7 +78,7 @@ export function CategoryPricingPanel({
                 <p className="font-semibold tabular-nums">{formatInr(tier.package_price)}</p>
               </div>
               <div>
-                <Label className="text-xs">Discount (optional)</Label>
+                <Label className="text-xs">Discount amount (optional)</Label>
                 <Input
                   type="number"
                   className="mt-0.5 h-8 text-xs"
@@ -106,7 +106,7 @@ export function CategoryPricingPanel({
               </div>
             </div>
             <p className="mt-2 text-xs font-semibold text-amber-800">
-              Total: {formatInr(tier.manual_override ?? tier.grand_total)}
+              Total: {formatInr(tier.grand_total)}
             </p>
             {(tier.manual_override != null || tier.discount_price != null) && (
               <p className="mt-1 text-[10px] text-stone-500">

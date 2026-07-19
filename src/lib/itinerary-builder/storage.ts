@@ -24,8 +24,10 @@ import {
 } from "@/lib/itinerary-builder/cost-engine";
 import { emptySnapshot, newUuid } from "@/lib/itinerary-builder/defaults";
 import { buildCategoryPricing, getPackageById } from "@/lib/itinerary-builder/package-catalog";
+import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { logPricingChange } from "@/lib/itinerary-builder/pricing-log";
 import { cloneSnapshot, createRevision } from "@/lib/itinerary-builder/revisions";
+import { loadSiteSettings } from "@/lib/site-settings/storage";
 import {
   readItineraryBuilderState,
   writeItineraryBuilderState,
@@ -211,6 +213,10 @@ export function createClientItineraryFromWizard(input: WizardCreateInput): Clien
     snapshot.header.title ||
     `Quote for ${input.client.client_name}`;
 
+  const defaultAdvance = clampAdvancePercent(
+    loadSiteSettings().adminGeneral.default_advance_percent
+  );
+
   snapshot = normalizeSnapshot({
     ...snapshot,
     header: {
@@ -244,6 +250,7 @@ export function createClientItineraryFromWizard(input: WizardCreateInput): Clien
     inclusions: input.inclusions ?? snapshot.inclusions,
     internal_notes: input.internal_notes ?? snapshot.internal_notes,
     public_notes: input.public_notes ?? snapshot.public_notes,
+    advance_percent: defaultAdvance,
   });
 
   snapshot = applyCostToSnapshot({
@@ -340,8 +347,8 @@ export function saveSnapshotRevision(
         },
         {
           field: `${tier.category_key}.grand_total`,
-          oldV: prevTier.manual_override ?? prevTier.grand_total,
-          newV: tier.manual_override ?? tier.grand_total,
+          oldV: prevTier.grand_total,
+          newV: tier.grand_total,
         },
       ];
 

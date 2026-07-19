@@ -94,7 +94,8 @@ export const MASTER_CANCELLATION: PolicyLine[] = [
 export const MASTER_PAYMENT: PolicyLine[] = [
   {
     id: "p1",
-    title: "Booking Confirmation: 20% advance of the total package cost.",
+    title:
+      "Booking Confirmation: 20% or 30% advance of the total package cost (as decided by admin/agent).",
     description: "",
   },
   {

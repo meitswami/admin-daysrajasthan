@@ -228,8 +228,10 @@ export interface ItinerarySnapshot {
   final_price: number | null;
   /** Keys of selected optional inclusions (V1 checklist) */
   optional_inclusion_keys: string[];
-  /** Preview & Confirm PDF theme 1–3 */
-  preview_theme: 1 | 2 | 3;
+  /** Preview & Confirm heritage theme 1–5 */
+  preview_theme: 1 | 2 | 3 | 4 | 5;
+  /** Advance deposit as % of package total (admin/agent selectable) */
+  advance_percent: 20 | 30;
   selected_contact_id: string | null;
 }
 

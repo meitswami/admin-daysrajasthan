@@ -126,6 +126,7 @@ export function emptySnapshot(overrides?: Partial<ItinerarySnapshot>): Itinerary
     final_price: null,
     optional_inclusion_keys: [],
     preview_theme: 1,
+    advance_percent: 20,
     selected_contact_id: null,
     ...overrides,
     vehicle_types:

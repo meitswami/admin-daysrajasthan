@@ -1,5 +1,6 @@
 import type { CategoryPricingTier, ItineraryDay } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
+import { bookingAdvance } from "./cost-engine";
 
 export type NightSegment = {
   nightLabel: string;
@@ -21,10 +22,8 @@ export type HotelStay = {
   reviewCount: number;
 };
 
-const BOOKING_ADVANCE_RATE = 0.2;
-
-export function bookingAmount(total: number, rate = BOOKING_ADVANCE_RATE): number {
-  return Math.round(total * rate);
+export function bookingAmount(total: number, rate?: number): number {
+  return bookingAdvance(total, rate);
 }
 
 export function extractDestination(day: ItineraryDay): string {
@@ -207,4 +206,4 @@ export const DEFAULT_CANCELLATION_POLICY =
   "Cancellation charges apply as per supplier rules and proximity to travel date. Our team will confirm applicable fees before processing any cancellation request.";
 
 export const DEFAULT_PAYMENT_POLICY =
-  "20% booking amount to reserve. Balance due 7 days before departure. Payments accepted via bank transfer, UPI, and approved payment gateways.";
+  "20% or 30% booking amount (as decided by admin/agent) to reserve. Balance due 7 days before departure. Payments accepted via bank transfer, UPI, and approved payment gateways.";

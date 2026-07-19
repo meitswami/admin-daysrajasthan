@@ -27,6 +27,58 @@ const VEHICLE_RATES: Record<string, number> = {
 
 const MARKUP_PCT = 12;
 const GST_PCT = 5;
+const BOOKING_ADVANCE_RATE = 0.2;
+
+export function advanceRateFromPercent(percent: 20 | 30 | undefined | null): number {
+  return (percent === 30 ? 30 : 20) / 100;
+}
+
+/** Normalize UI vehicle labels to rate-card keys */
+export function normalizeVehicleType(vehicleType: string): string {
+  const v = vehicleType.trim();
+  if (/tempo\s*traveller\s*17/i.test(v)) return "Tempo Traveller 17";
+  if (/tempo\s*traveller/i.test(v)) return "Tempo Traveller 12";
+  if (/innova/i.test(v)) return "Innova Crysta";
+  if (/mini\s*bus/i.test(v)) return "Mini Bus";
+  if (/\bsuv\b/i.test(v)) return "SUV";
+  if (/sedan/i.test(v)) return "Sedan";
+  return v;
+}
+
+export function vehicleRate(vehicleType: string): number {
+  return VEHICLE_RATES[normalizeVehicleType(vehicleType)] ?? 4000;
+}
+
+/** Advance used across builder + quotation (default 20%) */
+export function bookingAdvance(total: number, rate = BOOKING_ADVANCE_RATE): number {
+  return Math.round(total * rate);
+}
+
+/**
+ * Final package total after discount amount.
+ * Formula: max(0, (manual override || package price) - discount)
+ */
+export function resolveCategoryTierPricing(
+  tier: {
+    package_price: number;
+    discount_price: number | null;
+    manual_override: number | null;
+  },
+  advanceRate = BOOKING_ADVANCE_RATE
+): { base_price: number; grand_total: number; booking_amount: number } {
+  const base_price =
+    tier.manual_override != null && tier.manual_override > 0
+      ? tier.manual_override
+      : Math.max(0, tier.package_price);
+  const discount =
+    tier.discount_price != null && tier.discount_price > 0 ? tier.discount_price : 0;
+  const grand_total = Math.max(0, Math.round(base_price - Math.min(discount, base_price)));
+  return {
+    base_price,
+    grand_total,
+    booking_amount: bookingAdvance(grand_total, advanceRate),
+  };
+}
 
 export const PRICING_RATES = {
   markupPct: MARKUP_PCT,
@@ -144,7 +196,7 @@ export function buildCostLineItems(snapshot: ItinerarySnapshot): CostLineItem[] 
       );
     }
     if (day.vehicle_type) {
-      const rate = VEHICLE_RATES[day.vehicle_type] ?? 4000;
+      const rate = vehicleRate(day.vehicle_type);
       items.push(line(day.day_number, "vehicle", day.vehicle_type, 1, rate));
     }
     if (day.guide_required) {
@@ -209,14 +261,14 @@ export function categoryTotalsFromSnapshot(snapshot: ItinerarySnapshot): Categor
   return (snapshot.category_pricing ?? []).map((t) => ({
     category_key: t.category_key,
     label: t.label,
-    grand_total: t.manual_override ?? t.grand_total,
+    grand_total: t.grand_total,
   }));
 }
 
 export function primaryGrandTotal(snapshot: ItinerarySnapshot): number {
   const tiers = snapshot.category_pricing ?? [];
   if (tiers.length > 0) {
-    return Math.max(...tiers.map((t) => t.manual_override ?? t.grand_total));
+    return Math.max(...tiers.map((t) => t.grand_total));
   }
   return snapshot.cost_sheet?.grand_total ?? 0;
 }
@@ -231,17 +283,16 @@ export function recalculateCategoryPricing(snapshot: ItinerarySnapshot): Categor
       })),
     });
     const package_price = priced.grand_total;
-    const discount = tier.discount_price;
-    const grand_total =
-      tier.manual_override != null
-        ? tier.manual_override
-        : discount != null && discount > 0
-          ? discount
-          : package_price;
+    const { grand_total, booking_amount } = resolveCategoryTierPricing({
+      package_price,
+      discount_price: tier.discount_price,
+      manual_override: tier.manual_override,
+    });
     return {
       ...tier,
       package_price,
       grand_total,
+      booking_amount,
     };
   });
 }
@@ -256,7 +307,15 @@ export function applyCostToSnapshot(snapshot: ItinerarySnapshot): ItinerarySnaps
     return {
       ...snapshot,
       category_pricing,
-      cost_sheet: { ...cost_sheet, grand_total: maxTotal },
+      final_price: category_pricing[0]?.grand_total ?? snapshot.final_price,
+      cost_sheet: {
+        ...cost_sheet,
+        discount_total: category_pricing.reduce(
+          (sum, t) => sum + Math.max(0, t.discount_price ?? 0),
+          0
+        ),
+        grand_total: maxTotal,
+      },
     };
   }
   return {

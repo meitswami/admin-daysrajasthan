@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label, Select } from "@/components/ui/input";
 import { useSystem } from "@/components/providers/system-provider";
+import { useSiteSettings } from "@/components/providers/site-settings-provider";
 import { useToast } from "@/components/ui/toast";
 import { GlobalPricingAuditPanel } from "@/components/itinerary-builder/pricing-audit-panel";
 import {
@@ -17,7 +18,7 @@ import { ROLE_LABELS, ROLE_PERMISSIONS } from "@/types/rbac";
 import type { ActivityAction } from "@/types/system";
 import { formatDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/utils/csv";
-import { Database, Shield, History, IndianRupee, Smartphone, Download } from "lucide-react";
+import { Database, Shield, History, IndianRupee, Smartphone, Download, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ActivityLogEntry } from "@/types/system";
 
@@ -40,6 +41,7 @@ const ACTION_OPTIONS: ActivityAction[] = [
 export function SystemSettingsPanel() {
   const { dataMode, setDataModeAndPersist, supabaseConfigured, currentMember, teamMembers, switchMember, can } =
     useSystem();
+  const { settings, updateAdminGeneral } = useSiteSettings();
   const { show } = useToast();
   const [confirmReal, setConfirmReal] = useState(false);
   const [activity, setActivity] = useState<ActivityLogEntry[]>(listActivityLogs({ limit: 30 }));
@@ -86,10 +88,45 @@ export function SystemSettingsPanel() {
   }
 
   if (!can("settings.system") && !can("activity_logs.view")) {
+    const superAdmins = teamMembers.filter((m) => m.role === "superadmin" && m.is_active);
     return (
       <Card>
-        <CardContent className="p-6 text-sm text-stone-600">
-          You do not have permission to view system settings.
+        <CardContent className="space-y-4 p-6 text-sm text-stone-600">
+          <p>
+            You do not have permission to view system settings.
+            <span className="mt-1 block text-xs text-stone-500">
+              Current role: {ROLE_LABELS[currentMember.role]} ({currentMember.name}). Sales and
+              other non-admin roles cannot open System &amp; RBAC — switch back to a Super Admin.
+            </span>
+          </p>
+          <div>
+            <Label>Switch acting user</Label>
+            <Select
+              className="mt-1.5 max-w-md"
+              value={currentMember.id}
+              onChange={(e) => {
+                switchMember(e.target.value);
+                show(`Switched to ${teamMembers.find((m) => m.id === e.target.value)?.name}`);
+              }}
+            >
+              {teamMembers.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({ROLE_LABELS[m.role]})
+                </option>
+              ))}
+            </Select>
+          </div>
+          {superAdmins[0] && (
+            <Button
+              type="button"
+              onClick={() => {
+                switchMember(superAdmins[0].id);
+                show(`Restored ${superAdmins[0].name} (Super Admin)`);
+              }}
+            >
+              Continue as Super Admin
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
@@ -140,17 +177,52 @@ export function SystemSettingsPanel() {
         </Card>
       )}
 
+      {can("settings.system") && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Percent className="h-5 w-5" />
+              Booking Advance Default
+            </CardTitle>
+            <CardDescription>
+              Default advance % applied to new itineraries. Agents can still choose 20% or 30% per
+              booking on the Payment page.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-xs">
+              <Label>Default advance percent</Label>
+              <Select
+                className="mt-1.5"
+                value={String(settings.adminGeneral.default_advance_percent ?? 20)}
+                onChange={(e) => {
+                  const pct = e.target.value === "30" ? 30 : 20;
+                  updateAdminGeneral({ default_advance_percent: pct });
+                  show(`Default advance set to ${pct}%`);
+                }}
+              >
+                <option value="20">20% of package total</option>
+                <option value="30">30% of package total</option>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Shield className="h-5 w-5" />
             RBAC — Team & Permissions
           </CardTitle>
-          <CardDescription>Demo session — switch role to test module access</CardDescription>
+          <CardDescription>
+            Real DB team members load from Supabase. Use Acting as to preview another role (Sales
+            cannot open this tab — switch back to Super Admin).
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Acting as (demo)</Label>
+            <Label>Acting as</Label>
             <Select
               className="mt-1.5 max-w-md"
               value={currentMember.id}

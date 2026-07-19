@@ -93,14 +93,16 @@ function PackageOptionCard({
   packagePrice,
   grandTotal,
   segments,
+  advancePercent = 20,
 }: {
   optionNumber: number;
   label: string;
   packagePrice: number;
   grandTotal: number;
   segments: NightSegment[];
+  advancePercent?: 20 | 30;
 }) {
-  const advance = bookingAmount(grandTotal);
+  const advance = bookingAmount(grandTotal, advancePercent / 100);
   return (
     <div className="break-inside-avoid rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/80 to-white p-5">
       <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Option {optionNumber}</p>
@@ -115,7 +117,7 @@ function PackageOptionCard({
           <p className="font-bold tabular-nums text-amber-900">{formatInr(grandTotal)}</p>
         </div>
         <div className="rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
-          <p className="text-[10px] uppercase text-emerald-700">Booking Amount (20%)</p>
+          <p className="text-[10px] uppercase text-emerald-700">Booking Amount ({advancePercent}%)</p>
           <p className="font-bold tabular-nums text-emerald-900">{formatInr(advance)}</p>
         </div>
       </div>
@@ -258,6 +260,8 @@ export function QuotationDocument({
   const destinationsSummary = formatDestinationsSummary(nightSegments);
   const tierRows = tierRowsFromSnapshot(categoryTotals, category_pricing ?? []);
   const hasTiers = tierRows.length > 0;
+  const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
+  const advanceRate = advancePercent / 100;
 
   return (
     <article
@@ -328,7 +332,10 @@ export function QuotationDocument({
                 <p className="text-xs uppercase text-stone-500">Package Total</p>
                 <p className="text-2xl font-bold tabular-nums text-amber-900">{formatInr(cost_sheet.grand_total)}</p>
                 <p className="mt-1 text-sm text-emerald-800">
-                  Booking Amount (20%): <span className="font-bold">{formatInr(bookingAmount(cost_sheet.grand_total))}</span>
+                  Booking Amount ({advancePercent}%):{" "}
+                  <span className="font-bold">
+                    {formatInr(bookingAmount(cost_sheet.grand_total, advanceRate))}
+                  </span>
                 </p>
               </div>
             )}
@@ -358,6 +365,7 @@ export function QuotationDocument({
                   packagePrice={tier.package_price}
                   grandTotal={tier.grand_total}
                   segments={nightSegments}
+                  advancePercent={advancePercent}
                 />
               ))}
             </div>
@@ -425,9 +433,9 @@ export function QuotationDocument({
                   </td>
                 </tr>
                 <tr className="text-emerald-800">
-                  <td className="pt-1 text-sm font-medium">Booking amount (20%)</td>
+                  <td className="pt-1 text-sm font-medium">Booking amount ({advancePercent}%)</td>
                   <td className="pt-1 text-right text-sm font-bold tabular-nums">
-                    {formatInr(bookingAmount(cost_sheet.grand_total))}
+                    {formatInr(bookingAmount(cost_sheet.grand_total, advanceRate))}
                   </td>
                 </tr>
               </tfoot>

@@ -110,6 +110,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
     report_footer_text:
       "Thank you for choosing Travel Days Rajasthan. Prices subject to availability. GST extra as applicable.",
     gstin: null,
+    default_advance_percent: 20,
   },
   smtp: {
     host: "mail.traveldaysrajasthan.com",

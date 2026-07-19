@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { formatInr } from "@/lib/itinerary-builder/cost-engine";
+import { formatInr, advanceRateFromPercent } from "@/lib/itinerary-builder/cost-engine";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   findHotelByOptionLabel,
@@ -22,6 +22,11 @@ import {
   type PolicyLine,
 } from "@/lib/itinerary-builder/policy-master";
 import {
+  PREVIEW_THEMES,
+  THEME_MIX_SUGGESTIONS,
+  themeShellClass,
+} from "@/lib/itinerary-builder/preview-themes";
+import {
   getClientItinerary,
   getRevisions,
   saveSnapshotRevision,
@@ -31,6 +36,7 @@ import { formatDate, cn } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Download,
   Eye,
@@ -40,6 +46,7 @@ import {
   Palette,
   Phone,
   Save,
+  Sparkles,
   Target,
   X,
 } from "lucide-react";
@@ -291,11 +298,7 @@ function EditableBlocks({
   );
 }
 
-const THEMES: { id: 1 | 2 | 3; label: string; gradient: string }[] = [
-  { id: 1, label: "Theme 1 (Active)", gradient: "from-amber-700 via-yellow-700 to-amber-900" },
-  { id: 2, label: "Theme 2 (Active)", gradient: "from-emerald-600 via-green-700 to-teal-900" },
-  { id: 3, label: "Theme 3 (Active)", gradient: "from-rose-800 via-red-900 to-stone-900" },
-];
+const THEMES = PREVIEW_THEMES;
 
 export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
   const router = useRouter();
@@ -313,12 +316,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     }
   }, [itineraryId]);
 
-  const themeShell = useMemo(() => {
-    const t = snapshot?.preview_theme ?? 1;
-    if (t === 2) return "bg-emerald-50/40";
-    if (t === 3) return "bg-rose-50/40";
-    return "bg-teal-50/50";
-  }, [snapshot?.preview_theme]);
+  const themeShell = useMemo(
+    () => themeShellClass(snapshot?.preview_theme),
+    [snapshot?.preview_theme]
+  );
 
   if (!record || !snapshot) {
     return (
@@ -350,6 +351,13 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     setRecord(result.record);
     setSnapshot(normalizeSnapshot(result.revision.snapshot));
     show("Saved");
+    return result;
+  }
+
+  function handleNext() {
+    const result = handleSave();
+    if (!result) return;
+    router.push(`/itinerary-builder/${itineraryId}/payment`);
   }
 
   function handleDownloadPdf() {
@@ -358,6 +366,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
   }
 
   const primaryTier = snapshot.category_pricing;
+  const advanceRate = advanceRateFromPercent(snapshot.advance_percent);
 
   return (
     <div className={cn("min-h-screen", themeShell)}>
@@ -394,6 +403,15 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             >
               <Eye className="h-4 w-4" />
               Preview
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
+              onClick={handleNext}
+            >
+              Next
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -494,24 +512,26 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                     <span className="text-stone-600">{tier.label} Base Price</span>
                     <span className="font-medium">{formatInr(tier.package_price)}</span>
                   </div>
+                  {tier.discount_price != null && tier.discount_price > 0 && (
+                    <div className="flex justify-between gap-2">
+                      <span className="text-stone-600">Discount ({tier.label})</span>
+                      <span className="font-medium text-rose-700">
+                        −{formatInr(tier.discount_price)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between gap-2">
-                    <span className="text-stone-600">Booking Amount ({tier.label})</span>
-                    <span className="font-medium">
-                      {formatInr(tier.booking_amount ?? Math.round(tier.package_price * 0.2))}
+                    <span className="text-stone-600">
+                      Booking Amount ({snapshot.advance_percent ?? 20}%)
                     </span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-stone-600">Highlight ({tier.label})</span>
                     <span className="font-medium">
                       {formatInr(
-                        tier.discount_price && tier.discount_price > 0
-                          ? tier.discount_price
-                          : tier.package_price
+                        tier.booking_amount ?? Math.round(tier.grand_total * advanceRate)
                       )}
                     </span>
                   </div>
                   <div className="flex justify-between gap-2 font-semibold text-stone-900">
-                    <span>{tier.label} Total</span>
+                    <span>{tier.label} Final</span>
                     <span>{formatInr(tier.grand_total)}</span>
                   </div>
                 </div>
@@ -578,10 +598,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         {/* Theme */}
         <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-stone-900">
-            <Palette className="h-5 w-5 text-blue-600" />
+            <Palette className="h-5 w-5 text-[#7B1E2E]" />
             Select a Theme
           </h2>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {THEMES.map((theme) => {
               const selected = (snapshot.preview_theme ?? 1) === theme.id;
               return (
@@ -591,11 +611,11 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                   onClick={() => patch({ preview_theme: theme.id })}
                   className={cn(
                     "relative overflow-hidden rounded-2xl border-2 p-1 text-left transition",
-                    selected ? "border-blue-600" : "border-transparent hover:border-stone-300"
+                    selected ? "border-[#7B1E2E]" : "border-transparent hover:border-stone-300"
                   )}
                 >
                   {selected && (
-                    <span className="absolute right-2 top-2 z-10 rounded bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
+                    <span className="absolute right-2 top-2 z-10 rounded bg-[#7B1E2E] px-2 py-0.5 text-[10px] font-bold uppercase text-white">
                       Selected
                     </span>
                   )}
@@ -609,12 +629,46 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                       {theme.id}
                     </span>
                   </div>
-                  <p className="mt-2 px-1 text-center text-sm font-medium text-stone-700">
+                  <p className="mt-2 px-1 text-center text-xs font-medium leading-snug text-stone-700">
                     {theme.label}
                   </p>
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-6 border-t border-stone-100 pt-5">
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-stone-900">
+              <Sparkles className="h-4 w-4 text-[#A67C2D]" />
+              Mix Suggestions
+              <span className="font-normal text-stone-500">
+                — from daysrajasthan.com Destinations By Theme
+              </span>
+            </h3>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {THEME_MIX_SUGGESTIONS.map((mix) => {
+                const selected = (snapshot.preview_theme ?? 1) === mix.themeId;
+                return (
+                  <button
+                    key={mix.id}
+                    type="button"
+                    onClick={() => patch({ preview_theme: mix.themeId })}
+                    className={cn(
+                      "rounded-xl border px-3 py-3 text-left transition",
+                      selected
+                        ? "border-[#7B1E2E] bg-[#7B1E2E]/5 ring-1 ring-[#7B1E2E]"
+                        : "border-stone-200 hover:border-[#A67C2D]/60 hover:bg-[#FBF7F0]"
+                    )}
+                  >
+                    <p className="text-sm font-semibold text-stone-900">{mix.title}</p>
+                    <p className="mt-0.5 text-xs text-stone-500">{mix.subtitle}</p>
+                    <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-[#7B1E2E]">
+                      Applies Theme {mix.themeId}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </section>
 
@@ -681,6 +735,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             <Button type="button" className="bg-teal-700 hover:bg-teal-800" onClick={() => window.print()}>
               <Eye className="h-4 w-4" />
               Preview
+            </Button>
+            <Button type="button" className="bg-[#7B1E2E] hover:bg-[#5C0F1A]" onClick={handleNext}>
+              Next
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

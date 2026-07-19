@@ -9,7 +9,11 @@ import {
   OPTIONAL_INCLUSIONS,
   VEHICLE_TYPES,
 } from "@/lib/itinerary-builder/defaults";
-import { durationLabelFromDays, formatInr } from "@/lib/itinerary-builder/cost-engine";
+import {
+  durationLabelFromDays,
+  formatInr,
+  normalizeVehicleType,
+} from "@/lib/itinerary-builder/cost-engine";
 import { buildCategoryPricing } from "@/lib/itinerary-builder/package-catalog";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
@@ -463,6 +467,34 @@ export function V1BuilderForm({
     onChange(normalizeSnapshot({ ...s, ...partial }));
   }
 
+  /** Rebuild per-category package / discount / booking / final totals */
+  function pricingFrom(
+    base: ItinerarySnapshot,
+    keys: HotelCategoryKey[] = selectedKeys,
+    discounts?: Partial<Record<HotelCategoryKey, number | null>>,
+    overrides?: Partial<Record<HotelCategoryKey, number | null>>
+  ) {
+    const nextDiscounts: Partial<Record<HotelCategoryKey, number | null>> = {
+      ...discounts,
+    };
+    const nextOverrides: Partial<Record<HotelCategoryKey, number | null>> = {
+      ...overrides,
+    };
+    for (const tier of base.category_pricing) {
+      if (nextDiscounts[tier.category_key] === undefined) {
+        nextDiscounts[tier.category_key] = tier.discount_price;
+      }
+      if (nextOverrides[tier.category_key] === undefined && tier.manual_override != null) {
+        nextOverrides[tier.category_key] = tier.manual_override;
+      }
+    }
+    const category_pricing = buildCategoryPricing(base, keys, nextDiscounts, nextOverrides);
+    return {
+      category_pricing,
+      final_price: category_pricing[0]?.grand_total ?? null,
+    };
+  }
+
   function patchHeader(partial: Partial<ItinerarySnapshot["header"]>) {
     patch({
       header: {
@@ -480,17 +512,29 @@ export function V1BuilderForm({
 
   function updateDay(index: number, updater: (d: ItineraryDay) => ItineraryDay) {
     const days = s.days.map((d, i) => (i === index ? updater(d) : d));
-    patch({
+    const next = {
+      ...s,
       days,
       header: { ...s.header, duration_label: durationLabelFromDays(days) },
+    };
+    patch({
+      days,
+      header: next.header,
+      ...pricingFrom(next),
     });
   }
 
   function addDay() {
     const days = [...s.days, emptyDay(s.days.length + 1)];
-    patch({
+    const next = {
+      ...s,
       days,
       header: { ...s.header, duration_label: durationLabelFromDays(days) },
+    };
+    patch({
+      days,
+      header: next.header,
+      ...pricingFrom(next),
     });
   }
 
@@ -499,9 +543,15 @@ export function V1BuilderForm({
     const days = s.days
       .filter((_, i) => i !== index)
       .map((d, i) => ({ ...d, day_number: i + 1 }));
-    patch({
+    const next = {
+      ...s,
       days,
       header: { ...s.header, duration_label: durationLabelFromDays(days) },
+    };
+    patch({
+      days,
+      header: next.header,
+      ...pricingFrom(next),
     });
   }
 
@@ -510,20 +560,7 @@ export function V1BuilderForm({
     if (keys.includes(key)) keys = keys.filter((k) => k !== key);
     else if (keys.length >= 2) return;
     else keys = [...keys, key];
-
-    const discounts: Partial<Record<HotelCategoryKey, number | null>> = {};
-    const overrides: Partial<Record<HotelCategoryKey, number | null>> = {};
-    const booking: Partial<Record<HotelCategoryKey, number | null>> = {};
-    for (const tier of s.category_pricing) {
-      discounts[tier.category_key] = tier.discount_price;
-      if (tier.manual_override != null) overrides[tier.category_key] = tier.manual_override;
-      booking[tier.category_key] = tier.booking_amount;
-    }
-    const category_pricing = buildCategoryPricing(s, keys, discounts, overrides).map((t) => ({
-      ...t,
-      booking_amount: booking[t.category_key] ?? t.booking_amount ?? null,
-    }));
-    patch({ category_pricing });
+    patch(pricingFrom(s, keys));
   }
 
   function updateTier(
@@ -541,37 +578,39 @@ export function V1BuilderForm({
     }
     const discounts: Partial<Record<HotelCategoryKey, number | null>> = {};
     const overrides: Partial<Record<HotelCategoryKey, number | null>> = {};
-    const booking: Partial<Record<HotelCategoryKey, number | null>> = {};
-    for (const tier of s.category_pricing) {
-      discounts[tier.category_key] =
-        field === "discount_price" && tier.category_key === categoryKey
-          ? value
-          : tier.discount_price;
-      overrides[tier.category_key] =
-        field === "package_price" && tier.category_key === categoryKey
-          ? value
-          : tier.manual_override;
-      booking[tier.category_key] = tier.booking_amount;
-    }
-    if (field === "package_price") overrides[categoryKey] = value;
     if (field === "discount_price") discounts[categoryKey] = value;
+    if (field === "package_price") overrides[categoryKey] = value;
+    patch(pricingFrom(s, selectedKeys, discounts, overrides));
+  }
+
+  function syncVehicles(vehicle_types: string[]) {
+    const primary = vehicle_types[0] ?? null;
+    const rateKey = primary ? normalizeVehicleType(primary) : null;
+    const days = s.days.map((d) => ({
+      ...d,
+      vehicle_type: rateKey,
+    }));
+    const next = {
+      ...s,
+      days,
+      vehicle_types,
+      vehicle_type: primary,
+    };
     patch({
-      category_pricing: buildCategoryPricing(s, selectedKeys, discounts, overrides).map((t) => ({
-        ...t,
-        booking_amount: booking[t.category_key] ?? null,
-      })),
+      days,
+      vehicle_types,
+      vehicle_type: primary,
+      ...pricingFrom(next),
     });
   }
 
   function addVehicle(v: string) {
     if (!v || vehicleList.includes(v)) return;
-    const vehicle_types = [...vehicleList, v];
-    patch({ vehicle_types, vehicle_type: vehicle_types[0] ?? null });
+    syncVehicles([...vehicleList, v]);
   }
 
   function removeVehicle(v: string) {
-    const vehicle_types = vehicleList.filter((x) => x !== v);
-    patch({ vehicle_types, vehicle_type: vehicle_types[0] ?? null });
+    syncVehicles(vehicleList.filter((x) => x !== v));
   }
 
   function toggleOptional(key: string) {
@@ -885,7 +924,7 @@ export function V1BuilderForm({
                   <p className="mt-1 text-xs text-stone-500">Auto-filled from selected itinerary</p>
                 </div>
                 <div>
-                  <Label>Discount Price (Optional)</Label>
+                  <Label>Discount Amount (Optional)</Label>
                   <Input
                     type="number"
                     className="mt-1.5"
@@ -898,6 +937,9 @@ export function V1BuilderForm({
                       )
                     }
                   />
+                  <p className="mt-1 text-xs text-stone-500">
+                    Subtracted from package price · Final {formatInr(tier.grand_total)}
+                  </p>
                 </div>
               </div>
             ))}
@@ -915,7 +957,7 @@ export function V1BuilderForm({
               <Input
                 type="number"
                 className="mt-3"
-                value={tier.booking_amount ?? ""}
+                value={tier.booking_amount ?? 0}
                 onChange={(e) =>
                   updateTier(
                     tier.category_key,
@@ -925,6 +967,7 @@ export function V1BuilderForm({
                 }
                 placeholder="0"
               />
+              <p className="mt-1 text-xs text-stone-500">Auto: 20% of final price (editable)</p>
             </section>
           ))}
 
@@ -969,19 +1012,31 @@ export function V1BuilderForm({
                 </div>
               ))}
             </div>
-            <div className="mt-4">
-              <Label>Final Price</Label>
-              <Input
-                type="number"
-                className="mt-1.5"
-                value={s.final_price ?? s.category_pricing[0]?.grand_total ?? 0}
-                onChange={(e) =>
-                  patch({
-                    final_price: e.target.value === "" ? null : Number(e.target.value),
-                  })
-                }
-              />
-              <div className="mt-2 flex flex-wrap gap-4 text-sm">
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label>Final Price</Label>
+                <p className="mt-0.5 text-xs text-stone-500">
+                  Package price − discount (updates automatically)
+                </p>
+              </div>
+              {s.category_pricing.map((tier) => (
+                <div key={`final-${tier.category_key}`}>
+                  <span className="inline-block rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                    For {tier.label}
+                  </span>
+                  <Input
+                    type="number"
+                    className="mt-2 bg-stone-50"
+                    value={tier.grand_total}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </div>
+              ))}
+              {!s.category_pricing.length && (
+                <Input type="number" className="mt-1.5" value={0} readOnly tabIndex={-1} />
+              )}
+              <div className="flex flex-wrap gap-4 text-sm">
                 {(
                   [
                     ["per_person", "Per Person"],

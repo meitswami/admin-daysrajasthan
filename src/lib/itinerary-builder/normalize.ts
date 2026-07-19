@@ -10,6 +10,8 @@ import {
   DEFAULT_INCLUSION_ITEMS,
   stringsToContentBlocks,
 } from "@/lib/itinerary-builder/policy-master";
+import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
+import { clampPreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 
 function mealHotelPair(
   value: [string | null, string | null] | string[] | null | undefined,
@@ -98,6 +100,7 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
       final_price: null,
       optional_inclusion_keys: [],
       preview_theme: 1,
+      advance_percent: 20,
       selected_contact_id: null,
     };
   }
@@ -158,7 +161,8 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
     price_basis: snapshot.price_basis ?? "whole_group",
     final_price: snapshot.final_price ?? null,
     optional_inclusion_keys: snapshot.optional_inclusion_keys ?? [],
-    preview_theme: snapshot.preview_theme === 2 || snapshot.preview_theme === 3 ? snapshot.preview_theme : 1,
+    preview_theme: clampPreviewTheme(snapshot.preview_theme),
+    advance_percent: clampAdvancePercent(snapshot.advance_percent),
     selected_contact_id: snapshot.selected_contact_id ?? null,
     category_pricing: (snapshot.category_pricing ?? []).map((t) => ({
       ...t,

@@ -40,6 +40,8 @@ export interface AdminGeneralSettings {
   /** Shown on PDFs / printed reports */
   report_footer_text?: string;
   gstin?: string | null;
+  /** Default advance deposit % for new itineraries (admin setting) */
+  default_advance_percent?: 20 | 30;
 }
 
 export interface SmtpSettings {

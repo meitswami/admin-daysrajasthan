@@ -15,6 +15,8 @@ import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import { emptySnapshot } from "@/lib/itinerary-builder/defaults";
 import { durationLabelFromDays } from "@/lib/itinerary-builder/cost-engine";
+import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
+import { loadSiteSettings } from "@/lib/site-settings/storage";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { cn } from "@/lib/utils";
 import { Check, ChevronLeft, ChevronRight, Search, Wand2 } from "lucide-react";
@@ -63,6 +65,9 @@ export function NewItineraryWizard() {
     const pkg = pkgId ? getPackageById(pkgId) : null;
     const base = pkg ? pkg.buildTemplate() : emptySnapshot();
     const category_pricing = buildCategoryPricing(base, ["deluxe_hotels"], {}, {});
+    const defaultAdvance = clampAdvancePercent(
+      loadSiteSettings().adminGeneral.default_advance_percent
+    );
     return normalizeSnapshot({
       ...base,
       client: { ...base.client, ...client },
@@ -79,6 +84,7 @@ export function NewItineraryWizard() {
       price_basis: "whole_group",
       final_price: category_pricing[0]?.grand_total ?? null,
       optional_inclusion_keys: [],
+      advance_percent: defaultAdvance,
     });
   }
 
