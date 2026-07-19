@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/demo-session";
 import type { TeamMember } from "@/types/rbac";
 import { DEMO_TEAM, resolveTeamEmail, setExternalTeamMember } from "@/lib/rbac/current-user";
+import { resolveAuthTeamMember } from "@/lib/rbac/resolve-auth-member";
 
 export type AuthLoginResult =
   | { ok: true; member: TeamMember; mode: "supabase" | "demo" }
@@ -46,16 +47,11 @@ export async function signInWithEmailPassword(
       });
 
       if (!error && data.user) {
-        const member: TeamMember = {
-          id: data.user.id,
-          name: data.user.user_metadata?.full_name ?? data.user.email?.split("@")[0] ?? "User",
-          email: data.user.email ?? trimmed,
-          role: "admin",
-          mfa_enabled: false,
-          mfa_locked: false,
-          is_active: true,
-          created_at: new Date().toISOString(),
-        };
+        const member = await resolveAuthTeamMember(data.user);
+        if (!member.is_active) {
+          await supabase.auth.signOut();
+          return { ok: false, error: "This account is disabled" };
+        }
         establishSession(member);
         setExternalTeamMember(member);
         await persistDemoSessionCookie();
