@@ -14,7 +14,10 @@ export type ActivityAction =
   | "data_mode_change"
   | "lead_convert"
   | "mfa_enable"
-  | "mfa_disable";
+  | "mfa_disable"
+  | "master_data_create"
+  | "master_data_update"
+  | "master_data_delete";
 
 export interface ActivityLogEntry {
   id: string;

@@ -13,6 +13,7 @@ export function FileUploadField({
   onChange,
   previewWide,
   required,
+  disabled,
 }: {
   label: string;
   hint?: string;
@@ -21,6 +22,7 @@ export function FileUploadField({
   onChange: (dataUrl: string | null) => void;
   previewWide?: boolean;
   required?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -30,13 +32,20 @@ export function FileUploadField({
       </Label>
       {hint && <p className="mt-1 text-xs text-red-600">{hint}</p>}
       <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-start">
-        <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 hover:bg-stone-50">
+        <label
+          className={cn(
+            "inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700",
+            disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-stone-50"
+          )}
+        >
           Choose File
           <input
             type="file"
             accept={accept}
             className="sr-only"
+            disabled={disabled}
             onChange={(e) => {
+              if (disabled) return;
               const file = e.target.files?.[0];
               if (!file) return;
               const reader = new FileReader();
@@ -145,12 +154,14 @@ export function CoverImageUploadField({
   value,
   onChange,
   required,
+  disabled,
 }: {
   label: string;
   hint?: string;
   value: string | null;
   onChange: (dataUrl: string | null) => void;
   required?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <FileUploadField
@@ -159,6 +170,7 @@ export function CoverImageUploadField({
       value={value}
       onChange={onChange}
       required={required}
+      disabled={disabled}
       accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
     />
   );

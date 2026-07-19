@@ -36,7 +36,17 @@ export async function fetchItineraries(): Promise<Itinerary[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("itineraries").select("*").order("updated_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      ...(row as Itinerary),
+      created_by_id: (r.created_by as string | null) ?? (r.created_by_id as string | null) ?? null,
+      created_by_name: (r.created_by_name as string | null) ?? null,
+      inclusions: Array.isArray(r.inclusions) ? (r.inclusions as string[]) : [],
+      exclusions: Array.isArray(r.exclusions) ? (r.exclusions as string[]) : [],
+      gallery_urls: Array.isArray(r.gallery_urls) ? (r.gallery_urls as string[]) : [],
+    };
+  });
 }
 
 export async function fetchItineraryDownloads(): Promise<ItineraryDownload[]> {

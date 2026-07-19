@@ -9,7 +9,9 @@ import {
   homeNav,
   bookingNav,
   crmNav,
+  operationsNav,
   masterDataNav,
+  reportsNav,
   websiteNav,
   aiChatNav,
   secondaryNav,
@@ -133,7 +135,16 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
       </p>
       <CollapsibleGroup group={bookingNav} pathname={pathname} onNavigate={onNavigate} defaultOpen filterItem={filterItem} />
       <CollapsibleGroup group={crmNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
+      <CollapsibleGroup group={operationsNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
       <CollapsibleGroup group={masterDataNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
+      {reportsNav.filter(filterItem).map((item) => (
+        <NavLink
+          key={item.href}
+          item={item}
+          active={pathname === item.href || pathname.startsWith(item.href + "/")}
+          onNavigate={onNavigate}
+        />
+      ))}
 
       <p className="mb-2 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
         Website

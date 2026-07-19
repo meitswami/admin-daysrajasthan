@@ -75,6 +75,10 @@ export function mapItineraryToPackage(row: Itinerary): PackageRecord {
     updatedAt: row.updated_at,
     showOnWebsite: row.show_on_website,
     isTrending: row.is_trending,
+    createdById: row.created_by_id ?? null,
+    createdByName: row.created_by_name ?? null,
+    inclusions: row.inclusions ?? [],
+    exclusions: row.exclusions ?? [],
   };
 }
 
@@ -176,5 +180,9 @@ export function mapPackageToItineraryView(pkg: PackageRecord): Itinerary {
     download_count: pkg.downloadCount,
     created_at: pkg.createdAt,
     updated_at: pkg.updatedAt,
+    created_by_id: pkg.createdById ?? null,
+    created_by_name: pkg.createdByName ?? null,
+    inclusions: pkg.inclusions ?? [],
+    exclusions: pkg.exclusions ?? [],
   };
 }

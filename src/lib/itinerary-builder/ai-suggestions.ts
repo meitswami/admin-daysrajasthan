@@ -5,6 +5,8 @@ export type AiSuggestion = {
   created_at: string;
   updated_at: string;
   source: "seed" | "learned" | "manual";
+  created_by_id?: string | null;
+  created_by_name?: string | null;
 };
 
 const STORAGE_KEY = "td_ai_suggestions_v1";
@@ -110,6 +112,8 @@ function seedList(): AiSuggestion[] {
     created_at: t,
     updated_at: t,
     source: "seed" as const,
+    created_by_id: "tm-info",
+    created_by_name: "Travel Days Admin",
   }));
 }
 
@@ -147,6 +151,8 @@ export function createAiSuggestion(input: {
   title: string;
   description: string;
   source?: AiSuggestion["source"];
+  created_by_id?: string | null;
+  created_by_name?: string | null;
 }): AiSuggestion {
   const list = listAiSuggestions();
   const t = now();
@@ -157,6 +163,8 @@ export function createAiSuggestion(input: {
     created_at: t,
     updated_at: t,
     source: input.source ?? "manual",
+    created_by_id: input.created_by_id ?? null,
+    created_by_name: input.created_by_name ?? null,
   };
   list.unshift(item);
   saveAll(list);

@@ -53,6 +53,10 @@ export type PackageRecord = {
   downloadCount: number;
   createdAt: string;
   updatedAt: string;
+  createdById?: string | null;
+  createdByName?: string | null;
+  inclusions?: string[];
+  exclusions?: string[];
 } & KnowledgeVisibility;
 
 export type PlaceRecord = {

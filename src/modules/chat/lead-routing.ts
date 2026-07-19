@@ -28,7 +28,10 @@ function eligibleAgents(excludeIds: string[] = []) {
     (m) =>
       m.is_active &&
       !excluded.has(m.id) &&
-      (m.role === "sales" || m.role === "admin" || m.role === "superadmin")
+      (m.role === "sales" ||
+        m.role === "sales_admin" ||
+        m.role === "admin" ||
+        m.role === "superadmin")
   );
 }
 
@@ -54,11 +57,11 @@ function pickNextOfferTarget(input: {
   const pool = eligibleAgents([...declined]);
   const onlinePool = pool.filter((m) => onlineIds.has(m.id));
   if (onlinePool.length) {
-    const sales = onlinePool.find((m) => m.role === "sales");
+    const sales = onlinePool.find((m) => m.role === "sales" || m.role === "sales_admin");
     return sales ?? onlinePool[0];
   }
   if (input.requireOnline) return null;
-  return pool.find((m) => m.role === "sales") ?? pool[0] ?? null;
+  return pool.find((m) => m.role === "sales" || m.role === "sales_admin") ?? pool[0] ?? null;
 }
 
 function applyOffer(

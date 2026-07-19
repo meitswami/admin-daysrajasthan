@@ -16,11 +16,16 @@ import {
   Building2,
   MapPin,
   Car,
-  Flag,
   Tags,
   Lightbulb,
   ScrollText,
   Bot,
+  Truck,
+  ClipboardList,
+  TrendingUp,
+  FileText,
+  CreditCard,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 
@@ -73,15 +78,62 @@ export const crmNav: NavGroup = {
   ],
 };
 
+/** Post-booking operations — transport, cost sheets, P&L, invoices */
+export const operationsNav: NavGroup = {
+  label: "Operations",
+  items: [
+    {
+      label: "Transportation Sheets",
+      href: "/operations/transportation-sheets",
+      icon: Truck,
+      description: "Driver, vehicle & advance for confirmed bookings",
+    },
+    {
+      label: "Operation Sheet",
+      href: "/operations/operation-sheet",
+      icon: ClipboardList,
+      description: "Booked trips cost sheets",
+    },
+    {
+      label: "Profit & Loss",
+      href: "/operations/profit-loss",
+      icon: TrendingUp,
+      description: "Payments, expenses & net P&L",
+    },
+    {
+      label: "Invoice Bills",
+      href: "/operations/invoice-bills",
+      icon: FileText,
+      description: "Sales, car rental, quotation & all bills",
+    },
+    {
+      label: "Payment Manager",
+      href: "/operations/payment-manager",
+      icon: CreditCard,
+      description: "Regular & final itinerary payments",
+    },
+  ],
+};
+
 /** Master data used by itinerary costing & website CMS */
 export const masterDataNav: NavGroup = {
   label: "Master Data",
   items: [
-    { label: "Countries", href: "/master-data/countries", icon: Flag, description: "Country master" },
-    { label: "Destinations", href: "/master-data/destinations", icon: MapPin, description: "Destination / location master" },
-    { label: "Cities", href: "/master-data/cities", icon: Map, description: "City master" },
+    { label: "Destinations", href: "/master-data/destinations", icon: MapPin, description: "Destination / location master (India)" },
     { label: "Hotels", href: "/master-data/hotels", icon: Building2, description: "Hotel inventory" },
     { label: "Vehicles", href: "/master-data/vehicles", icon: Car, description: "Transport fleet" },
+    {
+      label: "Itineraries",
+      href: "/master-data/itineraries",
+      icon: Route,
+      description: "Package master with inclusions & images",
+    },
+    {
+      label: "Inclusions & Exclusions",
+      href: "/master-data/inclusions-exclusions",
+      icon: List,
+      description: "Reusable inclusion / exclusion lines",
+    },
     { label: "Categories", href: "/master-data/categories", icon: Tags, description: "Hotel category tiers" },
     {
       label: "AI Suggestions",
@@ -111,6 +163,16 @@ export const mainNav: NavItem[] = [
   { label: "Reports", href: "/reports", icon: BarChart3 },
 ];
 
+/** Top-level module — business reports & exports */
+export const reportsNav: NavItem[] = [
+  {
+    label: "Reports",
+    href: "/reports",
+    icon: BarChart3,
+    description: "Bookings, payments, inquiries & email reports",
+  },
+];
+
 export const websiteNav: NavGroup = {
   label: "Website",
   items: [
@@ -120,7 +182,6 @@ export const websiteNav: NavGroup = {
     { label: "Inquiries", href: "/inquiries", icon: FileQuestion },
     { label: "Blog", href: "/blogs", icon: BookOpen },
     { label: "WhatsApp Leads", href: "/whatsapp-leads", icon: MessageCircle },
-    { label: "Reports", href: "/reports", icon: BarChart3 },
   ],
 };
 
@@ -138,6 +199,7 @@ export const aiChatNav: NavGroup = {
 };
 
 export const secondaryNav: NavItem[] = [
+  { label: "Staff Management", href: "/staff", icon: Users, description: "Roles, access & password reset" },
   { label: "Web Settings", href: "/web-settings", icon: Globe2, description: "Site name, logo, pages & contact" },
   { label: "Settings", href: "/settings", icon: Settings, description: "Admin panel, SMTP & CRM" },
 ];
@@ -146,7 +208,9 @@ export const allNavItems: NavItem[] = [
   ...homeNav,
   ...bookingNav.items,
   ...crmNav.items,
+  ...operationsNav.items,
   ...masterDataNav.items,
+  ...reportsNav,
   ...websiteNav.items,
   ...aiChatNav.items,
   ...secondaryNav,

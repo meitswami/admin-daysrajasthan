@@ -44,6 +44,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const [dataMode, setDataModeState] = useState<DataMode>("dummy");
   const [currentMember, setCurrentMember] = useState<TeamMember>(getCurrentTeamMember());
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => listTeamMembers());
+  const [permTick, setPermTick] = useState(0);
 
   const refresh = useCallback(() => {
     setDataModeState(getDataMode());
@@ -65,11 +66,14 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       refresh();
       void fetchTeamMembers().then(setTeamMembers);
     };
+    const onPerms = () => setPermTick((t) => t + 1);
     window.addEventListener("td-data-mode-change", onMode);
     window.addEventListener("td-team-member-change", onMember);
+    window.addEventListener("td-rbac-overrides-change", onPerms);
     return () => {
       window.removeEventListener("td-data-mode-change", onMode);
       window.removeEventListener("td-team-member-change", onMember);
+      window.removeEventListener("td-rbac-overrides-change", onPerms);
     };
   }, [refresh]);
 
@@ -105,7 +109,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       can: (permission: Parameters<typeof hasPermission>[0]) =>
         hasPermission(permission, currentMember.role),
     }),
-    [dataMode, setDataModeAndPersist, currentMember, teamMembers, refresh]
+    [dataMode, setDataModeAndPersist, currentMember, teamMembers, refresh, permTick]
   );
 
   return <SystemContext.Provider value={value}>{children}</SystemContext.Provider>;

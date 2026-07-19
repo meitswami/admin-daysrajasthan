@@ -31,6 +31,8 @@ export const TRAVEL_DAYS_TABLES = [
   "td_activity_logs",
   "td_team_members",
   "td_customers",
+  "td_master_inclusions_exclusions",
+  "td_master_data_audit",
   "team_email_messages",
   "unified_leads",
 ] as const;

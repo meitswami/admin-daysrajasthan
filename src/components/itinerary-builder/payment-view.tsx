@@ -30,6 +30,7 @@ import {
   Check,
   Copy,
   CreditCard,
+  Download,
   QrCode,
   Smartphone,
 } from "lucide-react";
@@ -125,6 +126,14 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
     show(`Advance of ${formatInr(amount)} recorded (${advancePercent}%)`);
   }
 
+  /** Agents may skip collecting payment and go straight to the quotation PDF */
+  function handleSkipToPdf() {
+    const saved = handleSave();
+    if (!saved) return;
+    show("Payment skipped — opening quotation PDF");
+    window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
+  }
+
   async function copyText(key: string, text: string) {
     try {
       await navigator.clipboard.writeText(text);
@@ -166,7 +175,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
           </p>
           <div className="mx-auto mt-3 h-px w-24 bg-gradient-to-r from-transparent via-[#A67C2D] to-transparent" />
           <p className="mt-3 text-sm text-stone-600">
-            Pay the advance amount via bank transfer or UPI to confirm this package.
+            Pay the advance via bank transfer or UPI, or skip if payment will be collected later.
           </p>
         </header>
 
@@ -326,25 +335,39 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
           >
             Back to Preview
           </button>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="border-[#7B1E2E]/30 text-[#7B1E2E]"
-              onClick={() => {
-                if (handleSave()) show("Saved");
-              }}
-            >
-              Save
-            </Button>
-            <Button
-              type="button"
-              className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
-              onClick={handleRecordAdvance}
-              disabled={primaryAdvance <= 0}
-            >
-              Record Advance Payment
-            </Button>
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="border-[#7B1E2E]/30 text-[#7B1E2E]"
+                onClick={() => {
+                  if (handleSave()) show("Saved");
+                }}
+              >
+                Save
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="border-stone-300 bg-white text-stone-800 hover:bg-stone-50"
+                onClick={handleSkipToPdf}
+              >
+                <Download className="h-4 w-4" />
+                Skip & Download PDF
+              </Button>
+              <Button
+                type="button"
+                className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
+                onClick={handleRecordAdvance}
+                disabled={primaryAdvance <= 0}
+              >
+                Record Advance Payment
+              </Button>
+            </div>
+            <p className="text-right text-xs text-stone-500">
+              Payment is optional — skip to share the quotation PDF now; collect payment later if needed.
+            </p>
           </div>
         </div>
 

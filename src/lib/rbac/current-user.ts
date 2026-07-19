@@ -1,23 +1,9 @@
-import type { TeamMember, TeamRole } from "@/types/rbac";
+import type { TeamMember } from "@/types/rbac";
 import { isSupabaseConfigured } from "@/lib/system/data-mode";
+import { asTeamRole } from "@/lib/rbac/role-utils";
 
 const SESSION_KEY = "td-current-team-member-v1";
 const EXTERNAL_MEMBER_KEY = "td-external-team-member-v1";
-
-const TEAM_ROLES: TeamRole[] = [
-  "superadmin",
-  "admin",
-  "sales",
-  "operations",
-  "accounts",
-  "staff",
-];
-
-function asTeamRole(value: string | null | undefined): TeamRole | null {
-  if (!value) return null;
-  if (value === "super_admin") return "superadmin";
-  return TEAM_ROLES.includes(value as TeamRole) ? (value as TeamRole) : null;
-}
 
 export const DEMO_TEAM: TeamMember[] = [
   {
@@ -41,10 +27,20 @@ export const DEMO_TEAM: TeamMember[] = [
     created_at: "2026-01-01T00:00:00Z",
   },
   {
+    id: "tm-raja",
+    name: "Raja Shaker",
+    email: "raja@traveldays.in",
+    role: "sales_admin",
+    mfa_enabled: false,
+    mfa_locked: false,
+    is_active: true,
+    created_at: "2026-01-01T00:00:00Z",
+  },
+  {
     id: "tm-admin",
     name: "Admin User",
     email: "admin@traveldays.in",
-    role: "superadmin",
+    role: "admin",
     mfa_enabled: true,
     mfa_locked: false,
     is_active: true,
@@ -54,7 +50,17 @@ export const DEMO_TEAM: TeamMember[] = [
     id: "tm-priya",
     name: "Priya Vohra",
     email: "priya@traveldays.in",
-    role: "admin",
+    role: "sales_admin",
+    mfa_enabled: false,
+    mfa_locked: false,
+    is_active: true,
+    created_at: "2026-02-01T00:00:00Z",
+  },
+  {
+    id: "tm-finance",
+    name: "Finance User",
+    email: "finance@traveldays.in",
+    role: "finance",
     mfa_enabled: false,
     mfa_locked: false,
     is_active: true,
@@ -138,7 +144,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("td_team_members")
-      .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at")
+      .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
       .eq("is_active", true)
       .order("created_at", { ascending: true });
 
@@ -157,6 +163,9 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
         mfa_locked: Boolean(row.mfa_locked),
         is_active: row.is_active !== false,
         created_at: row.created_at ?? new Date().toISOString(),
+        permission_overrides: Array.isArray(row.permission_overrides)
+          ? (row.permission_overrides as TeamMember["permission_overrides"])
+          : null,
       });
     }
 

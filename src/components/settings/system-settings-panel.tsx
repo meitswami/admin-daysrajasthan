@@ -14,15 +14,16 @@ import {
   listActivityLogs,
 } from "@/lib/system/activity-log";
 import { updateTeamMemberMfa } from "@/lib/rbac/current-user";
-import { ROLE_LABELS, ROLE_PERMISSIONS } from "@/types/rbac";
+import { ROLE_LABELS } from "@/types/rbac";
 import type { ActivityAction } from "@/types/system";
 import { formatDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/utils/csv";
 import { Database, Shield, History, IndianRupee, Smartphone, Download, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ActivityLogEntry } from "@/types/system";
+import { RbacPermissionMatrix } from "@/components/settings/rbac-permission-matrix";
 
-const MODULE_OPTIONS = ["", "auth", "system", "itinerary_builder", "email", "crm"];
+const MODULE_OPTIONS = ["", "auth", "system", "itinerary_builder", "email", "crm", "master_data"];
 const ACTION_OPTIONS: ActivityAction[] = [
   "login",
   "quote_create",
@@ -36,6 +37,9 @@ const ACTION_OPTIONS: ActivityAction[] = [
   "mfa_disable",
   "lead_convert",
   "pricing_change",
+  "master_data_create",
+  "master_data_update",
+  "master_data_delete",
 ];
 
 export function SystemSettingsPanel() {
@@ -285,13 +289,13 @@ export function SystemSettingsPanel() {
               </tbody>
             </table>
           </div>
-          <details className="text-xs text-stone-600">
-            <summary className="cursor-pointer font-medium">Permission matrix ({ROLE_LABELS[currentMember.role]})</summary>
-            <ul className="mt-2 list-inside list-disc">
-              {ROLE_PERMISSIONS[currentMember.role].map((p) => (
-                <li key={p}>{p}</li>
-              ))}
-            </ul>
+          <details className="text-sm text-stone-600" open>
+            <summary className="cursor-pointer font-medium">
+              Permission matrix — toggle by role
+            </summary>
+            <div className="mt-3">
+              <RbacPermissionMatrix canEdit={can("settings.system") && currentMember.role === "superadmin"} />
+            </div>
           </details>
         </CardContent>
       </Card>

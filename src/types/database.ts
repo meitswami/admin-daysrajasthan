@@ -37,6 +37,11 @@ export interface Itinerary {
   download_count: number;
   created_at: string;
   updated_at: string;
+  inclusions?: string[];
+  exclusions?: string[];
+  gallery_urls?: string[];
+  created_by_id?: string | null;
+  created_by_name?: string | null;
 }
 
 export type CountryRegion = "indian" | "international";
@@ -52,6 +57,9 @@ export interface WebsiteContentItem {
   country?: string | null;
   region?: CountryRegion | null;
   created_at: string;
+  created_by_id?: string | null;
+  created_by_name?: string | null;
+  updated_at?: string;
 }
 
 export interface WebsiteModuleVisibility {

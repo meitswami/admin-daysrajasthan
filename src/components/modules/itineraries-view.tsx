@@ -24,6 +24,17 @@ import { Download, Search, Pencil, Grid3X3, List, Star, Copy, Trash2, FileUp } f
 import { useToast } from "@/components/ui/toast";
 import { slugify } from "@/lib/utils/slugify";
 import { cn } from "@/lib/utils";
+import { useSystem } from "@/components/providers/system-provider";
+import {
+  createMasterItinerary,
+  deleteMasterItinerary,
+  updateMasterItinerary,
+} from "@/lib/master-data/itinerary-store";
+import {
+  canCreateMasterData,
+  canDeleteMasterRecord,
+  canEditMasterRecord,
+} from "@/lib/rbac/ownership";
 
 function itineraryImageCategory(row: Itinerary): PlaceholderCategory {
   if (row.destination?.toLowerCase().includes("ranthambore")) return "wildlife";
@@ -168,6 +179,8 @@ export function ItinerariesView({
   const [downloadPackage, setDownloadPackage] = useState("all");
   const [downloadCrm, setDownloadCrm] = useState("all");
   const { show } = useToast();
+  const { currentMember } = useSystem();
+  const canCreate = canCreateMasterData(currentMember);
 
   const filtered = useMemo(() => {
     return items.filter((row) => {
@@ -210,12 +223,25 @@ export function ItinerariesView({
   }, [downloads, downloadSearch, downloadPackage, downloadCrm]);
 
   function toggleWebsite(id: string, v: boolean) {
+    const row = items.find((i) => i.id === id);
+    if (row && !canEditMasterRecord(currentMember, row)) {
+      show("View only — you cannot edit this package");
+      return;
+    }
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, show_on_website: v } : i)));
+    void updateMasterItinerary(id, { show_on_website: v }, currentMember);
     show(v ? "Visible on website" : "Hidden from website");
   }
 
   function toggleTrending(id: string) {
-    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, is_trending: !i.is_trending } : i)));
+    const row = items.find((i) => i.id === id);
+    if (row && !canEditMasterRecord(currentMember, row)) {
+      show("View only — you cannot edit this package");
+      return;
+    }
+    const next = !row?.is_trending;
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, is_trending: next } : i)));
+    void updateMasterItinerary(id, { is_trending: next }, currentMember);
     show("Trending updated");
   }
 
@@ -294,8 +320,15 @@ export function ItinerariesView({
     show("Download records exported");
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!deleteId) return;
+    const row = items.find((i) => i.id === deleteId);
+    if (row && !canDeleteMasterRecord(currentMember, row)) {
+      show("You can only delete your own packages (or need Admin)");
+      setDeleteId(null);
+      return;
+    }
+    await deleteMasterItinerary(deleteId, currentMember);
     setItems((prev) => prev.filter((i) => i.id !== deleteId));
     setDeleteId(null);
     show("Itinerary deleted");
@@ -304,16 +337,21 @@ export function ItinerariesView({
   function handleExport() {
     downloadCsv(
       "itineraries.csv",
-      ["Package", "Type", "Duration", "Destination", "Website", "Trending", "Status", "Downloads"],
+      ["Package", "Type", "Duration", "Destination", "Website", "Trending", "Status", "Downloads", "Created by"],
       filtered.map((r) => [
         r.package_name, r.package_type ?? "", r.package_duration ?? "", r.destination ?? "",
         r.show_on_website ? "yes" : "no", r.is_trending ? "yes" : "no", r.status, String(r.download_count),
+        r.created_by_name ?? "",
       ])
     );
   }
 
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
+  async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!canCreate) {
+      show("You do not have permission to add packages");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const pdf = String(fd.get("pdf_url") || "");
     if (!pdf) {
@@ -321,21 +359,36 @@ export function ItinerariesView({
       return;
     }
     const parsed = parseForm(fd, cloneSource);
-    const newItem: Itinerary = {
-      ...parsed,
-      id: crypto.randomUUID(),
-      download_count: 0,
-      created_at: new Date().toISOString(),
-    };
-    setItems((prev) => [newItem, ...prev]);
+    const created = await createMasterItinerary(
+      {
+        package_name: parsed.package_name,
+        destination: parsed.destination,
+        package_type: parsed.package_type,
+        package_duration: parsed.package_duration,
+        pdf_url: parsed.pdf_url,
+        cover_image_url: parsed.cover_image_url,
+        show_on_website: parsed.show_on_website,
+        is_trending: parsed.is_trending,
+        display_mode: parsed.display_mode,
+        status: parsed.status,
+        inclusions: cloneSource?.inclusions ?? [],
+        exclusions: cloneSource?.exclusions ?? [],
+      },
+      currentMember
+    );
+    setItems((prev) => [created, ...prev]);
     setAddOpen(false);
     setCloneFrom("");
-    show(cloneSource ? "Itinerary cloned & uploaded" : "Itinerary uploaded");
+    show(cloneSource ? "Itinerary cloned & saved to Supabase" : "Itinerary uploaded to Supabase");
   }
 
-  function handleEdit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editItem) return;
+    if (!canEditMasterRecord(currentMember, editItem)) {
+      show("You can only edit your own packages (or need Admin)");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     const pdf = String(fd.get("pdf_url") || "");
     if (!pdf) {
@@ -343,10 +396,27 @@ export function ItinerariesView({
       return;
     }
     const parsed = parseForm(fd, editItem);
-    const updated: Itinerary = { ...editItem, ...parsed };
-    setItems((prev) => prev.map((i) => (i.id === editItem.id ? updated : i)));
+    const updated = await updateMasterItinerary(
+      editItem.id,
+      {
+        package_name: parsed.package_name,
+        destination: parsed.destination,
+        package_type: parsed.package_type,
+        package_duration: parsed.package_duration,
+        pdf_url: parsed.pdf_url,
+        cover_image_url: parsed.cover_image_url,
+        show_on_website: parsed.show_on_website,
+        is_trending: parsed.is_trending,
+        display_mode: parsed.display_mode,
+        status: parsed.status,
+      },
+      currentMember
+    );
+    if (updated) {
+      setItems((prev) => prev.map((i) => (i.id === editItem.id ? updated : i)));
+    }
     setEditItem(null);
-    show("Itinerary updated");
+    show("Itinerary updated in Supabase");
   }
 
   const profile = detailEmail ? getCustomerByEmail(detailEmail) : null;
@@ -375,7 +445,11 @@ export function ItinerariesView({
           <Button variant="outline" className="flex-1 sm:flex-none" onClick={handleExport}>
             <Download className="h-4 w-4" /> Export
           </Button>
-          <Button className="flex-1 sm:flex-none" onClick={() => setAddOpen(true)}>
+          <Button
+            className="flex-1 sm:flex-none"
+            onClick={() => setAddOpen(true)}
+            disabled={!canCreate}
+          >
             <FileUp className="h-4 w-4" /> Upload Itinerary
           </Button>
         </div>

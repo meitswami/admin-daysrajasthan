@@ -1,20 +1,7 @@
-import type { TeamMember, TeamRole } from "@/types/rbac";
+import type { TeamMember, TeamRole, PermissionKey } from "@/types/rbac";
+import { ALL_PERMISSION_KEYS } from "@/types/rbac";
 import { DEMO_TEAM } from "@/lib/rbac/current-user";
-
-const TEAM_ROLES: TeamRole[] = [
-  "superadmin",
-  "admin",
-  "sales",
-  "operations",
-  "accounts",
-  "staff",
-];
-
-function asTeamRole(value: string | null | undefined): TeamRole | null {
-  if (!value) return null;
-  if (value === "super_admin") return "superadmin";
-  return TEAM_ROLES.includes(value as TeamRole) ? (value as TeamRole) : null;
-}
+import { asTeamRole } from "@/lib/rbac/role-utils";
 
 type AuthUserLike = {
   id: string;
@@ -22,6 +9,13 @@ type AuthUserLike = {
   user_metadata?: { full_name?: string };
   created_at?: string;
 };
+
+function sanitizePerms(raw: unknown): PermissionKey[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw.filter((p): p is PermissionKey =>
+    typeof p === "string" && ALL_PERMISSION_KEYS.includes(p as PermissionKey)
+  );
+}
 
 /**
  * Map a Supabase Auth user to a TeamMember using Real DB roles when present.
@@ -39,6 +33,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
   let is_active = true;
   let created_at = user.created_at ?? new Date().toISOString();
   let id = user.id;
+  let permission_overrides: PermissionKey[] | null = null;
 
   try {
     const { createClient } = await import("@/lib/supabase/client");
@@ -47,7 +42,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
     if (email) {
       const { data: teamRow } = await supabase
         .from("td_team_members")
-        .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at")
+        .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
         .ilike("email", email)
         .maybeSingle();
 
@@ -60,6 +55,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
         mfa_locked = Boolean(teamRow.mfa_locked);
         is_active = teamRow.is_active !== false;
         created_at = teamRow.created_at || created_at;
+        permission_overrides = sanitizePerms(teamRow.permission_overrides);
       }
     }
 
@@ -89,5 +85,6 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
     mfa_locked,
     is_active,
     created_at,
+    permission_overrides,
   };
 }

@@ -10,12 +10,14 @@ export function Sheet({
   title,
   children,
   side = "right",
+  className,
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
   side?: "right" | "bottom";
+  className?: string;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -39,7 +41,8 @@ export function Sheet({
           side === "right" &&
             "right-0 top-0 h-full w-full max-w-md border-l border-stone-200 animate-in slide-in-from-right duration-200",
           side === "bottom" &&
-            "bottom-0 left-0 max-h-[85vh] w-full rounded-t-2xl border-t border-stone-200"
+            "bottom-0 left-0 max-h-[85vh] w-full rounded-t-2xl border-t border-stone-200",
+          className
         )}
       >
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-4">

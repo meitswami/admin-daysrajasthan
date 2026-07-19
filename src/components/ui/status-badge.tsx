@@ -16,6 +16,14 @@ const styles: Record<string, string> = {
   pending: "bg-amber-50 text-amber-800 ring-amber-200",
   success: "bg-emerald-50 text-emerald-700 ring-emerald-200",
   failed: "bg-red-50 text-red-700 ring-red-200",
+  booked: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  partial: "bg-amber-50 text-amber-800 ring-amber-200",
+  unpaid: "bg-stone-100 text-stone-600 ring-stone-200",
+  paid: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  sent: "bg-emerald-50 text-emerald-700 ring-emerald-200",
+  received: "bg-sky-50 text-sky-800 ring-sky-200",
+  queued: "bg-violet-50 text-violet-800 ring-violet-200",
+  scheduled: "bg-indigo-50 text-indigo-800 ring-indigo-200",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
