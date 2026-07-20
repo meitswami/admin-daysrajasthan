@@ -107,10 +107,6 @@ export default function LoginForm() {
               <p className="text-center text-sm text-stone-500">
                 <Link href="/login/forgot-password" className="text-amber-700 hover:underline">Forgot password?</Link>
               </p>
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">
-                Use your company email <span className="font-medium">info@traveldaysrajasthan.com</span> (password
-                ignored in demo). MFA demo: admin@traveldays.in. Real passwords apply when Supabase Auth users exist.
-              </p>
             </form>
           </CardContent>
         </Card>
