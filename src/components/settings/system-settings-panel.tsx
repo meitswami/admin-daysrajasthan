@@ -86,6 +86,10 @@ export function SystemSettingsPanel() {
       show("Click Real again to confirm — mock seed data will be hidden");
       return;
     }
+    if (!supabaseConfigured && mode === "real") {
+      show("Supabase env is not configured — cannot use Real mode");
+      return;
+    }
     await setDataModeAndPersist(mode);
     setConfirmReal(false);
     show(`Data mode: ${mode.toUpperCase()}`);

@@ -1,6 +1,10 @@
 import type { TeamMember } from "@/types/rbac";
-import { isSupabaseConfigured } from "@/lib/system/data-mode";
+import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+
+function useSupabaseMaster(): boolean {
+  return isSupabaseConfigured() && isRealDataMode();
+}
 
 export type InclusionExclusionKind = "inclusion" | "exclusion";
 
@@ -74,7 +78,7 @@ function writeLocal(items: InclusionExclusionItem[]) {
 }
 
 export async function listInclusionExclusions(): Promise<InclusionExclusionItem[]> {
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -114,7 +118,7 @@ export async function createInclusionExclusion(
   };
 
   let persisted = false;
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -157,7 +161,7 @@ export async function updateInclusionExclusion(
   const beforeList = await listInclusionExclusions();
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -213,7 +217,7 @@ export async function deleteInclusionExclusion(id: string, actor?: TeamMember): 
   const beforeList = await listInclusionExclusions();
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();

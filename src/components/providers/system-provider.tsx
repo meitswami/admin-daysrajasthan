@@ -80,13 +80,15 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   const setDataModeAndPersist = useCallback(async (mode: DataMode) => {
     setDataMode(mode);
     setDataModeState(mode);
-    await persistDataModeToServer(mode);
+    const ok = await persistDataModeToServer(mode);
     const { logActivity } = await import("@/lib/system/activity-log");
     logActivity({
       action: "data_mode_change",
       module: "system",
-      summary: `Data mode switched to ${mode.toUpperCase()}`,
-      metadata: { mode },
+      summary: ok
+        ? `Data mode switched to ${mode.toUpperCase()}`
+        : `Data mode set to ${mode.toUpperCase()} (browser only — server save failed)`,
+      metadata: { mode, persisted: ok },
     });
   }, []);
 

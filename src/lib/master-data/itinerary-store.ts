@@ -1,7 +1,11 @@
 import type { Itinerary, PackageType } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
-import { isSupabaseConfigured } from "@/lib/system/data-mode";
+import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+
+function useSupabaseMaster(): boolean {
+  return isSupabaseConfigured() && isRealDataMode();
+}
 
 const STORAGE_KEY = "td-master-itineraries-v1";
 
@@ -95,7 +99,7 @@ export type MasterItineraryInput = {
 };
 
 export async function listMasterItineraries(): Promise<Itinerary[]> {
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -144,7 +148,7 @@ export async function createMasterItinerary(
   };
 
   let persisted = false;
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -200,7 +204,7 @@ export async function updateMasterItinerary(
   const all = await listMasterItineraries();
   const before = all.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -259,7 +263,7 @@ export async function deleteMasterItinerary(id: string, actor?: TeamMember): Pro
   const all = await listMasterItineraries();
   const before = all.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();

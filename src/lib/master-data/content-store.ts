@@ -5,8 +5,13 @@ import {
   hotels as seedHotels,
   vehicles as seedVehicles,
 } from "@/lib/data/website-content";
-import { isSupabaseConfigured } from "@/lib/system/data-mode";
+import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+
+/** Real mode + configured env → Supabase. Dummy → local mock/seed. */
+function useSupabaseMaster(): boolean {
+  return isSupabaseConfigured() && isRealDataMode();
+}
 
 export type MasterContentEntity = "destinations" | "hotels" | "vehicles";
 
@@ -83,7 +88,7 @@ function asMeta(item: WebsiteContentItem): Record<string, unknown> {
 }
 
 export async function listMasterContent(entity: MasterContentEntity): Promise<WebsiteContentItem[]> {
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -133,7 +138,7 @@ export async function createMasterContent(
   };
 
   let persisted = false;
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -185,7 +190,7 @@ export async function updateMasterContent(
   const beforeList = await listMasterContent(entity);
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
@@ -252,7 +257,7 @@ export async function deleteMasterContent(
   const beforeList = await listMasterContent(entity);
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (isSupabaseConfigured()) {
+  if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();

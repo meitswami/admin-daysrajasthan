@@ -15,11 +15,13 @@ import { crmSyncLogs } from "@/lib/data/mock-data";
 import { formatDateTime } from "@/lib/utils";
 import type { AdminSettingsTab, SmtpSecure } from "@/types/site-settings";
 import { cn } from "@/lib/utils";
+import { useSystem } from "@/components/providers/system-provider";
 import { CheckCircle2, Database, Loader2, Mail, Settings2, Zap, Wrench, Shield } from "lucide-react";
 import { SystemSettingsPanel } from "@/components/settings/system-settings-panel";
 
 export function SettingsView() {
   const { settings, updateAdminGeneral, updateSmtp } = useSiteSettings();
+  const { dataMode, supabaseConfigured } = useSystem();
   const { show } = useToast();
   const [tab, setTab] = useState<AdminSettingsTab>("general");
   const [draftAdmin, setDraftAdmin] = useState(settings.adminGeneral);
@@ -82,18 +84,40 @@ export function SettingsView() {
 
   return (
     <PageMain>
-      <Card className="border-amber-200/60 bg-amber-50/40">
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
-          <Database className="h-8 w-8 shrink-0 text-amber-700" />
-          <div className="flex-1">
-            <p className="font-semibold text-stone-900">Demo mode — settings persist in browser</p>
-            <p className="text-sm text-stone-600">
-              {settings.webGeneral.site_name} ({settings.webGeneral.site_short_name}) — changes apply across admin until Supabase connects.
-            </p>
-          </div>
-          <Badge variant="warning">Mock data</Badge>
-        </CardContent>
-      </Card>
+      {(!supabaseConfigured || dataMode === "dummy") && (
+        <Card className="border-amber-200/60 bg-amber-50/40">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
+            <Database className="h-8 w-8 shrink-0 text-amber-700" />
+            <div className="flex-1">
+              <p className="font-semibold text-stone-900">
+                {!supabaseConfigured
+                  ? "Demo mode — settings persist in browser"
+                  : "Dummy data mode — using mock/local data"}
+              </p>
+              <p className="text-sm text-stone-600">
+                {!supabaseConfigured
+                  ? `${settings.webGeneral.site_name} (${settings.webGeneral.site_short_name}) — changes apply across admin until Supabase connects.`
+                  : "Switch to Real (production) under System & RBAC to load Master Data from Supabase."}
+              </p>
+            </div>
+            <Badge variant="warning">{!supabaseConfigured ? "Mock data" : "DUMMY"}</Badge>
+          </CardContent>
+        </Card>
+      )}
+      {supabaseConfigured && dataMode === "real" && (
+        <Card className="border-emerald-200/60 bg-emerald-50/40">
+          <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
+            <Database className="h-8 w-8 shrink-0 text-emerald-700" />
+            <div className="flex-1">
+              <p className="font-semibold text-stone-900">Connected to Supabase</p>
+              <p className="text-sm text-stone-600">
+                {settings.webGeneral.site_name} — Master Data and settings use the live database.
+              </p>
+            </div>
+            <Badge variant="success">REAL</Badge>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-3">
         {tabs.map((t) => {

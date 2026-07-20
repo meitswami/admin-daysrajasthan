@@ -63,7 +63,7 @@ function normalizeEntity(entity?: MasterDataEntity): MasterContentEntity {
 export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const router = useRouter();
   const { show } = useToast();
-  const { currentMember } = useSystem();
+  const { currentMember, dataMode } = useSystem();
   const initialTab = normalizeEntity(entity);
   const [tab, setTab] = useState<MasterContentEntity>(initialTab);
   const [viewMode, setViewMode] = useState<DisplayMode>("grid");
@@ -100,7 +100,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, dataMode]);
 
   function selectTab(next: MasterContentEntity) {
     setTab(next);
