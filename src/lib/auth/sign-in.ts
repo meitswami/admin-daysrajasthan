@@ -19,23 +19,14 @@ function findDemoMember(email: string): TeamMember | null {
 }
 
 /**
- * Prefer demo team login for known emails (no Supabase round-trip).
- * Otherwise use Supabase email/password when configured.
+ * Prefer Supabase email/password when configured (real passwords).
+ * Demo roster is only used when Supabase env is not configured.
  */
 export async function signInWithEmailPassword(
   email: string,
   password: string
 ): Promise<AuthLoginResult> {
   const trimmed = email.trim().toLowerCase();
-  const demoMatch = findDemoMember(trimmed);
-
-  if (demoMatch) {
-    const member = loginDemoMember(demoMatch.email);
-    if (member) {
-      await persistDemoSessionCookie();
-      return { ok: true, member, mode: "demo" };
-    }
-  }
 
   if (isSupabaseConfigured()) {
     try {
@@ -61,6 +52,15 @@ export async function signInWithEmailPassword(
       return { ok: false, error: error?.message ?? "Invalid email or password" };
     } catch (e) {
       return { ok: false, error: e instanceof Error ? e.message : "Sign-in failed" };
+    }
+  }
+
+  const demoMatch = findDemoMember(trimmed);
+  if (demoMatch) {
+    const member = loginDemoMember(demoMatch.email);
+    if (member) {
+      await persistDemoSessionCookie();
+      return { ok: true, member, mode: "demo" };
     }
   }
 

@@ -23,8 +23,6 @@ function sanitizePerms(raw: unknown): PermissionKey[] | null {
  */
 export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMember> {
   const email = (user.email ?? "").trim().toLowerCase();
-  const demoMatch = DEMO_TEAM.find((m) => m.email.toLowerCase() === email && m.is_active);
-  if (demoMatch) return demoMatch;
 
   let role: TeamRole = "admin";
   let name = user.user_metadata?.full_name ?? email.split("@")[0] ?? "User";
@@ -34,6 +32,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
   let created_at = user.created_at ?? new Date().toISOString();
   let id = user.id;
   let permission_overrides: PermissionKey[] | null = null;
+  let foundTeam = false;
 
   try {
     const { createClient } = await import("@/lib/supabase/client");
@@ -47,6 +46,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
         .maybeSingle();
 
       if (teamRow) {
+        foundTeam = true;
         const mapped = asTeamRole(teamRow.role);
         if (mapped) role = mapped;
         id = teamRow.id || id;
@@ -74,6 +74,11 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
     }
   } catch {
     // Fall through with defaults when Supabase is unreachable.
+  }
+
+  if (!foundTeam) {
+    const demoMatch = DEMO_TEAM.find((m) => m.email.toLowerCase() === email && m.is_active);
+    if (demoMatch) return demoMatch;
   }
 
   return {
