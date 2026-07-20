@@ -13,6 +13,26 @@ import { isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logActivity } from "@/lib/system/activity-log";
 
 const STORAGE_KEY = "td-staff-members-v1";
+const DELETED_EMAILS_KEY = "td-staff-deleted-emails-v1";
+
+function readDeletedEmails(): Set<string> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const raw = localStorage.getItem(DELETED_EMAILS_KEY);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw) as string[];
+    return new Set(Array.isArray(parsed) ? parsed.map((e) => e.toLowerCase()) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markEmailDeleted(email: string) {
+  if (typeof window === "undefined") return;
+  const set = readDeletedEmails();
+  set.add(email.trim().toLowerCase());
+  localStorage.setItem(DELETED_EMAILS_KEY, JSON.stringify([...set]));
+}
 
 function sanitizePerms(raw: unknown): PermissionKey[] | null {
   if (raw == null) return null;
@@ -41,9 +61,15 @@ function mapRow(row: Record<string, unknown>): TeamMember | null {
 }
 
 function mergeSeedStaff(existing: TeamMember[]): TeamMember[] {
-  const byEmail = new Map(existing.map((m) => [m.email.toLowerCase(), m]));
+  const deleted = readDeletedEmails();
+  const byEmail = new Map(
+    existing
+      .filter((m) => !deleted.has(m.email.toLowerCase()))
+      .map((m) => [m.email.toLowerCase(), m])
+  );
   for (const seed of SEED_RAJASTHAN_TOURING_STAFF) {
     const key = seed.email.toLowerCase();
+    if (deleted.has(key)) continue;
     if (!byEmail.has(key)) {
       byEmail.set(key, { ...seed });
     }
@@ -281,6 +307,56 @@ export async function createStaffMember(
   });
 
   return member;
+}
+
+export async function deleteStaffMember(
+  id: string,
+  actor?: TeamMember
+): Promise<{ ok: boolean; error?: string }> {
+  const beforeList = await listStaffMembers();
+  const before = beforeList.find((m) => m.id === id) ?? null;
+  if (!before) return { ok: false, error: "Staff member not found" };
+
+  // Protect the last superadmin from accidental removal
+  if (before.role === "superadmin") {
+    const otherAdmins = beforeList.filter(
+      (m) => m.id !== id && m.role === "superadmin" && m.is_active
+    );
+    if (otherAdmins.length === 0) {
+      return { ok: false, error: "Cannot delete the last Super Admin" };
+    }
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { error } = await supabase.from("td_team_members").delete().eq("id", id);
+      if (error) return { ok: false, error: error.message };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Delete failed" };
+    }
+  }
+
+  markEmailDeleted(before.email);
+  const list = readLocal().filter((m) => m.id !== id);
+  writeLocal(list);
+
+  const demoIdx = DEMO_TEAM.findIndex((m) => m.id === id);
+  if (demoIdx >= 0) {
+    DEMO_TEAM.splice(demoIdx, 1);
+  }
+
+  logActivity({
+    action: "settings_change",
+    module: "staff",
+    summary: `Deleted staff ${before.name} (${before.email})`,
+    entity_type: "team_member",
+    entity_id: id,
+    metadata: { before, actor: actor?.email },
+  });
+
+  return { ok: true };
 }
 
 export async function sendStaffPasswordReset(email: string): Promise<{ ok: boolean; error?: string }> {

@@ -27,6 +27,7 @@ import {
 } from "@/lib/rbac/permission-groups-store";
 import {
   createStaffMember,
+  deleteStaffMember,
   listStaffMembers,
   memberEffectivePermissions,
   sendStaffPasswordReset,
@@ -35,7 +36,7 @@ import {
 import { SEED_PERMISSION_GROUP_ID } from "@/lib/rbac/staff-seed";
 import { getEffectivePermissions } from "@/lib/rbac/permission-overrides";
 import { cn } from "@/lib/utils";
-import { KeyRound, Pencil, Plus, Search, Shield, UserPlus, Users } from "lucide-react";
+import { KeyRound, Pencil, Plus, Search, Shield, Trash2, UserPlus, Users } from "lucide-react";
 
 function resolveDraftPermissions(
   role: TeamRole,
@@ -70,6 +71,8 @@ export function StaffManagementView() {
   const [useCustomPerms, setUseCustomPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -203,6 +206,21 @@ export function StaffManagementView() {
         ? `Password reset link sent to ${email}`
         : result.error ?? "Could not send reset email"
     );
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget || !canManage) return;
+    setDeleting(true);
+    const result = await deleteStaffMember(deleteTarget.id, currentMember);
+    setDeleting(false);
+    if (result.ok) {
+      show(`Deleted ${deleteTarget.name}`);
+      if (selected?.id === deleteTarget.id) setSelected(null);
+      setDeleteTarget(null);
+      void refresh();
+    } else {
+      show(result.error ?? "Could not delete staff member");
+    }
   }
 
   async function addMember() {
@@ -478,6 +496,20 @@ export function StaffManagementView() {
                           >
                             <KeyRound className="h-3.5 w-3.5" /> Reset pwd
                           </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            disabled={m.id === currentMember.id}
+                            title={
+                              m.id === currentMember.id
+                                ? "You cannot delete your own account"
+                                : `Delete ${m.name}`
+                            }
+                            onClick={() => setDeleteTarget(m)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -722,6 +754,37 @@ export function StaffManagementView() {
           </div>
         )}
       </Sheet>
+
+      <Modal
+        open={Boolean(deleteTarget)}
+        onClose={() => !deleting && setDeleteTarget(null)}
+        title="Delete staff member"
+        description={
+          deleteTarget
+            ? `Remove ${deleteTarget.name} (${deleteTarget.email}) from Staff Management? This cannot be undone.`
+            : undefined
+        }
+      >
+        <div className="flex justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={deleting}
+            onClick={() => setDeleteTarget(null)}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={deleting}
+            onClick={() => void confirmDelete()}
+          >
+            <Trash2 className="h-4 w-4" />
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add staff member">
         <div className="space-y-4">
