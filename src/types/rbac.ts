@@ -111,6 +111,18 @@ export interface TeamMember {
   created_at: string;
   /** When set, replaces role defaults for this member only */
   permission_overrides?: PermissionKey[] | null;
+  /** Shared permission group — same access for everyone in the group */
+  permission_group_id?: string | null;
+}
+
+/** Named permission bundle assignable to multiple staff members */
+export interface StaffPermissionGroup {
+  id: string;
+  name: string;
+  description?: string;
+  permissions: PermissionKey[];
+  created_at: string;
+  updated_at: string;
 }
 
 /** Grouped permissions for Staff Management UI */

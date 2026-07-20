@@ -144,7 +144,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("td_team_members")
-      .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
+      .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id")
       .eq("is_active", true)
       .order("created_at", { ascending: true });
 
@@ -166,6 +166,7 @@ export async function fetchTeamMembers(): Promise<TeamMember[]> {
         permission_overrides: Array.isArray(row.permission_overrides)
           ? (row.permission_overrides as TeamMember["permission_overrides"])
           : null,
+        permission_group_id: row.permission_group_id ? String(row.permission_group_id) : null,
       });
     }
 

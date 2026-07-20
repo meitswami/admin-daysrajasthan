@@ -11,14 +11,20 @@ import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
 import {
-  PERMISSION_GROUPS,
+  PERMISSION_GROUPS as PERMISSION_UI_GROUPS,
   PERMISSION_LABELS,
   PRIMARY_ROLES,
   ROLE_LABELS,
   type PermissionKey,
+  type StaffPermissionGroup,
   type TeamMember,
   type TeamRole,
 } from "@/types/rbac";
+import {
+  createPermissionGroup,
+  listPermissionGroups,
+  updatePermissionGroup,
+} from "@/lib/rbac/permission-groups-store";
 import {
   createStaffMember,
   listStaffMembers,
@@ -26,22 +32,39 @@ import {
   sendStaffPasswordReset,
   updateStaffMember,
 } from "@/lib/rbac/staff-store";
+import { SEED_PERMISSION_GROUP_ID } from "@/lib/rbac/staff-seed";
 import { getEffectivePermissions } from "@/lib/rbac/permission-overrides";
 import { cn } from "@/lib/utils";
-import { KeyRound, Pencil, Plus, Search, Shield, UserPlus } from "lucide-react";
+import { KeyRound, Pencil, Plus, Search, Shield, UserPlus, Users } from "lucide-react";
+
+function resolveDraftPermissions(
+  role: TeamRole,
+  groupId: string | null,
+  groups: StaffPermissionGroup[],
+  custom: boolean,
+  customPerms: PermissionKey[]
+): PermissionKey[] {
+  if (custom) return customPerms;
+  const group = groups.find((g) => g.id === groupId);
+  if (group) return [...group.permissions];
+  return getEffectivePermissions(role);
+}
 
 export function StaffManagementView() {
   const { show } = useToast();
   const { can, currentMember } = useSystem();
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [permGroups, setPermGroups] = useState<StaffPermissionGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<TeamRole | "">("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
 
   const [selected, setSelected] = useState<TeamMember | null>(null);
   const [draftName, setDraftName] = useState("");
-  const [draftRole, setDraftRole] = useState<TeamRole>("sales");
+  const [draftRole, setDraftRole] = useState<TeamRole>("staff");
+  const [draftGroupId, setDraftGroupId] = useState<string | null>(null);
   const [draftActive, setDraftActive] = useState(true);
   const [draftPerms, setDraftPerms] = useState<PermissionKey[]>([]);
   const [useCustomPerms, setUseCustomPerms] = useState(false);
@@ -51,13 +74,24 @@ export function StaffManagementView() {
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
-  const [newRole, setNewRole] = useState<TeamRole>("sales");
+  const [newRole, setNewRole] = useState<TeamRole>("staff");
+  const [newGroupId, setNewGroupId] = useState<string | null>(SEED_PERMISSION_GROUP_ID);
+
+  const [editGroup, setEditGroup] = useState<StaffPermissionGroup | null>(null);
+  const [groupDraftName, setGroupDraftName] = useState("");
+  const [groupDraftDesc, setGroupDraftDesc] = useState("");
+  const [groupDraftPerms, setGroupDraftPerms] = useState<PermissionKey[]>([]);
+  const [groupSaving, setGroupSaving] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
 
   const canManage = can("team.manage");
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setMembers(await listStaffMembers());
+    const [staff, groups] = await Promise.all([listStaffMembers(), listPermissionGroups()]);
+    setMembers(staff);
+    setPermGroups(groups);
     setLoading(false);
   }, []);
 
@@ -65,34 +99,56 @@ export function StaffManagementView() {
     void refresh();
   }, [refresh]);
 
+  const groupById = useMemo(
+    () => new Map(permGroups.map((g) => [g.id, g])),
+    [permGroups]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return members.filter((m) => {
       const matchQ =
         !q || m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q);
       const matchRole = !roleFilter || m.role === roleFilter;
+      const matchGroup = !groupFilter || m.permission_group_id === groupFilter;
       const matchStatus =
         statusFilter === "all" ||
         (statusFilter === "active" && m.is_active) ||
         (statusFilter === "inactive" && !m.is_active);
-      return matchQ && matchRole && matchStatus;
+      return matchQ && matchRole && matchGroup && matchStatus;
     });
-  }, [members, search, roleFilter, statusFilter]);
+  }, [members, search, roleFilter, groupFilter, statusFilter]);
 
   function openEdit(member: TeamMember) {
     setSelected(member);
     setDraftName(member.name);
     setDraftRole(member.role);
+    setDraftGroupId(member.permission_group_id ?? null);
     setDraftActive(member.is_active);
     const custom = member.permission_overrides != null;
     setUseCustomPerms(custom);
-    setDraftPerms(custom ? [...member.permission_overrides!] : getEffectivePermissions(member.role));
+    setDraftPerms(
+      resolveDraftPermissions(
+        member.role,
+        member.permission_group_id ?? null,
+        permGroups,
+        custom,
+        custom ? [...member.permission_overrides!] : []
+      )
+    );
   }
 
   function onRoleChange(role: TeamRole) {
     setDraftRole(role);
     if (!useCustomPerms) {
-      setDraftPerms(getEffectivePermissions(role));
+      setDraftPerms(resolveDraftPermissions(role, draftGroupId, permGroups, false, []));
+    }
+  }
+
+  function onGroupChange(groupId: string | null) {
+    setDraftGroupId(groupId);
+    if (!useCustomPerms) {
+      setDraftPerms(resolveDraftPermissions(draftRole, groupId, permGroups, false, []));
     }
   }
 
@@ -103,9 +159,15 @@ export function StaffManagementView() {
     );
   }
 
-  function applyRolePreset() {
+  function toggleGroupPerm(key: PermissionKey, enabled: boolean) {
+    setGroupDraftPerms((prev) =>
+      enabled ? (prev.includes(key) ? prev : [...prev, key]) : prev.filter((p) => p !== key)
+    );
+  }
+
+  function applyGroupOrRolePreset() {
     setUseCustomPerms(false);
-    setDraftPerms(getEffectivePermissions(draftRole));
+    setDraftPerms(resolveDraftPermissions(draftRole, draftGroupId, permGroups, false, []));
   }
 
   async function saveMember() {
@@ -117,6 +179,7 @@ export function StaffManagementView() {
         name: draftName,
         role: draftRole,
         is_active: draftActive,
+        permission_group_id: draftGroupId,
         permission_overrides: useCustomPerms ? draftPerms : null,
       },
       currentMember
@@ -149,15 +212,70 @@ export function StaffManagementView() {
       return;
     }
     await createStaffMember(
-      { name: newName, email: newEmail, role: newRole, is_active: true },
+      {
+        name: newName,
+        email: newEmail,
+        role: newRole,
+        is_active: true,
+        permission_group_id: newGroupId,
+      },
       currentMember
     );
     show(`Added ${newName}`);
     setAddOpen(false);
     setNewName("");
     setNewEmail("");
-    setNewRole("sales");
+    setNewRole("staff");
+    setNewGroupId(SEED_PERMISSION_GROUP_ID);
     void refresh();
+  }
+
+  function openGroupEdit(group: StaffPermissionGroup) {
+    setEditGroup(group);
+    setGroupDraftName(group.name);
+    setGroupDraftDesc(group.description ?? "");
+    setGroupDraftPerms([...group.permissions]);
+  }
+
+  async function saveGroup() {
+    if (!editGroup) return;
+    setGroupSaving(true);
+    const updated = await updatePermissionGroup(editGroup.id, {
+      name: groupDraftName,
+      description: groupDraftDesc,
+      permissions: groupDraftPerms,
+    });
+    setGroupSaving(false);
+    if (updated) {
+      show(`Updated group ${updated.name}`);
+      setEditGroup(null);
+      void refresh();
+    } else {
+      show("Failed to save group");
+    }
+  }
+
+  async function createGroup() {
+    if (!newGroupName.trim()) {
+      show("Group name is required");
+      return;
+    }
+    await createPermissionGroup({
+      name: newGroupName,
+      permissions: getEffectivePermissions("staff"),
+    });
+    show(`Created group ${newGroupName}`);
+    setCreateGroupOpen(false);
+    setNewGroupName("");
+    void refresh();
+  }
+
+  function accessLabel(member: TeamMember) {
+    if (member.permission_overrides != null) return "Custom overrides";
+    if (member.permission_group_id) {
+      return groupById.get(member.permission_group_id)?.name ?? "Permission group";
+    }
+    return "Role preset";
   }
 
   if (!canManage) {
@@ -177,9 +295,53 @@ export function StaffManagementView() {
     <>
       <Header
         title="Staff Management"
-        description="Manage roles, status, and permissions — cleaner than a dense checkbox grid"
+        description="Manage staff, permission groups, and access"
       />
       <PageMain>
+        <section className="mb-6 rounded-xl border border-stone-200 bg-white p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-2 text-sm font-semibold text-stone-900">
+              <Users className="h-4 w-4 text-amber-600" />
+              Permission groups
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={() => setCreateGroupOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> New group
+            </Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {permGroups.map((g) => {
+              const memberCount = members.filter((m) => m.permission_group_id === g.id).length;
+              return (
+                <div
+                  key={g.id}
+                  className="rounded-lg border border-stone-100 bg-stone-50/80 p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-stone-900">{g.name}</p>
+                      {g.description && (
+                        <p className="mt-0.5 text-xs text-stone-500">{g.description}</p>
+                      )}
+                      <p className="mt-2 text-xs text-stone-600">
+                        {g.permissions.length} permissions · {memberCount} member
+                        {memberCount === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openGroupEdit(g)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
         <PageToolbar>
           <div className="relative w-full sm:max-w-xs">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -191,6 +353,18 @@ export function StaffManagementView() {
             />
           </div>
           <Select
+            className="h-10 w-44"
+            value={groupFilter}
+            onChange={(e) => setGroupFilter(e.target.value)}
+          >
+            <option value="">All groups</option>
+            {permGroups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
+          <Select
             className="h-10 w-40"
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value as TeamRole | "")}
@@ -201,6 +375,9 @@ export function StaffManagementView() {
                 {ROLE_LABELS[r]}
               </option>
             ))}
+            <option value="staff">{ROLE_LABELS.staff}</option>
+            <option value="operations">{ROLE_LABELS.operations}</option>
+            <option value="accounts">{ROLE_LABELS.accounts}</option>
           </Select>
           <Select
             className="h-10 w-36"
@@ -217,6 +394,7 @@ export function StaffManagementView() {
             onClick={() => {
               setSearch("");
               setRoleFilter("");
+              setGroupFilter("");
               setStatusFilter("all");
             }}
           >
@@ -231,11 +409,12 @@ export function StaffManagementView() {
           <p className="text-sm text-stone-500">Loading staff…</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase text-stone-500">
                 <tr>
                   <th className="px-4 py-3">Staff</th>
                   <th className="px-4 py-3">Role</th>
+                  <th className="px-4 py-3">Permission group</th>
                   <th className="px-4 py-3">Access</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
@@ -244,7 +423,9 @@ export function StaffManagementView() {
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((m) => {
                   const perms = memberEffectivePermissions(m);
-                  const custom = m.permission_overrides != null;
+                  const groupName = m.permission_group_id
+                    ? groupById.get(m.permission_group_id)?.name
+                    : null;
                   return (
                     <tr key={m.id} className="hover:bg-stone-50/80">
                       <td className="px-4 py-3">
@@ -255,12 +436,26 @@ export function StaffManagementView() {
                         <Badge variant="info">{ROLE_LABELS[m.role]}</Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <p className="text-stone-700">{perms.length} permissions</p>
-                        {custom ? (
-                          <p className="text-[11px] text-amber-700">Custom overrides</p>
+                        {groupName ? (
+                          <Badge variant="default">{groupName}</Badge>
                         ) : (
-                          <p className="text-[11px] text-stone-400">Role preset</p>
+                          <span className="text-stone-400">—</span>
                         )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-stone-700">{perms.length} permissions</p>
+                        <p
+                          className={cn(
+                            "text-[11px]",
+                            m.permission_overrides != null
+                              ? "text-amber-700"
+                              : m.permission_group_id
+                                ? "text-sky-700"
+                                : "text-stone-400"
+                          )}
+                        >
+                          {accessLabel(m)}
+                        </p>
                       </td>
                       <td className="px-4 py-3">
                         {m.is_active ? (
@@ -290,7 +485,7 @@ export function StaffManagementView() {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-stone-500">
+                    <td colSpan={6} className="px-4 py-10 text-center text-stone-500">
                       No staff match your filters
                     </td>
                   </tr>
@@ -321,7 +516,28 @@ export function StaffManagementView() {
               <div>
                 <Label>Email</Label>
                 <Input className="mt-1.5" value={selected.email} disabled />
-                <p className="mt-1 text-xs text-stone-500">Email is the login ID — use password reset to change access.</p>
+                <p className="mt-1 text-xs text-stone-500">
+                  Email is the login ID — use password reset to change access.
+                </p>
+              </div>
+              <div>
+                <Label>Permission group</Label>
+                <Select
+                  className="mt-1.5"
+                  value={draftGroupId ?? ""}
+                  onChange={(e) => onGroupChange(e.target.value || null)}
+                >
+                  <option value="">None — use role preset</option>
+                  {permGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </Select>
+                <p className="mt-1 text-xs text-stone-500">
+                  Everyone in the same group gets identical permissions. Edit the group above to
+                  change access for all members at once.
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -336,6 +552,9 @@ export function StaffManagementView() {
                         {ROLE_LABELS[r]}
                       </option>
                     ))}
+                    <option value="staff">{ROLE_LABELS.staff}</option>
+                    <option value="operations">{ROLE_LABELS.operations}</option>
+                    <option value="accounts">{ROLE_LABELS.accounts}</option>
                   </Select>
                 </div>
                 <div>
@@ -357,18 +576,20 @@ export function StaffManagementView() {
                     <Shield className="h-4 w-4 text-amber-600" />
                     Permissions
                   </p>
-                  <Button type="button" size="sm" variant="outline" onClick={applyRolePreset}>
-                    Reset to role preset
+                  <Button type="button" size="sm" variant="outline" onClick={applyGroupOrRolePreset}>
+                    Reset to {draftGroupId ? "group" : "role"} preset
                   </Button>
                 </div>
                 <p className="mb-3 text-xs text-stone-500">
                   {useCustomPerms
-                    ? "Custom overrides for this person (saved separately from the role matrix)."
-                    : `Using ${ROLE_LABELS[draftRole]} preset. Toggle any box to customize.`}
+                    ? "Custom overrides for this person only."
+                    : draftGroupId
+                      ? `Using ${groupById.get(draftGroupId)?.name ?? "group"} preset. Toggle any box to customize.`
+                      : `Using ${ROLE_LABELS[draftRole]} preset. Toggle any box to customize.`}
                 </p>
 
                 <div className="space-y-4">
-                  {PERMISSION_GROUPS.map((group) => (
+                  {PERMISSION_UI_GROUPS.map((group) => (
                     <div key={group.id}>
                       <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
                         {group.label}
@@ -422,6 +643,86 @@ export function StaffManagementView() {
         )}
       </Sheet>
 
+      <Sheet
+        open={Boolean(editGroup)}
+        onClose={() => setEditGroup(null)}
+        title={editGroup ? `Edit group — ${editGroup.name}` : "Edit group"}
+        className="!max-w-lg"
+      >
+        {editGroup && (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+              <div>
+                <Label>Group name</Label>
+                <Input
+                  className="mt-1.5"
+                  value={groupDraftName}
+                  onChange={(e) => setGroupDraftName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Input
+                  className="mt-1.5"
+                  value={groupDraftDesc}
+                  onChange={(e) => setGroupDraftDesc(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-stone-500">
+                Changes apply to all {members.filter((m) => m.permission_group_id === editGroup.id).length}{" "}
+                members in this group (unless they have custom overrides).
+              </p>
+              <div className="space-y-4">
+                {PERMISSION_UI_GROUPS.map((group) => (
+                  <div key={group.id}>
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">
+                      {group.label}
+                    </p>
+                    <div className="space-y-1.5">
+                      {group.keys.map((key) => {
+                        const on = groupDraftPerms.includes(key);
+                        return (
+                          <label
+                            key={key}
+                            className={cn(
+                              "flex cursor-pointer items-start gap-2 rounded-lg border px-2.5 py-2 text-sm",
+                              on ? "border-sky-200 bg-sky-50/60" : "border-transparent bg-white"
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="mt-0.5 h-4 w-4 rounded border-stone-300"
+                              checked={on}
+                              onChange={(e) => toggleGroupPerm(key, e.target.checked)}
+                            />
+                            <span className="font-medium text-stone-800">
+                              {PERMISSION_LABELS[key]}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex gap-2 border-t border-stone-100 px-4 py-3">
+              <Button type="button" variant="outline" className="flex-1" onClick={() => setEditGroup(null)}>
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                className="flex-1"
+                disabled={groupSaving}
+                onClick={() => void saveGroup()}
+              >
+                {groupSaving ? "Saving…" : "Save group"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Sheet>
+
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add staff member">
         <div className="space-y-4">
           <div>
@@ -435,8 +736,23 @@ export function StaffManagementView() {
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              placeholder="name@company.com"
+              placeholder="name@rajasthantouring.com"
             />
+          </div>
+          <div>
+            <Label>Permission group</Label>
+            <Select
+              className="mt-1.5"
+              value={newGroupId ?? ""}
+              onChange={(e) => setNewGroupId(e.target.value || null)}
+            >
+              <option value="">None — use role preset</option>
+              {permGroups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </Select>
           </div>
           <div>
             <Label>Role</Label>
@@ -450,10 +766,11 @@ export function StaffManagementView() {
                   {ROLE_LABELS[r]}
                 </option>
               ))}
+              <option value="staff">{ROLE_LABELS.staff}</option>
             </Select>
           </div>
           <p className="text-xs text-stone-500">
-            After adding, use <strong>Reset pwd</strong> so they receive a secure password link. We never store or show plaintext passwords.
+            After adding, use <strong>Reset pwd</strong> so they receive a secure password link.
           </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
@@ -461,6 +778,31 @@ export function StaffManagementView() {
             </Button>
             <Button type="button" onClick={() => void addMember()}>
               <Plus className="h-4 w-4" /> Add
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={createGroupOpen} onClose={() => setCreateGroupOpen(false)} title="New permission group">
+        <div className="space-y-4">
+          <div>
+            <Label>Group name *</Label>
+            <Input
+              className="mt-1.5"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              placeholder="e.g. Sales Team"
+            />
+          </div>
+          <p className="text-xs text-stone-500">
+            Starts with the Staff role preset. Edit permissions after creating.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setCreateGroupOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void createGroup()}>
+              Create
             </Button>
           </div>
         </div>

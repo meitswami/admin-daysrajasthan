@@ -5,11 +5,8 @@ import { memberHasPermission } from "./staff-store";
 
 export function hasPermission(permission: PermissionKey, role?: TeamRole): boolean {
   const member = getCurrentTeamMember();
-  // When checking the current session member, honour per-user overrides
   if (!role || role === member.role) {
-    if (member.permission_overrides != null) {
-      return memberHasPermission(member, permission);
-    }
+    return memberHasPermission(member, permission);
   }
   const r = role ?? member.role;
   return roleHasPermission(r, permission);

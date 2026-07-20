@@ -5,8 +5,10 @@ import {
   type TeamRole,
 } from "@/types/rbac";
 import { getEffectivePermissions } from "@/lib/rbac/permission-overrides";
+import { getPermissionGroupSync } from "@/lib/rbac/permission-groups-store";
 import { asTeamRole } from "@/lib/rbac/role-utils";
 import { DEMO_TEAM } from "@/lib/rbac/current-user";
+import { SEED_RAJASTHAN_TOURING_STAFF } from "@/lib/rbac/staff-seed";
 import { isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logActivity } from "@/lib/system/activity-log";
 
@@ -34,22 +36,45 @@ function mapRow(row: Record<string, unknown>): TeamMember | null {
     is_active: row.is_active !== false,
     created_at: String(row.created_at ?? new Date().toISOString()),
     permission_overrides: sanitizePerms(row.permission_overrides),
+    permission_group_id: row.permission_group_id ? String(row.permission_group_id) : null,
   };
 }
 
+function mergeSeedStaff(existing: TeamMember[]): TeamMember[] {
+  const byEmail = new Map(existing.map((m) => [m.email.toLowerCase(), m]));
+  for (const seed of SEED_RAJASTHAN_TOURING_STAFF) {
+    const key = seed.email.toLowerCase();
+    if (!byEmail.has(key)) {
+      byEmail.set(key, { ...seed });
+    }
+  }
+  return Array.from(byEmail.values()).sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+}
+
 function readLocal(): TeamMember[] {
-  if (typeof window === "undefined") return DEMO_TEAM.map((m) => ({ ...m }));
+  if (typeof window === "undefined") {
+    return mergeSeedStaff(DEMO_TEAM.map((m) => ({ ...m, permission_group_id: null })));
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const seeded = DEMO_TEAM.map((m) => ({ ...m, permission_overrides: null }));
+      const seeded = mergeSeedStaff(
+        DEMO_TEAM.map((m) => ({ ...m, permission_overrides: null, permission_group_id: null }))
+      );
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       return seeded;
     }
     const parsed = JSON.parse(raw) as TeamMember[];
-    return Array.isArray(parsed) ? parsed : DEMO_TEAM.map((m) => ({ ...m }));
+    const list = Array.isArray(parsed) ? parsed : [];
+    const merged = mergeSeedStaff(list);
+    if (merged.length !== list.length) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+    }
+    return merged;
   } catch {
-    return DEMO_TEAM.map((m) => ({ ...m }));
+    return mergeSeedStaff(DEMO_TEAM.map((m) => ({ ...m })));
   }
 }
 
@@ -62,6 +87,10 @@ function writeLocal(members: TeamMember[]) {
 export function memberEffectivePermissions(member: TeamMember): PermissionKey[] {
   if (member.permission_overrides != null) {
     return [...member.permission_overrides];
+  }
+  const group = getPermissionGroupSync(member.permission_group_id);
+  if (group) {
+    return [...group.permissions];
   }
   return getEffectivePermissions(member.role);
 }
@@ -77,7 +106,9 @@ export async function listStaffMembers(): Promise<TeamMember[]> {
       const supabase = createClient();
       const { data, error } = await supabase
         .from("td_team_members")
-        .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
+        .select(
+          "id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id"
+        )
         .order("created_at", { ascending: true });
       if (!error && data?.length) {
         const mapped = data
@@ -99,6 +130,7 @@ export type StaffUpdateInput = {
   mfa_enabled?: boolean;
   mfa_locked?: boolean;
   permission_overrides?: PermissionKey[] | null;
+  permission_group_id?: string | null;
 };
 
 export async function updateStaffMember(
@@ -122,12 +154,17 @@ export async function updateStaffMember(
       if (patch.permission_overrides !== undefined) {
         payload.permission_overrides = patch.permission_overrides;
       }
+      if (patch.permission_group_id !== undefined) {
+        payload.permission_group_id = patch.permission_group_id;
+      }
 
       const { data, error } = await supabase
         .from("td_team_members")
         .update(payload)
         .eq("id", id)
-        .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
+        .select(
+          "id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id"
+        )
         .maybeSingle();
 
       if (!error && data) {
@@ -160,6 +197,9 @@ export async function updateStaffMember(
     ...(patch.permission_overrides !== undefined
       ? { permission_overrides: patch.permission_overrides }
       : {}),
+    ...(patch.permission_group_id !== undefined
+      ? { permission_group_id: patch.permission_group_id }
+      : {}),
   };
   writeLocal(list);
   // Keep demo Acting-as roster in sync for local edits
@@ -183,6 +223,7 @@ export type StaffCreateInput = {
   email: string;
   role: TeamRole;
   is_active?: boolean;
+  permission_group_id?: string | null;
 };
 
 export async function createStaffMember(
@@ -199,6 +240,7 @@ export async function createStaffMember(
     is_active: input.is_active !== false,
     created_at: new Date().toISOString(),
     permission_overrides: null,
+    permission_group_id: input.permission_group_id ?? null,
   };
 
   let persisted = false;
@@ -215,6 +257,7 @@ export async function createStaffMember(
         mfa_locked: false,
         is_active: member.is_active,
         permission_overrides: null,
+        permission_group_id: member.permission_group_id,
       });
       if (!error) persisted = true;
     } catch {
