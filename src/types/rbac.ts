@@ -42,7 +42,8 @@ export type PermissionKey =
   | "master_data.edit_any"
   | "master_data.delete_own"
   | "master_data.delete_any"
-  | "operations.view";
+  | "operations.view"
+  | "website.view";
 
 export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   "dashboard.view",
@@ -70,6 +71,7 @@ export const ALL_PERMISSION_KEYS: PermissionKey[] = [
   "master_data.delete_own",
   "master_data.delete_any",
   "operations.view",
+  "website.view",
 ];
 
 export const PERMISSION_LABELS: Record<PermissionKey, string> = {
@@ -98,6 +100,7 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   "master_data.delete_own": "Master data — delete own",
   "master_data.delete_any": "Master data — delete any",
   "operations.view": "Operations — transport, sheets, P&L, invoices",
+  "website.view": "Website — packages, CMS, queries, blog, WhatsApp",
 };
 
 export interface TeamMember {
@@ -142,6 +145,11 @@ export const PERMISSION_GROUPS: { id: string; label: string; keys: PermissionKey
       "itinerary_builder.approve",
       "itinerary_builder.delete",
     ],
+  },
+  {
+    id: "website",
+    label: "Website",
+    keys: ["website.view"],
   },
   {
     id: "crm",
@@ -222,6 +230,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, PermissionKey[]> = {
     "data_mode.toggle",
     ...MASTER_DATA_FULL,
     "operations.view",
+    "website.view",
   ],
   admin: [
     "dashboard.view",
@@ -236,12 +245,11 @@ export const ROLE_PERMISSIONS: Record<TeamRole, PermissionKey[]> = {
     "crm.leads",
     "reports.view",
     "reports.export",
-    "settings.view",
     "chat.manage",
-    "team.manage",
     "activity_logs.view",
     ...MASTER_DATA_FULL,
     "operations.view",
+    // website.view / settings.view / team.manage intentionally off — Website & System nav Super Admin only
   ],
   sales_admin: [
     "dashboard.view",
@@ -253,9 +261,9 @@ export const ROLE_PERMISSIONS: Record<TeamRole, PermissionKey[]> = {
     "crm.view",
     "crm.leads",
     "reports.view",
-    "settings.view",
     ...MASTER_DATA_OWN,
     "operations.view",
+    // website.view / settings.view intentionally off — Website & System nav Super Admin only
   ],
   sales: [
     "dashboard.view",

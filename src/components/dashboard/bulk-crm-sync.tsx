@@ -1,24 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/components/ui/toast";
-import { itineraryDownloads, whatsappLeads } from "@/lib/data";
+import { createClient } from "@/lib/supabase/client";
+import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
+import { useSystem } from "@/components/providers/system-provider";
 import { Loader2, RefreshCw } from "lucide-react";
+
+async function countPendingCrm(): Promise<number> {
+  if (!isSupabaseConfigured() || !isRealDataMode()) return 0;
+  const supabase = createClient();
+  const [downloads, whatsapp] = await Promise.all([
+    supabase
+      .from("itinerary_downloads")
+      .select("id", { count: "exact", head: true })
+      .eq("synced_to_crm", false),
+    supabase
+      .from("whatsapp_leads")
+      .select("id", { count: "exact", head: true })
+      .eq("synced_to_crm", false),
+  ]);
+  return (downloads.count ?? 0) + (whatsapp.count ?? 0);
+}
 
 export function BulkCrmSync() {
   const { show } = useToast();
+  const { dataMode } = useSystem();
   const [syncing, setSyncing] = useState(false);
-  const pending =
-    itineraryDownloads.filter((d) => !d.synced_to_crm).length +
-    whatsappLeads.filter((w) => !w.synced_to_crm).length;
+  const [pending, setPending] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void countPendingCrm().then((n) => {
+      if (!cancelled) setPending(n);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [dataMode]);
 
   async function handleSyncAll() {
+    if (!isSupabaseConfigured() || !isRealDataMode()) {
+      show("CRM sync requires Real mode + Supabase");
+      return;
+    }
     setSyncing(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setSyncing(false);
-    show(`Synced ${pending} pending leads to CRM (demo)`);
+    try {
+      const supabase = createClient();
+      const now = new Date().toISOString();
+      await Promise.all([
+        supabase
+          .from("itinerary_downloads")
+          .update({ synced_to_crm: true })
+          .eq("synced_to_crm", false),
+        supabase
+          .from("whatsapp_leads")
+          .update({ synced_to_crm: true, crm_synced_at: now })
+          .eq("synced_to_crm", false),
+      ]);
+      const left = await countPendingCrm();
+      setPending(left);
+      show(left === 0 ? "All pending leads synced to CRM" : `${left} still pending`);
+    } catch (e) {
+      console.warn(e);
+      show("CRM sync failed");
+    } finally {
+      setSyncing(false);
+    }
   }
 
   return (

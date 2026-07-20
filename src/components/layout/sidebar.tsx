@@ -115,6 +115,8 @@ function CollapsibleGroup({
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const filterItem = (item: NavItem) => canAccessModule(item.href);
+  const websiteItems = websiteNav.items.filter(filterItem);
+  const systemItems = secondaryNav.filter(filterItem);
 
   return (
     <>
@@ -146,17 +148,21 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         />
       ))}
 
-      <p className="mb-2 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-        Website
-      </p>
-      {websiteNav.items.filter(filterItem).map((item) => (
-        <NavLink
-          key={item.href}
-          item={item}
-          active={pathname === item.href || pathname.startsWith(item.href + "/")}
-          onNavigate={onNavigate}
-        />
-      ))}
+      {websiteItems.length > 0 && (
+        <>
+          <p className="mb-2 mt-4 px-3 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            Website
+          </p>
+          {websiteItems.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </>
+      )}
 
       {aiChatNav.items.some(filterItem) && (
         <>
@@ -174,17 +180,21 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         </>
       )}
 
-      <p className="mb-2 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-        System
-      </p>
-      {secondaryNav.filter(filterItem).map((item) => (
-        <NavLink
-          key={item.href}
-          item={item}
-          active={pathname === item.href || pathname.startsWith(item.href + "/")}
-          onNavigate={onNavigate}
-        />
-      ))}
+      {systemItems.length > 0 && (
+        <>
+          <p className="mb-2 mt-6 px-3 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+            System
+          </p>
+          {systemItems.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </>
+      )}
     </>
   );
 }

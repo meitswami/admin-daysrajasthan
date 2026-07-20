@@ -1,23 +1,42 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { StatCard } from "@/components/ui/stat-card";
 import { DashboardPeriodToolbar } from "@/components/dashboard/period-toolbar";
-import { getDashboardStatsByPeriod, getInquiryTrendLabel } from "@/lib/data/dashboard-stats";
+import { fetchDashboardStatsByPeriodLive } from "@/lib/data/dashboard-stats";
 import { exportWebsiteDashboardCsv } from "@/lib/dashboard/export";
 import type { DashboardPeriod } from "@/lib/utils/date-range";
+import type { DashboardStats } from "@/types/database";
 import { MessageSquare, FileQuestion, Download, BookOpen, MessageCircle } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { useSystem } from "@/components/providers/system-provider";
+
+const EMPTY: DashboardStats = {
+  totalContactQueries: 0,
+  totalInquiries: 0,
+  totalItineraryDownloads: 0,
+  totalBlogs: 0,
+  totalWhatsappLeads: 0,
+};
 
 export function DashboardStats() {
   const { show } = useToast();
+  const { dataMode } = useSystem();
   const [period, setPeriod] = useState<DashboardPeriod>("today");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
-  const custom = { from: customFrom, to: customTo };
+  const custom = useMemo(() => ({ from: customFrom, to: customTo }), [customFrom, customTo]);
+  const [stats, setStats] = useState<DashboardStats>(EMPTY);
 
-  const stats = useMemo(() => getDashboardStatsByPeriod(period, custom), [period, customFrom, customTo]);
-  const inquiryTrend = useMemo(() => getInquiryTrendLabel(period), [period]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchDashboardStatsByPeriodLive(period, custom).then((next) => {
+      if (!cancelled) setStats(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [period, custom, dataMode]);
 
   return (
     <div className="space-y-3">
@@ -29,15 +48,16 @@ export function DashboardStats() {
         onCustomFromChange={setCustomFrom}
         onCustomToChange={setCustomTo}
         onExport={() => {
-          exportWebsiteDashboardCsv(period, custom);
-          show("Website dashboard CSV downloaded");
+          void exportWebsiteDashboardCsv(period, custom).then(() =>
+            show("Website dashboard CSV downloaded")
+          );
         }}
         exportLabel="Export website CSV"
       />
 
       <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-5">
         <StatCard label="Contact Queries" value={stats.totalContactQueries} icon={MessageSquare} />
-        <StatCard label="Inquiries" value={stats.totalInquiries} icon={FileQuestion} trend={inquiryTrend} />
+        <StatCard label="Inquiries" value={stats.totalInquiries} icon={FileQuestion} />
         <StatCard label="Itinerary Downloads" value={stats.totalItineraryDownloads} icon={Download} />
         <StatCard label="Published Blogs" value={stats.totalBlogs} icon={BookOpen} />
         <StatCard

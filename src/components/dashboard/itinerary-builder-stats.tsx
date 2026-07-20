@@ -30,6 +30,20 @@ export function ItineraryBuilderStats() {
     setMetrics(getItineraryBuilderMetricsLive(period, custom));
   }, [period, custom]);
 
+  useEffect(() => {
+    void import("@/lib/system/data-mode").then(({ isRealDataMode }) => {
+      if (!isRealDataMode()) {
+        setMetrics(getItineraryBuilderMetricsLive(period, custom));
+        return;
+      }
+      void import("@/lib/itinerary-builder/sync-real").then(({ hydrateItineraryBuilderFromSupabaseIfReal }) =>
+        hydrateItineraryBuilderFromSupabaseIfReal().then(() => {
+          setMetrics(getItineraryBuilderMetricsLive(period, custom));
+        })
+      );
+    });
+  }, [period, custom]);
+
   return (
     <Card className="border-amber-200/60 bg-gradient-to-br from-amber-50/40 to-white shadow-sm">
       <CardHeader className="pb-2">
@@ -40,7 +54,7 @@ export function ItineraryBuilderStats() {
               Itinerary Builder
             </CardTitle>
             <CardDescription>
-              Synced from client quotes (QRT*) — filter by created date & export
+              Client quotes only (excludes website package catalog) — filter by created date
             </CardDescription>
           </div>
           <Link

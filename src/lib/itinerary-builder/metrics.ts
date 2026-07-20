@@ -1,4 +1,3 @@
-import { SEED_ITINERARY_RECORDS } from "@/lib/data/itinerary-builder-mock";
 import type { ClientItineraryRecord, WorkflowStatus } from "@/types/itinerary-builder";
 import { isInDashboardPeriod, type DashboardPeriod } from "@/lib/utils/date-range";
 import { listClientItineraries } from "./storage";
@@ -25,8 +24,15 @@ const PENDING_STATUSES: WorkflowStatus[] = [
 
 const CONFIRMED_STATUSES: WorkflowStatus[] = ["booking_confirmed", "completed"];
 
+/** Website package catalog rows are not client bookings / quotes. */
+function isClientBookingQuote(record: ClientItineraryRecord): boolean {
+  const name = (record.client_name ?? "").trim().toLowerCase();
+  if (name === "website package" || name === "") return false;
+  return true;
+}
+
 function aggregate(records: ClientItineraryRecord[]): ItineraryBuilderMetrics {
-  const active = records.filter((r) => !r.deleted_at);
+  const active = records.filter((r) => !r.deleted_at && isClientBookingQuote(r));
   const pending = active.filter((r) => PENDING_STATUSES.includes(r.workflow_status));
   const confirmed = active.filter((r) => CONFIRMED_STATUSES.includes(r.workflow_status));
 
@@ -49,15 +55,25 @@ function filterByPeriod(
   return records.filter((r) => isInDashboardPeriod(r.created_at, period, new Date(), custom));
 }
 
-/** Server / initial render — seed data only */
+/** Server / initial render — never seed dummy quotes into the dashboard */
 export function getItineraryBuilderMetricsFromSeed(
   period: DashboardPeriod = "all",
   custom?: { from?: string; to?: string }
 ): ItineraryBuilderMetrics {
-  return aggregate(filterByPeriod(SEED_ITINERARY_RECORDS, period, custom));
+  void period;
+  void custom;
+  return {
+    totalQuotes: 0,
+    pendingQuotes: 0,
+    confirmedQuotes: 0,
+    totalBookingValue: 0,
+    totalRevenue: 0,
+    unpaidQuotes: 0,
+    activePackages: 0,
+  };
 }
 
-/** Client — includes localStorage quotes created in demo */
+/** Client — live quotes only (excludes website package catalog rows) */
 export function getItineraryBuilderMetricsLive(
   period: DashboardPeriod = "all",
   custom?: { from?: string; to?: string }

@@ -34,7 +34,7 @@ function seedState(): StoreState {
 }
 
 export function readItineraryBuilderState(): StoreState {
-  if (typeof window === "undefined") return seedState();
+  if (typeof window === "undefined") return emptyState();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return isRealDataMode() ? emptyState() : seedState();
