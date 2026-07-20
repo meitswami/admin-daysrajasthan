@@ -44,7 +44,7 @@ export function QuotationPrintView({ itineraryId }: { itineraryId: string }) {
 
   return (
     <div className="min-h-screen bg-stone-100 print:bg-white">
-      <div className="no-print sticky top-0 z-10 border-b border-stone-200 bg-white px-4 py-3">
+      <div className="no-print sticky top-0 z-10 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
           <Link
             href={`/itinerary-builder/${itineraryId}`}
@@ -53,7 +53,7 @@ export function QuotationPrintView({ itineraryId }: { itineraryId: string }) {
             <ArrowLeft className="h-4 w-4" />
             Back to builder
           </Link>
-          <Button type="button" size="sm" onClick={() => window.print()}>
+          <Button type="button" size="sm" className="no-print" onClick={() => window.print()}>
             <Printer className="h-4 w-4" />
             Print / Save as PDF
           </Button>

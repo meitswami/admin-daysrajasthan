@@ -2,50 +2,126 @@ export type PreviewThemeId = 1 | 2 | 3 | 4 | 5;
 
 export type PreviewTheme = {
   id: PreviewThemeId;
-  /** Full branded label shown under the card */
-  label: string;
+  /** Short style name shown on selector cards */
+  styleName: string;
   shortLabel: string;
+  /** Card preview gradient */
   gradient: string;
   /** Page shell tint when this theme is selected */
   shell: string;
+  /** Primary accent (hex) used in themed quotation */
+  accent: string;
+  accentSoft: string;
+  heading: string;
+  heroImage: string;
+  gallery: string[];
 };
 
-/** Five Complete Rajasthan Traditional Heritage Look variants (daysrajasthan.com palette). */
+/**
+ * Five Rajasthani booking-preview themes.
+ * Themes 1–3 mirror rajasthantouring SenduserviewData layouts;
+ * 4–5 are companion Rajasthani setups.
+ */
 export const PREVIEW_THEMES: PreviewTheme[] = [
   {
     id: 1,
-    label: "1 Complete Rajasthan Traditional Heritage Look",
-    shortLabel: "Heritage Look 1",
-    gradient: "from-[#7B1E2E] via-[#A67C2D] to-[#5C0F1A]",
-    shell: "bg-[#FBF7F0]",
+    styleName: "Legacy of Maharajas",
+    shortLabel: "Heritage Cover",
+    gradient: "from-[#C9A227] via-[#E8C547] to-[#8B6914]",
+    shell: "bg-[#FFF8E7]",
+    accent: "#C9A227",
+    accentSoft: "#FFF3C4",
+    heading: "#1e293b",
+    heroImage: "/theme-assets/heritage-fort.jpg",
+    gallery: [
+      "/theme-assets/heritage-fort.jpg",
+      "/theme-assets/heritage-palace.jpg",
+      "/theme-assets/amber-gate.jpg",
+      "/theme-assets/hawa-mahal.jpg",
+      "/theme-assets/wildlife.jpg",
+      "/theme-assets/lake-udaipur.jpg",
+      "/theme-assets/circle-fort.jpg",
+    ],
   },
   {
     id: 2,
-    label: "2 Complete Rajasthan Traditional Heritage Look",
-    shortLabel: "Heritage Look 2",
-    gradient: "from-[#C45C26] via-[#E8A838] to-[#8B3A1A]",
-    shell: "bg-[#FFF8F0]",
+    styleName: "Royal Circle Heritage",
+    shortLabel: "Circle Modern",
+    gradient: "from-[#F5C518] via-[#A8E063] to-[#56AB2F]",
+    shell: "bg-[#FAFFF5]",
+    accent: "#56AB2F",
+    accentSoft: "#EEFBE3",
+    heading: "#111827",
+    heroImage: "/theme-assets/circle-fort.jpg",
+    gallery: [
+      "/theme-assets/circle-fort.jpg",
+      "/theme-assets/hawa-mahal.jpg",
+      "/theme-assets/amber-gate.jpg",
+      "/theme-assets/lake-udaipur.jpg",
+      "/theme-assets/wildlife.jpg",
+      "/theme-assets/heritage-palace.jpg",
+      "/theme-assets/desert-dunes.jpg",
+    ],
   },
   {
     id: 3,
-    label: "3 Complete Rajasthan Traditional Heritage Look",
-    shortLabel: "Heritage Look 3",
-    gradient: "from-[#C4A574] via-[#A67C52] to-[#6B4423]",
-    shell: "bg-[#FAF6F0]",
+    styleName: "Parchment Heritage",
+    shortLabel: "Maroon Parchment",
+    gradient: "from-[#7B1E2E] via-[#A63D4F] to-[#4A0E18]",
+    shell: "bg-[#FBF7F0]",
+    accent: "#7B1E2E",
+    accentSoft: "#F8E9EC",
+    heading: "#1c1917",
+    heroImage: "/theme-assets/amber-gate.jpg",
+    gallery: [
+      "/theme-assets/amber-gate.jpg",
+      "/theme-assets/hawa-mahal.jpg",
+      "/theme-assets/wildlife.jpg",
+      "/theme-assets/lake-udaipur.jpg",
+      "/theme-assets/heritage-fort.jpg",
+      "/theme-assets/circle-fort.jpg",
+      "/theme-assets/desert-dunes.jpg",
+    ],
   },
   {
     id: 4,
-    label: "4 Complete Rajasthan Traditional Heritage Look",
-    shortLabel: "Heritage Look 4",
-    gradient: "from-[#1E4D7B] via-[#3A7CA5] to-[#0D2B45]",
-    shell: "bg-[#F0F5FA]",
+    styleName: "Desert Sunset Trail",
+    shortLabel: "Desert Sunset",
+    gradient: "from-[#C45C26] via-[#E07A3D] to-[#8B3A1A]",
+    shell: "bg-[#FFF8F0]",
+    accent: "#C45C26",
+    accentSoft: "#FFE8D6",
+    heading: "#3b2112",
+    heroImage: "/theme-assets/desert-dunes.jpg",
+    gallery: [
+      "/theme-assets/desert-dunes.jpg",
+      "/theme-assets/circle-fort.jpg",
+      "/theme-assets/heritage-fort.jpg",
+      "/theme-assets/amber-gate.jpg",
+      "/theme-assets/lake-udaipur.jpg",
+      "/theme-assets/hawa-mahal.jpg",
+      "/theme-assets/wildlife.jpg",
+    ],
   },
   {
     id: 5,
-    label: "5 Complete Rajasthan Traditional Heritage Look",
-    shortLabel: "Heritage Look 5",
-    gradient: "from-[#6B1E3A] via-[#9B2D4A] to-[#3D0F1F]",
-    shell: "bg-[#FBF0F3]",
+    styleName: "Palace Indigo Night",
+    shortLabel: "Palace Indigo",
+    gradient: "from-[#1E3A5F] via-[#2E5A8C] to-[#0D1B2A]",
+    shell: "bg-[#F0F4FA]",
+    accent: "#1E3A5F",
+    accentSoft: "#E4ECF7",
+    heading: "#0f172a",
+    heroImage: "/theme-assets/lake-udaipur.jpg",
+    gallery: [
+      "/theme-assets/lake-udaipur.jpg",
+      "/theme-assets/heritage-palace.jpg",
+      "/theme-assets/hawa-mahal.jpg",
+      "/theme-assets/amber-gate.jpg",
+      "/theme-assets/wildlife.jpg",
+      "/theme-assets/circle-fort.jpg",
+      "/theme-assets/desert-dunes.jpg",
+    ],
   },
 ];
 
@@ -56,7 +132,7 @@ export type ThemeMixSuggestion = {
   themeId: PreviewThemeId;
 };
 
-/** Mix suggestions inspired by Destinations By Theme on daysrajasthan.com */
+/** @deprecated Mix suggestions UI is hidden; kept for type compatibility. */
 export const THEME_MIX_SUGGESTIONS: ThemeMixSuggestion[] = [
   {
     id: "heritage-royalty",
@@ -96,7 +172,28 @@ export function clampPreviewTheme(value: unknown): PreviewThemeId {
   return 1;
 }
 
+export function getPreviewTheme(themeId: PreviewThemeId | undefined | null): PreviewTheme {
+  return PREVIEW_THEMES.find((t) => t.id === (themeId ?? 1)) ?? PREVIEW_THEMES[0];
+}
+
 export function themeShellClass(themeId: PreviewThemeId | undefined | null): string {
-  const theme = PREVIEW_THEMES.find((t) => t.id === (themeId ?? 1));
-  return theme?.shell ?? PREVIEW_THEMES[0].shell;
+  return getPreviewTheme(themeId).shell;
+}
+
+/** Dynamic theme-card label from booking preview fields. */
+export function themeCardLabel(
+  theme: PreviewTheme,
+  booking: { title?: string | null; durationLabel?: string | null }
+): string {
+  const title = booking.title?.trim();
+  const duration = booking.durationLabel?.trim();
+  if (title && duration) return `${theme.id} · ${duration} · ${title}`;
+  if (title) return `${theme.id} · ${title}`;
+  if (duration) return `${theme.id} · ${duration} · ${theme.styleName}`;
+  return `${theme.id} · ${theme.styleName}`;
+}
+
+export function dayGalleryImage(theme: PreviewTheme, dayNumber: number): string {
+  const list = theme.gallery;
+  return list[(Math.max(1, dayNumber) - 1) % list.length] ?? theme.heroImage;
 }

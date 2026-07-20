@@ -86,8 +86,6 @@ function loadSessionId(): string {
 
 export function getCurrentTeamMember(): TeamMember {
   const id = loadSessionId();
-  const demo = DEMO_TEAM.find((m) => m.id === id);
-  if (demo) return demo;
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem(EXTERNAL_MEMBER_KEY);
@@ -99,6 +97,8 @@ export function getCurrentTeamMember(): TeamMember {
       // ignore
     }
   }
+  const demo = DEMO_TEAM.find((m) => m.id === id);
+  if (demo) return demo;
   return DEMO_TEAM[0];
 }
 

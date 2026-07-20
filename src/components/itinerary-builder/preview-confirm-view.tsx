@@ -23,7 +23,7 @@ import {
 } from "@/lib/itinerary-builder/policy-master";
 import {
   PREVIEW_THEMES,
-  THEME_MIX_SUGGESTIONS,
+  themeCardLabel,
   themeShellClass,
 } from "@/lib/itinerary-builder/preview-themes";
 import {
@@ -46,7 +46,6 @@ import {
   Palette,
   Phone,
   Save,
-  Sparkles,
   Target,
   X,
 } from "lucide-react";
@@ -370,7 +369,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
 
   return (
     <div className={cn("min-h-screen", themeShell)}>
-      <div className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur">
+      <div className="no-print sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">
@@ -596,7 +595,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         />
 
         {/* Theme */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+        <section className="no-print rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 print:hidden">
           <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-stone-900">
             <Palette className="h-5 w-5 text-[#7B1E2E]" />
             Select a Theme
@@ -604,6 +603,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {THEMES.map((theme) => {
               const selected = (snapshot.preview_theme ?? 1) === theme.id;
+              const label = themeCardLabel(theme, {
+                title: snapshot.header.title,
+                durationLabel: snapshot.header.duration_label,
+              });
               return (
                 <button
                   key={theme.id}
@@ -619,61 +622,39 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                       Selected
                     </span>
                   )}
-                  <div
-                    className={cn(
-                      "flex h-28 items-center justify-center rounded-xl bg-gradient-to-br",
-                      theme.gradient
-                    )}
-                  >
-                    <span className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-2xl font-bold text-stone-800">
-                      {theme.id}
-                    </span>
+                  <div className="relative h-28 overflow-hidden rounded-xl">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={theme.heroImage}
+                      alt=""
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                    <div
+                      className={cn(
+                        "absolute inset-0 bg-gradient-to-br opacity-80",
+                        theme.gradient
+                      )}
+                    />
+                    <div className="relative z-10 flex h-full flex-col items-center justify-center gap-1 px-2 text-center text-white">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-full bg-white/95 text-lg font-bold text-stone-800 shadow">
+                        {theme.id}
+                      </span>
+                      <span className="text-[10px] font-semibold uppercase tracking-wide drop-shadow-sm">
+                        {theme.styleName}
+                      </span>
+                    </div>
                   </div>
-                  <p className="mt-2 px-1 text-center text-xs font-medium leading-snug text-stone-700">
-                    {theme.label}
+                  <p className="mt-2 px-1 text-center text-[11px] font-medium leading-snug text-stone-700">
+                    {label}
                   </p>
                 </button>
               );
             })}
           </div>
-
-          <div className="mt-6 border-t border-stone-100 pt-5">
-            <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-stone-900">
-              <Sparkles className="h-4 w-4 text-[#A67C2D]" />
-              Mix Suggestions
-              <span className="font-normal text-stone-500">
-                — from daysrajasthan.com Destinations By Theme
-              </span>
-            </h3>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-              {THEME_MIX_SUGGESTIONS.map((mix) => {
-                const selected = (snapshot.preview_theme ?? 1) === mix.themeId;
-                return (
-                  <button
-                    key={mix.id}
-                    type="button"
-                    onClick={() => patch({ preview_theme: mix.themeId })}
-                    className={cn(
-                      "rounded-xl border px-3 py-3 text-left transition",
-                      selected
-                        ? "border-[#7B1E2E] bg-[#7B1E2E]/5 ring-1 ring-[#7B1E2E]"
-                        : "border-stone-200 hover:border-[#A67C2D]/60 hover:bg-[#FBF7F0]"
-                    )}
-                  >
-                    <p className="text-sm font-semibold text-stone-900">{mix.title}</p>
-                    <p className="mt-0.5 text-xs text-stone-500">{mix.subtitle}</p>
-                    <p className="mt-2 text-[10px] font-medium uppercase tracking-wide text-[#7B1E2E]">
-                      Applies Theme {mix.themeId}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
         </section>
 
         {/* Contacts */}
-        <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
+        <section className="no-print rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 print:hidden">
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-stone-900">Select Contact</h2>
             <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">

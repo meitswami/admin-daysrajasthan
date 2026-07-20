@@ -20,8 +20,8 @@ export default function LoginForm() {
   const { site_name, site_short_name, site_description, site_logo_url, copyright_html } = settings.webGeneral;
   const logo = settings.adminGeneral.admin_logo_url || site_logo_url;
   const initials = getBrandInitials(site_short_name);
-  const [email, setEmail] = useState(settings.adminGeneral.email || "admin@traveldays.in");
-  const [password, setPassword] = useState("demo1234");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 

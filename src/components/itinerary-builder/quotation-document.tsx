@@ -11,9 +11,15 @@ import {
   type HotelStay,
   type NightSegment,
 } from "@/lib/itinerary-builder/quotation-layout";
+import {
+  dayGalleryImage,
+  getPreviewTheme,
+  type PreviewTheme,
+} from "@/lib/itinerary-builder/preview-themes";
 import type { CategoryTotalSummary, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
 import { DocumentBrandFooter } from "@/components/branding/document-brand";
+import { QuotationThemeHero } from "@/components/itinerary-builder/quotation-theme-heroes";
 
 function StarRating({ rating }: { rating: number }) {
   const full = Math.floor(rating);
@@ -34,10 +40,12 @@ function ClientDetailsTable({
   clientLabel,
   client,
   header,
+  accent,
 }: {
   clientLabel: string;
   client: ItinerarySnapshot["client"];
   header: ItinerarySnapshot["header"];
+  accent: string;
 }) {
   const rows = [
     ["Name", clientLabel],
@@ -50,7 +58,9 @@ function ClientDetailsTable({
 
   return (
     <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white p-5">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Client Details</h2>
+      <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: accent }}>
+        Client Details
+      </h2>
       <table className="mt-3 w-full text-sm">
         <tbody>
           {rows.map(([label, value]) => (
@@ -63,22 +73,26 @@ function ClientDetailsTable({
       </table>
       {header.tour_code && (
         <p className="mt-3 text-xs text-stone-500">
-          Tour Code: <span className="font-semibold text-amber-900">{header.tour_code}</span>
+          Tour Code:{" "}
+          <span className="font-semibold" style={{ color: accent }}>
+            {header.tour_code}
+          </span>
         </p>
       )}
     </section>
   );
 }
 
-function NightSegmentPills({ segments }: { segments: NightSegment[] }) {
+function NightSegmentPills({ segments, accentSoft }: { segments: NightSegment[]; accentSoft: string }) {
   return (
     <div className="mt-3 flex flex-wrap gap-2">
       {segments.map((segment) => (
         <div
           key={`${segment.nightLabel}-${segment.destination}`}
-          className="min-w-[120px] rounded-xl border border-amber-100 bg-amber-50/60 px-3 py-2 text-center"
+          className="min-w-[120px] rounded-xl border border-stone-200 px-3 py-2 text-center"
+          style={{ backgroundColor: accentSoft }}
         >
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">{segment.nightLabel}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-600">{segment.nightLabel}</p>
           <p className="text-xs text-stone-600">{segment.dateLabel}</p>
           <p className="mt-1 text-sm font-semibold text-stone-900">{segment.destination}</p>
         </div>
@@ -94,6 +108,7 @@ function PackageOptionCard({
   grandTotal,
   segments,
   advancePercent = 20,
+  theme,
 }: {
   optionNumber: number;
   label: string;
@@ -101,11 +116,17 @@ function PackageOptionCard({
   grandTotal: number;
   segments: NightSegment[];
   advancePercent?: 20 | 30;
+  theme: PreviewTheme;
 }) {
   const advance = bookingAmount(grandTotal, advancePercent / 100);
   return (
-    <div className="break-inside-avoid rounded-2xl border border-amber-200 bg-gradient-to-b from-amber-50/80 to-white p-5">
-      <p className="text-xs font-bold uppercase tracking-widest text-amber-700">Option {optionNumber}</p>
+    <div
+      className="break-inside-avoid rounded-2xl border bg-white p-5"
+      style={{ borderColor: `${theme.accent}55` }}
+    >
+      <p className="text-xs font-bold uppercase tracking-widest" style={{ color: theme.accent }}>
+        Option {optionNumber}
+      </p>
       <h3 className="mt-1 text-lg font-bold text-stone-900">{label}</h3>
       <div className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
         <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-stone-100">
@@ -114,14 +135,16 @@ function PackageOptionCard({
         </div>
         <div className="rounded-lg bg-white px-3 py-2 ring-1 ring-stone-100">
           <p className="text-[10px] uppercase text-stone-500">Total Price</p>
-          <p className="font-bold tabular-nums text-amber-900">{formatInr(grandTotal)}</p>
+          <p className="font-bold tabular-nums" style={{ color: theme.heading }}>
+            {formatInr(grandTotal)}
+          </p>
         </div>
         <div className="rounded-lg bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
           <p className="text-[10px] uppercase text-emerald-700">Booking Amount ({advancePercent}%)</p>
           <p className="font-bold tabular-nums text-emerald-900">{formatInr(advance)}</p>
         </div>
       </div>
-      <NightSegmentPills segments={segments} />
+      <NightSegmentPills segments={segments} accentSoft={theme.accentSoft} />
     </div>
   );
 }
@@ -140,58 +163,117 @@ function HotelCard({ stay }: { stay: HotelStay }) {
       <div className="mt-3 grid gap-1 text-xs text-stone-600">
         {stay.checkIn && <p>Check-in: {stay.checkIn}</p>}
         {stay.checkOut && <p>Check-out: {stay.checkOut}</p>}
-        <p className="font-medium text-emerald-700">{stay.roomCategory} · {stay.breakfast ? "Breakfast included" : "Room only"}</p>
+        <p className="font-medium text-emerald-700">
+          {stay.roomCategory} · {stay.breakfast ? "Breakfast included" : "Room only"}
+        </p>
       </div>
     </div>
   );
 }
 
-function DayCard({ day, travelDate }: { day: ItineraryDay; travelDate: string | null }) {
+function DayCard({
+  day,
+  travelDate,
+  theme,
+}: {
+  day: ItineraryDay;
+  travelDate: string | null;
+  theme: PreviewTheme;
+}) {
   const dateLabel = travelDate
     ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
     : null;
+  const image = dayGalleryImage(theme, day.day_number);
+  const isHeritageLayout = theme.id === 1;
+
+  if (isHeritageLayout) {
+    return (
+      <div className="break-inside-avoid grid gap-4 border-b border-stone-100 py-5 sm:grid-cols-2">
+        <div>
+          <span
+            className="inline-block rounded px-2 py-1 text-[11px] font-bold uppercase tracking-wide text-white"
+            style={{ backgroundColor: theme.heading }}
+          >
+            Day {day.day_number}
+          </span>
+          <h3 className="mt-2 text-base font-bold" style={{ color: theme.heading }}>
+            {day.day_title}
+          </h3>
+          {dateLabel && <p className="mt-1 text-xs font-semibold uppercase text-stone-500">{dateLabel}</p>}
+          {day.day_description && (
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
+          )}
+          {day.hotel_name && (
+            <p className="mt-3 text-xs font-medium" style={{ color: theme.accent }}>
+              🏨 {day.hotel_name}
+            </p>
+          )}
+        </div>
+        <div className="overflow-hidden rounded-xl">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt="" className="h-44 w-full object-cover sm:h-full" />
+          <div className="px-3 py-1.5 text-center text-[10px] font-medium text-white" style={{ backgroundColor: theme.accent }}>
+            Days Rajasthan Studio
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="break-inside-avoid overflow-hidden rounded-2xl border border-stone-200 bg-white">
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-amber-700 to-amber-600 px-4 py-3 text-white">
+      <div className="grid sm:grid-cols-[140px_1fr]">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={image} alt="" className="h-36 w-full object-cover sm:h-full" />
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wide opacity-90">Day {day.day_number}</p>
-          <h3 className="text-base font-bold">{day.day_title}</h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-white" style={{ backgroundColor: theme.accent }}>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-90">Day {day.day_number}</p>
+              <h3 className="text-base font-bold">{day.day_title}</h3>
+            </div>
+            {dateLabel && <p className="text-sm font-medium">{dateLabel}</p>}
+          </div>
+          <div className="p-4">
+            {day.day_subtitle && (
+              <p className="text-sm font-medium" style={{ color: theme.accent }}>
+                {day.day_subtitle}
+              </p>
+            )}
+            {day.day_description && (
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
+            )}
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              {day.hotel_name && (
+                <span
+                  className="rounded-full px-2.5 py-1 font-medium ring-1"
+                  style={{ backgroundColor: theme.accentSoft, color: theme.heading, borderColor: `${theme.accent}33` }}
+                >
+                  🏨 {day.hotel_name}
+                </span>
+              )}
+              {day.vehicle_type && (
+                <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
+                  🚗 {day.vehicle_type}
+                </span>
+              )}
+              {day.meal_plan && (
+                <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
+                  Meals: {day.meal_plan}
+                </span>
+              )}
+            </div>
+            {(day.activities ?? []).length > 0 && (
+              <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
+                {(day.activities ?? []).map((activity) => (
+                  <li key={activity.activity_uuid}>
+                    • {activity.title}
+                    {activity.start_time ? ` (${activity.start_time})` : ""}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
-        {dateLabel && <p className="text-sm font-medium">{dateLabel}</p>}
-      </div>
-      <div className="p-4">
-        {day.day_subtitle && <p className="text-sm font-medium text-amber-800">{day.day_subtitle}</p>}
-        {day.day_description && (
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
-        )}
-        <div className="mt-3 flex flex-wrap gap-2 text-xs">
-          {day.hotel_name && (
-            <span className="rounded-full bg-amber-50 px-2.5 py-1 font-medium text-amber-900 ring-1 ring-amber-100">
-              🏨 {day.hotel_name}
-            </span>
-          )}
-          {day.vehicle_type && (
-            <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
-              🚗 {day.vehicle_type}
-            </span>
-          )}
-          {day.meal_plan && (
-            <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
-              Meals: {day.meal_plan}
-            </span>
-          )}
-        </div>
-        {(day.activities ?? []).length > 0 && (
-          <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
-            {(day.activities ?? []).map((activity) => (
-              <li key={activity.activity_uuid}>
-                • {activity.title}
-                {activity.start_time ? ` (${activity.start_time})` : ""}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </div>
   );
@@ -201,10 +283,12 @@ function PolicyGrid({
   inclusions,
   exclusions,
   terms,
+  accent,
 }: {
   inclusions: string[];
   exclusions: string[];
   terms: string;
+  accent: string;
 }) {
   const policies = [
     { title: "Inclusions", items: inclusions, tone: "text-emerald-800" },
@@ -216,7 +300,9 @@ function PolicyGrid({
 
   return (
     <section className="break-inside-avoid">
-      <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Tour Policies</h2>
+      <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: accent }}>
+        Tour Policies
+      </h2>
       <div className="mt-4 grid gap-4 sm:grid-cols-2">
         {policies.map((policy) => (
           <div key={policy.title} className="rounded-xl border border-stone-200 bg-stone-50/50 p-4">
@@ -255,6 +341,7 @@ export function QuotationDocument({
   mode?: "screen" | "print";
 }) {
   const { header, client, days, inclusions, exclusions, terms, cost_sheet, category_pricing } = snapshot;
+  const theme = getPreviewTheme(snapshot.preview_theme);
   const clientLabel = [client.title, client.client_name].filter(Boolean).join(" ");
   const nightSegments = buildNightSegments(days, client.travel_date);
   const destinationsSummary = formatDestinationsSummary(nightSegments);
@@ -265,72 +352,51 @@ export function QuotationDocument({
 
   return (
     <article
-      className={`quotation-document mx-auto bg-white text-stone-900 ${
+      className={`quotation-document quotation-theme-${theme.id} mx-auto text-stone-900 ${
         mode === "print" ? "max-w-none p-0" : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"
       }`}
+      style={{
+        backgroundColor:
+          theme.id === 3 ? "#FBF7F0" : theme.id === 1 ? "#FFFDF6" : theme.id === 5 ? "#F8FAFC" : "#ffffff",
+      }}
+      data-theme={theme.id}
     >
-      {/* Top contact bar */}
-      <div className="border-b border-amber-100 bg-amber-50/50 px-6 py-2 text-right text-xs font-medium text-amber-900">
-        {brand.phone}
-      </div>
-
-      {/* Cover hero */}
-      <section className="bg-gradient-to-br from-amber-800 via-amber-700 to-amber-900 px-6 py-8 text-white">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {brand.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={brand.logoUrl}
-                alt={brand.companyName}
-                className="h-12 max-w-[160px] rounded-lg bg-white/10 object-contain object-left p-1 print:h-10"
-              />
-            ) : (
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/15 text-sm font-bold">
-                {brand.shortName.slice(0, 3)}
-              </div>
-            )}
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-amber-100">{brand.companyName}</p>
-              <p className="text-[11px] text-amber-200">{brand.email}</p>
-            </div>
-          </div>
-          <div className="text-right text-sm">
-            <p className="font-bold">{quoteId}</p>
-            <p className="text-amber-200">Version {versionNumber}</p>
-          </div>
-        </div>
-
-        <div className="mt-8">
-          <p className="text-sm text-amber-100">
-            Hi {client.client_name || "there"},
-          </p>
-          <p className="mt-1 text-base text-amber-50">
-            Here is the package exclusively designed / tailor-made for you
-          </p>
-          {header.duration_label && (
-            <p className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">{header.duration_label}</p>
-          )}
-          <h1 className="mt-2 text-xl font-bold uppercase leading-tight sm:text-2xl">{header.title}</h1>
-          {destinationsSummary && (
-            <p className="mt-3 text-sm text-amber-100">• {destinationsSummary.replace(/ • /g, " • ")}</p>
-          )}
-        </div>
-      </section>
+      <QuotationThemeHero
+        theme={theme}
+        brand={brand}
+        clientLabel={clientLabel}
+        client={client}
+        header={header}
+        destinationsSummary={destinationsSummary}
+        quoteId={quoteId}
+        versionNumber={versionNumber}
+      />
 
       <div className="space-y-8 px-6 py-8">
         <div className="grid gap-6 lg:grid-cols-2">
-          <ClientDetailsTable clientLabel={clientLabel} client={client} header={header} />
+          <ClientDetailsTable
+            clientLabel={clientLabel}
+            client={client}
+            header={header}
+            accent={theme.accent}
+          />
 
-          <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-stone-50/40 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Travel Itinerary</h2>
+          <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white/80 p-5">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Travel Itinerary
+            </h2>
             <p className="mt-2 text-sm text-stone-600">
               Covering Destinations: <span className="font-medium text-stone-900">{destinationsSummary}</span>
             </p>
             {!hasTiers && (
-              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/60 p-4">
+              <div
+                className="mt-4 rounded-xl border p-4"
+                style={{ borderColor: `${theme.accent}55`, backgroundColor: theme.accentSoft }}
+              >
                 <p className="text-xs uppercase text-stone-500">Package Total</p>
-                <p className="text-2xl font-bold tabular-nums text-amber-900">{formatInr(cost_sheet.grand_total)}</p>
+                <p className="text-2xl font-bold tabular-nums" style={{ color: theme.heading }}>
+                  {formatInr(cost_sheet.grand_total)}
+                </p>
                 <p className="mt-1 text-sm text-emerald-800">
                   Booking Amount ({advancePercent}%):{" "}
                   <span className="font-bold">
@@ -352,7 +418,9 @@ export function QuotationDocument({
 
         {hasTiers && (
           <section className="break-inside-avoid">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Travel Package Options</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Travel Package Options
+            </h2>
             <p className="mt-1 text-sm text-stone-600">
               We&apos;ve curated exclusive travel packages for you. Choose the one that suits your journey best.
             </p>
@@ -366,6 +434,7 @@ export function QuotationDocument({
                   grandTotal={tier.grand_total}
                   segments={nightSegments}
                   advancePercent={advancePercent}
+                  theme={theme}
                 />
               ))}
             </div>
@@ -373,17 +442,21 @@ export function QuotationDocument({
         )}
 
         <section>
-          <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Day-wise Itinerary</h2>
-          <div className="mt-4 space-y-4">
+          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+            Day-wise Itinerary
+          </h2>
+          <div className={theme.id === 1 ? "mt-2" : "mt-4 space-y-4"}>
             {days.map((day) => (
-              <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} />
+              <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
             ))}
           </div>
         </section>
 
         {hasTiers && (
           <section className="break-inside-avoid">
-            <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">Hotels by Package</h2>
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Hotels by Package
+            </h2>
             <div className="mt-4 space-y-6">
               {tierRows.map((tier, index) => {
                 const stays = getHotelStaysForTier(days, tier.room_category, client.travel_date);
@@ -405,7 +478,12 @@ export function QuotationDocument({
           </section>
         )}
 
-        <PolicyGrid inclusions={inclusions ?? []} exclusions={exclusions ?? []} terms={terms} />
+        <PolicyGrid
+          inclusions={inclusions ?? []}
+          exclusions={exclusions ?? []}
+          terms={terms}
+          accent={theme.accent}
+        />
 
         {!hasTiers && cost_sheet.line_items.length > 0 && (
           <section className="break-inside-avoid">
@@ -426,9 +504,9 @@ export function QuotationDocument({
                   ))}
               </tbody>
               <tfoot>
-                <tr className="border-t-2 border-amber-200 font-bold">
+                <tr className="border-t-2 font-bold" style={{ borderColor: `${theme.accent}66` }}>
                   <td className="pt-3">Grand total (incl. taxes)</td>
-                  <td className="pt-3 text-right text-lg tabular-nums text-amber-900">
+                  <td className="pt-3 text-right text-lg tabular-nums" style={{ color: theme.heading }}>
                     {formatInr(cost_sheet.grand_total)}
                   </td>
                 </tr>
@@ -443,8 +521,13 @@ export function QuotationDocument({
           </section>
         )}
 
-        <section className="break-inside-avoid rounded-2xl border border-amber-100 bg-amber-50/30 p-5">
-          <h2 className="text-sm font-bold uppercase tracking-wide text-amber-800">About {brand.companyName}</h2>
+        <section
+          className="break-inside-avoid rounded-2xl border p-5"
+          style={{ borderColor: `${theme.accent}33`, backgroundColor: theme.accentSoft }}
+        >
+          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+            About {brand.companyName}
+          </h2>
           <p className="mt-3 text-sm leading-relaxed text-stone-700">
             {brand.siteDescription ??
               `${brand.companyName} crafts curated travel experiences with verified partners, transparent pricing, and dedicated on-ground support. Every itinerary is tailor-made to match your pace, preferences, and budget.`}
@@ -453,7 +536,8 @@ export function QuotationDocument({
 
         <DocumentBrandFooter brand={brand} />
         <p className="text-center text-[10px] text-stone-400">
-          This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}…
+          This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme {theme.id}{" "}
+          {theme.styleName}
         </p>
       </div>
     </article>

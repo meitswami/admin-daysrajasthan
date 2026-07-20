@@ -26,6 +26,7 @@ body {
 
 @media print {
   .no-print,
+  .print\:hidden,
   aside,
   nav[class*="sidebar"],
   header.no-print-header {

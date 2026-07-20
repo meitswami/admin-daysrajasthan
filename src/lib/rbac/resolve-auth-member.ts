@@ -32,6 +32,7 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
   let created_at = user.created_at ?? new Date().toISOString();
   let id = user.id;
   let permission_overrides: PermissionKey[] | null = null;
+  let permission_group_id: string | null = null;
   let foundTeam = false;
 
   try {
@@ -41,7 +42,9 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
     if (email) {
       const { data: teamRow } = await supabase
         .from("td_team_members")
-        .select("id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides")
+        .select(
+          "id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id"
+        )
         .ilike("email", email)
         .maybeSingle();
 
@@ -56,6 +59,9 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
         is_active = teamRow.is_active !== false;
         created_at = teamRow.created_at || created_at;
         permission_overrides = sanitizePerms(teamRow.permission_overrides);
+        permission_group_id = teamRow.permission_group_id
+          ? String(teamRow.permission_group_id)
+          : null;
       }
     }
 
@@ -91,5 +97,6 @@ export async function resolveAuthTeamMember(user: AuthUserLike): Promise<TeamMem
     is_active,
     created_at,
     permission_overrides,
+    permission_group_id,
   };
 }

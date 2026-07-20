@@ -27,6 +27,8 @@ import {
   setExternalTeamMember,
 } from "@/lib/rbac/current-user";
 import { hasPermission } from "@/lib/rbac/permissions";
+import { memberHasPermission } from "@/lib/rbac/staff-store";
+import { listPermissionGroups } from "@/lib/rbac/permission-groups-store";
 
 type SystemContextValue = {
   dataMode: DataMode;
@@ -59,7 +61,19 @@ export function SystemProvider({ children }: { children: ReactNode }) {
         refresh();
       }
     });
-    void fetchTeamMembers().then(setTeamMembers);
+    void listPermissionGroups();
+    void fetchTeamMembers().then((members) => {
+      setTeamMembers(members);
+      // Refresh signed-in member from DB so permission_group_id / overrides apply
+      const current = getCurrentTeamMember();
+      const fresh = members.find(
+        (m) => m.id === current.id || m.email.toLowerCase() === current.email.toLowerCase()
+      );
+      if (fresh) {
+        setExternalTeamMember(fresh);
+        setCurrentMember(fresh);
+      }
+    });
 
     const onMode = () => refresh();
     const onMember = () => {
@@ -67,13 +81,18 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       void fetchTeamMembers().then(setTeamMembers);
     };
     const onPerms = () => setPermTick((t) => t + 1);
+    const onGroups = () => {
+      void listPermissionGroups().then(() => setPermTick((t) => t + 1));
+    };
     window.addEventListener("td-data-mode-change", onMode);
     window.addEventListener("td-team-member-change", onMember);
     window.addEventListener("td-rbac-overrides-change", onPerms);
+    window.addEventListener("td-permission-groups-change", onGroups);
     return () => {
       window.removeEventListener("td-data-mode-change", onMode);
       window.removeEventListener("td-team-member-change", onMember);
       window.removeEventListener("td-rbac-overrides-change", onPerms);
+      window.removeEventListener("td-permission-groups-change", onGroups);
     };
   }, [refresh]);
 
@@ -109,7 +128,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       },
       teamMembers,
       can: (permission: Parameters<typeof hasPermission>[0]) =>
-        hasPermission(permission, currentMember.role),
+        memberHasPermission(currentMember, permission),
     }),
     [dataMode, setDataModeAndPersist, currentMember, teamMembers, refresh, permTick]
   );
