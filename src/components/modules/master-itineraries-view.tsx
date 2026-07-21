@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import {
   GalleryImagesField,
@@ -17,9 +16,6 @@ import { useSystem } from "@/components/providers/system-provider";
 import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
 import {
   canCreateMasterData,
-  canDeleteMasterRecord,
-  canEditMasterRecord,
-  isMasterDataLocked,
 } from "@/lib/rbac/ownership";
 import {
   createMasterItinerary,
@@ -29,7 +25,7 @@ import {
 } from "@/lib/master-data/itinerary-store";
 import { listMasterContent } from "@/lib/master-data/content-store";
 import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
-import { Lock, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 
 const PACKAGE_TYPES: PackageType[] = [
@@ -96,24 +92,12 @@ function locationsCountOf(item: Itinerary): string {
 
 function StatusToggle({
   active,
-  disabled,
   onChange,
 }: {
   active: boolean;
-  disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-stone-500">Status</span>
-      <Toggle
-        checked={active}
-        onChange={onChange}
-        label={active ? "Active" : "Inactive"}
-        disabled={disabled}
-      />
-    </div>
-  );
+  return <Toggle checked={active} onChange={onChange} />;
 }
 
 function StringListField({
@@ -190,7 +174,6 @@ export function MasterItinerariesView() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Itinerary | null>(null);
-  const [locked, setLocked] = useState(false);
 
   const [packageName, setPackageName] = useState("");
   const [packageType, setPackageType] = useState<PackageType>("Domestic");
@@ -255,15 +238,12 @@ export function MasterItinerariesView() {
       return;
     }
     setEditing(null);
-    setLocked(false);
     resetForm();
     setModalOpen(true);
   }
 
   function openEdit(item: Itinerary) {
-    const isLocked = isMasterDataLocked(currentMember, item);
     setEditing(item);
-    setLocked(isLocked);
     setPackageName(item.package_name);
     setPackageType(item.package_type ?? "Domestic");
     const nextDuration = item.package_duration ?? "3 Days 2 Nights";
@@ -303,7 +283,6 @@ export function MasterItinerariesView() {
   }
 
   async function save() {
-    if (locked) return;
     if (!packageName.trim()) {
       show("Package name is required");
       return;
@@ -342,10 +321,6 @@ export function MasterItinerariesView() {
     }
 
     if (editing) {
-      if (!canEditMasterRecord(currentMember, editing)) {
-        show("You can only edit your own itineraries");
-        return;
-      }
       await updateMasterItinerary(editing.id, payload);
       show("Itinerary updated");
     } else {
@@ -357,10 +332,6 @@ export function MasterItinerariesView() {
   }
 
   async function remove(item: Itinerary) {
-    if (!canDeleteMasterRecord(currentMember, item)) {
-      show("You can only delete your own itineraries (or need Admin)");
-      return;
-    }
     if (!confirm(`Delete “${item.package_name}”?`)) return;
     await deleteMasterItinerary(item.id);
     show("Deleted");
@@ -368,10 +339,6 @@ export function MasterItinerariesView() {
   }
 
   async function toggleStatus(item: Itinerary, active: boolean) {
-    if (!canEditMasterRecord(currentMember, item)) {
-      show("You can only edit your own itineraries");
-      return;
-    }
     const status = active ? "active" : "inactive";
     setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, status } : row)));
     await updateMasterItinerary(item.id, { status }, currentMember);
@@ -382,7 +349,7 @@ export function MasterItinerariesView() {
     <>
       <Header
         title="Itineraries"
-        description="Package master with day-wise plan, inclusions, exclusions & images. Sales Admins see all; edit only own."
+        description="Package master with day-wise plan, inclusions, exclusions & images."
       />
       <PageMain>
         <PageToolbar>
@@ -419,9 +386,7 @@ export function MasterItinerariesView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filtered.map((item, index) => {
-                  const editable = canEditMasterRecord(currentMember, item);
-                  return (
+                {filtered.map((item, index) => (
                     <tr key={item.id}>
                       <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                       <td className="px-3 py-3">
@@ -432,7 +397,6 @@ export function MasterItinerariesView() {
                       </td>
                       <td className="px-3 py-3">
                         <p className="font-medium text-stone-900">{item.package_name}</p>
-                        {!editable && <p className="text-xs text-amber-700">View only</p>}
                       </td>
                       <td className="px-3 py-3 text-stone-600">
                         {item.package_duration ?? "—"}
@@ -445,22 +409,18 @@ export function MasterItinerariesView() {
                         <div className="flex flex-wrap items-center gap-2">
                           <StatusToggle
                             active={item.status === "active"}
-                            disabled={!editable}
                             onChange={(v) => void toggleStatus(item, v)}
                           />
                           <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                          {canDeleteMasterRecord(currentMember, item) && (
-                            <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          )}
+                          <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
-                  );
-                })}
+                ))}
                 {!filtered.length && (
                   <tr>
                     <td colSpan={7} className="px-3 py-8 text-center text-stone-500">
@@ -477,27 +437,21 @@ export function MasterItinerariesView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? (locked ? "View itinerary" : "Edit itinerary") : "Add itinerary"}
+        title={editing ? "Edit itinerary" : "Add itinerary"}
         description={
           editing
-            ? `Created by ${editing.created_by_name ?? "Unknown"}${locked ? " — fields locked" : ""}`
+            ? `Created by ${editing.created_by_name ?? "Unknown"}`
             : "Package details, day-wise plan, inclusions, exclusions & media"
         }
         className="sm:max-w-3xl"
       >
         <div className="space-y-4">
-          {locked && (
-            <Badge variant="warning" className="gap-1">
-              <Lock className="h-3 w-3" /> View only
-            </Badge>
-          )}
           <div>
             <Label>Package name *</Label>
             <Input
               className="mt-1.5"
               value={packageName}
               onChange={(e) => setPackageName(e.target.value)}
-              disabled={locked}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -507,7 +461,6 @@ export function MasterItinerariesView() {
                 className="mt-1.5"
                 value={packageType}
                 onChange={(e) => setPackageType(e.target.value as PackageType)}
-                disabled={locked}
               >
                 {PACKAGE_TYPES.map((t) => (
                   <option key={t} value={t}>
@@ -522,7 +475,6 @@ export function MasterItinerariesView() {
                 className="mt-1.5"
                 value={duration}
                 onChange={(e) => setDurationAndDays(e.target.value)}
-                disabled={locked}
               >
                 {PACKAGE_DURATIONS.map((d) => (
                   <option key={d} value={d}>
@@ -537,7 +489,6 @@ export function MasterItinerariesView() {
             label="Package images (up to 6)"
             value={galleryUrls}
             onChange={setGalleryUrls}
-            disabled={locked}
           />
 
           <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3">
@@ -548,11 +499,9 @@ export function MasterItinerariesView() {
                   Title, location, description & images for each day
                 </p>
               </div>
-              {!locked && (
-                <Button type="button" size="sm" onClick={addDay}>
+              <Button type="button" size="sm" onClick={addDay}>
                   <Plus className="h-3.5 w-3.5" /> Add Day
                 </Button>
-              )}
             </div>
             <div className="space-y-4">
               {days.map((day, index) => (
@@ -562,7 +511,7 @@ export function MasterItinerariesView() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-sm font-medium text-stone-800">Day {index + 1}</p>
-                    {!locked && days.length > 1 && (
+                    {days.length > 1 && (
                       <Button
                         type="button"
                         size="sm"
@@ -579,7 +528,6 @@ export function MasterItinerariesView() {
                       className="mt-1.5"
                       value={day.title}
                       placeholder={`Day ${index + 1} title`}
-                      disabled={locked}
                       onChange={(e) => updateDay(index, { title: e.target.value })}
                     />
                   </div>
@@ -588,7 +536,6 @@ export function MasterItinerariesView() {
                     <Select
                       className="mt-1.5"
                       value={day.location}
-                      disabled={locked}
                       onChange={(e) => updateDay(index, { location: e.target.value })}
                     >
                       <option value="">Select location</option>
@@ -609,7 +556,6 @@ export function MasterItinerariesView() {
                       rows={3}
                       value={day.description}
                       placeholder="Enter description…"
-                      disabled={locked}
                       onChange={(e) => updateDay(index, { description: e.target.value })}
                     />
                   </div>
@@ -617,7 +563,6 @@ export function MasterItinerariesView() {
                     label="Day images"
                     value={day.image_urls}
                     onChange={(urls) => updateDay(index, { image_urls: urls })}
-                    disabled={locked}
                     max={4}
                   />
                 </div>
@@ -633,20 +578,17 @@ export function MasterItinerariesView() {
               label="Inclusions"
               value={inclusions}
               onChange={setInclusions}
-              disabled={locked}
               placeholder="e.g. Breakfast"
             />
             <StringListField
               label="Exclusions"
               value={exclusions}
               onChange={setExclusions}
-              disabled={locked}
               placeholder="e.g. Airfare"
             />
           </div>
 
-          {!locked && (
-            <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancel
               </Button>
@@ -654,7 +596,6 @@ export function MasterItinerariesView() {
                 {editing ? "Save" : "Create"}
               </Button>
             </div>
-          )}
         </div>
       </Modal>
     </>

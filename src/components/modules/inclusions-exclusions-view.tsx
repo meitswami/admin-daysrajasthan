@@ -4,17 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import {
-  canCreateMasterData,
-  canDeleteMasterRecord,
-  canEditMasterRecord,
-  isMasterDataLocked,
-} from "@/lib/rbac/ownership";
+import { canCreateMasterData } from "@/lib/rbac/ownership";
 import {
   createInclusionExclusion,
   deleteInclusionExclusion,
@@ -23,7 +17,7 @@ import {
   type InclusionExclusionItem,
   type InclusionExclusionKind,
 } from "@/lib/master-data/inclusions-store";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 export function InclusionsExclusionsView() {
   const { show } = useToast();
@@ -31,7 +25,6 @@ export function InclusionsExclusionsView() {
   const [items, setItems] = useState<InclusionExclusionItem[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<InclusionExclusionItem | null>(null);
-  const [locked, setLocked] = useState(false);
   const [kind, setKind] = useState<InclusionExclusionKind>("inclusion");
   const [text, setText] = useState("");
 
@@ -51,7 +44,6 @@ export function InclusionsExclusionsView() {
       return;
     }
     setEditing(null);
-    setLocked(false);
     setKind(defaultKind);
     setText("");
     setModalOpen(true);
@@ -59,23 +51,17 @@ export function InclusionsExclusionsView() {
 
   function openEdit(item: InclusionExclusionItem) {
     setEditing(item);
-    setLocked(isMasterDataLocked(currentMember, item));
     setKind(item.kind);
     setText(item.text);
     setModalOpen(true);
   }
 
   async function save() {
-    if (locked) return;
     if (!text.trim()) {
       show("Text is required");
       return;
     }
     if (editing) {
-      if (!canEditMasterRecord(currentMember, editing)) {
-        show("You can only edit your own records");
-        return;
-      }
       await updateInclusionExclusion(editing.id, text);
       show("Updated");
     } else {
@@ -87,10 +73,6 @@ export function InclusionsExclusionsView() {
   }
 
   async function remove(item: InclusionExclusionItem) {
-    if (!canDeleteMasterRecord(currentMember, item)) {
-      show("You can only delete your own records (or need Admin)");
-      return;
-    }
     if (!confirm("Delete this line?")) return;
     await deleteInclusionExclusion(item.id);
     show("Deleted");
@@ -112,30 +94,24 @@ export function InclusionsExclusionsView() {
           )}
         </div>
         <ul className="divide-y divide-stone-100">
-          {list.map((item) => {
-            const editable = canEditMasterRecord(currentMember, item);
-            return (
-              <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
-                <div>
-                  <p className="text-sm text-stone-800">{item.text}</p>
-                  <p className="mt-1 text-xs text-stone-400">
-                    Created by {item.created_by_name ?? "Unknown"}
-                    {!editable && " · view only"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 gap-1">
-                  <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                    {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                  </Button>
-                  {canDeleteMasterRecord(currentMember, item) && (
-                    <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
+          {list.map((item) => (
+            <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
+              <div>
+                <p className="text-sm text-stone-800">{item.text}</p>
+                <p className="mt-1 text-xs text-stone-400">
+                  Created by {item.created_by_name ?? "Unknown"}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
+              </div>
+            </li>
+          ))}
           {!list.length && (
             <li className="px-4 py-6 text-center text-sm text-stone-500">No items yet</li>
           )}
@@ -148,7 +124,7 @@ export function InclusionsExclusionsView() {
     <>
       <Header
         title="Inclusions & Exclusions"
-        description="Reusable lines for packages. Visible to Sales Admin & Admin; edit only own unless Admin."
+        description="Reusable lines for packages used when building itineraries."
       />
       <PageMain>
         <PageToolbar>
@@ -165,19 +141,12 @@ export function InclusionsExclusionsView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? (locked ? "View line" : "Edit line") : "Add line"}
+        title={editing ? "Edit line" : "Add line"}
         description={
-          editing
-            ? `Created by ${editing.created_by_name ?? "Unknown"}${locked ? " — locked" : ""}`
-            : undefined
+          editing ? `Created by ${editing.created_by_name ?? "Unknown"}` : undefined
         }
       >
         <div className="space-y-4">
-          {locked && (
-            <Badge variant="warning" className="gap-1">
-              <Lock className="h-3 w-3" /> View only
-            </Badge>
-          )}
           {!editing && (
             <div>
               <Label>Type</Label>
@@ -197,19 +166,16 @@ export function InclusionsExclusionsView() {
               className="mt-1.5"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              disabled={locked}
             />
           </div>
-          {!locked && (
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => void save()}>
-                {editing ? "Save" : "Create"}
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void save()}>
+              {editing ? "Save" : "Create"}
+            </Button>
+          </div>
         </div>
       </Modal>
     </>

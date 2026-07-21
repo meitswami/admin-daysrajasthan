@@ -332,7 +332,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     setSnapshot((prev) => (prev ? normalizeSnapshot({ ...prev, ...partial }) : prev));
   }
 
-  function handleSave() {
+  async function handleSave() {
     if (!snapshot) return;
     const synced = normalizeSnapshot({
       ...snapshot,
@@ -349,23 +349,30 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     }
     setRecord(result.record);
     setSnapshot(normalizeSnapshot(result.revision.snapshot));
+
+    const { syncRecordToSupabaseIfReal } = await import("@/lib/itinerary-builder/sync-real");
+    const sync = await syncRecordToSupabaseIfReal(result.record, result.revision);
+    if (!sync.ok) {
+      show("Saved on this device, but cloud sync failed — try Save again");
+      return result;
+    }
     show("Saved");
     return result;
   }
 
-  function handleNext() {
-    const result = handleSave();
+  async function handleNext() {
+    const result = await handleSave();
     if (!result) return;
     router.push(`/itinerary-builder/${itineraryId}/payment`);
   }
 
   function handleDownloadPdf() {
-    handleSave();
+    void handleSave();
     window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
   }
 
-  function handlePreview() {
-    const result = handleSave();
+  async function handlePreview() {
+    const result = await handleSave();
     if (!result) return;
     router.push(`/itinerary-builder/${itineraryId}/quotation`);
   }

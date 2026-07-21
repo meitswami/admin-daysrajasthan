@@ -7,7 +7,6 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import {
   GalleryImagesField,
@@ -21,15 +20,10 @@ import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import type { DisplayMode, WebsiteContentItem } from "@/types/database";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
-import { Grid3X3, List, Plus, Search, Star, Pencil, Trash2, Lock } from "lucide-react";
+import { Grid3X3, List, Plus, Search, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystem } from "@/components/providers/system-provider";
-import {
-  canCreateMasterData,
-  canDeleteMasterRecord,
-  canEditMasterRecord,
-  isMasterDataLocked,
-} from "@/lib/rbac/ownership";
+import { canCreateMasterData } from "@/lib/rbac/ownership";
 import {
   createMasterContent,
   deleteMasterContent,
@@ -98,7 +92,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<WebsiteContentItem | null>(null);
-  const [locked, setLocked] = useState(false);
 
   const [name, setName] = useState("");
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
@@ -188,7 +181,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
       return;
     }
     setEditing(null);
-    setLocked(false);
     setName("");
     setGalleryUrls([]);
     setGoogleMapsUrl("");
@@ -199,9 +191,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   }
 
   function openEdit(item: WebsiteContentItem) {
-    const isLocked = isMasterDataLocked(currentMember, item);
     setEditing(item);
-    setLocked(isLocked);
     setName(item.name);
     setGalleryUrls(collectDisplayImages(item.image_url, item.gallery_urls));
     setGoogleMapsUrl(item.google_maps_url ?? "");
@@ -217,7 +207,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   }
 
   async function save() {
-    if (locked) return;
     if (!name.trim()) {
       show(tab === "vehicles" ? "Model is required" : "Name is required");
       return;
@@ -260,10 +249,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     };
 
     if (editing) {
-      if (!canEditMasterRecord(currentMember, editing)) {
-        show("You can only edit your own records");
-        return;
-      }
       await updateMasterContent(tab, editing.id, {
         ...payload,
         show_on_website: editing.show_on_website,
@@ -279,10 +264,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   }
 
   async function remove(item: WebsiteContentItem) {
-    if (!canDeleteMasterRecord(currentMember, item)) {
-      show("You can only delete your own records (or need Admin)");
-      return;
-    }
     if (!confirm(`Delete “${item.name}”?`)) return;
     await deleteMasterContent(tab, item.id);
     show("Deleted");
@@ -290,23 +271,9 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   }
 
   async function toggleStatus(item: WebsiteContentItem, v: boolean) {
-    if (!canEditMasterRecord(currentMember, item)) {
-      show("View only — created by " + (item.created_by_name ?? "another user"));
-      return;
-    }
     await updateMasterContent(tab, item.id, { show_on_website: v });
     void refresh();
     show(v ? "Status: Active" : "Status: Inactive");
-  }
-
-  async function toggleTrending(item: WebsiteContentItem) {
-    if (!canEditMasterRecord(currentMember, item)) {
-      show("View only — created by " + (item.created_by_name ?? "another user"));
-      return;
-    }
-    await updateMasterContent(tab, item.id, { is_trending: !item.is_trending });
-    void refresh();
-    show("Trending updated");
   }
 
   const heading = TAB_TITLES[tab];
@@ -483,7 +450,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item, index) => {
-                  const editable = canEditMasterRecord(currentMember, item);
                   const images = collectDisplayImages(item.image_url, item.gallery_urls, 4);
                   if (tab === "hotels") {
                     return (
@@ -520,24 +486,21 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                         </td>
                         <td className="px-3 py-3">
                           <div className="flex flex-wrap items-center gap-2">
+                            <StatusToggle
+                              active={item.show_on_website}
+                              onChange={(v) => void toggleStatus(item, v)}
+                            />
+                            <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
                             <Button
                               type="button"
+                              variant="ghost"
                               size="sm"
-                              className="bg-blue-600 hover:bg-blue-700"
-                              onClick={() => openEdit(item)}
+                              onClick={() => void remove(item)}
                             >
-                              {editable ? "Edit" : "View"}
+                              <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
-                            {canDeleteMasterRecord(currentMember, item) && (
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="bg-red-600 hover:bg-red-700"
-                                onClick={() => void remove(item)}
-                              >
-                                Delete
-                              </Button>
-                            )}
                           </div>
                         </td>
                       </tr>
@@ -562,44 +525,27 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                         ) : null}
                         <p className="text-xs text-stone-400">
                           Created by {item.created_by_name ?? "Unknown"}
-                          {!editable && " · view only"}
                         </p>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusToggle
-                            active={item.show_on_website}
-                            disabled={!editable}
-                            onChange={(v) => void toggleStatus(item, v)}
-                          />
-                          {tab === "destinations" && (
-                            <button
-                              type="button"
-                              onClick={() => void toggleTrending(item)}
-                              className="rounded-lg p-2 hover:bg-amber-50"
-                              disabled={!editable}
-                            >
-                              <Star
-                                className={cn(
-                                  "h-4 w-4",
-                                  item.is_trending ? "fill-amber-500 text-amber-500" : "text-stone-400"
-                                )}
-                              />
-                            </button>
+                          {tab !== "destinations" && (
+                            <StatusToggle
+                              active={item.show_on_website}
+                              onChange={(v) => void toggleStatus(item, v)}
+                            />
                           )}
                           <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                            {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                          {canDeleteMasterRecord(currentMember, item) && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => void remove(item)}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void remove(item)}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -625,11 +571,8 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 key={item.id}
                 item={item}
                 imageCategory={getImageCategory(tab)}
-                showTrending={tab === "destinations"}
-                canEdit={canEditMasterRecord(currentMember, item)}
-                canDelete={canDeleteMasterRecord(currentMember, item)}
+                showStatus={tab !== "destinations"}
                 onToggleStatus={toggleStatus}
-                onToggleTrending={toggleTrending}
                 onEdit={openEdit}
                 onDelete={remove}
               />
@@ -643,9 +586,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         onClose={() => setModalOpen(false)}
         title={
           editing
-            ? locked
-              ? `View ${heading.singular}`
-              : `Edit ${heading.singular}`
+            ? `Edit ${heading.singular}`
             : tab === "vehicles"
               ? "Add New Vehicle"
               : tab === "hotels"
@@ -653,19 +594,11 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 : `Add ${heading.singular}`
         }
         description={
-          editing
-            ? `Created by ${editing.created_by_name ?? "Unknown"}${locked ? " — fields locked" : ""}`
-            : undefined
+          editing ? `Created by ${editing.created_by_name ?? "Unknown"}` : undefined
         }
         className={tab === "hotels" ? "sm:max-w-2xl" : "sm:max-w-lg"}
       >
         <div className="space-y-4">
-          {locked && (
-            <Badge variant="warning" className="gap-1">
-              <Lock className="h-3 w-3" /> View only
-            </Badge>
-          )}
-
           {tab === "vehicles" ? (
             <>
               <div>
@@ -675,7 +608,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={locked}
                   placeholder="e.g., Corolla"
                   required
                 />
@@ -687,7 +619,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={vehicleType}
                   onChange={(e) => setVehicleType(e.target.value)}
-                  disabled={locked}
                   placeholder="e.g., Sedan"
                 />
               </div>
@@ -698,7 +629,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={capacity}
                   onChange={(e) => setCapacity(e.target.value)}
-                  disabled={locked}
                   placeholder="e.g., 5"
                 />
               </div>
@@ -706,7 +636,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Vehicle images (up to 6)"
                 value={galleryUrls}
                 onChange={setGalleryUrls}
-                disabled={locked}
               />
             </>
           ) : tab === "hotels" ? (
@@ -719,7 +648,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     className="mt-1.5"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    disabled={locked}
                     placeholder="Enter hotel name"
                     required
                   />
@@ -731,7 +659,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     className="mt-1.5"
                     value={hotelCategory}
                     onChange={(e) => setHotelCategory(e.target.value)}
-                    disabled={locked}
                     required
                   >
                     <option value="">Select Category</option>
@@ -753,7 +680,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5 min-h-[120px]"
                   value={priceDescription}
                   onChange={(e) => setPriceDescription(e.target.value)}
-                  disabled={locked}
                   placeholder="e.g. Starting from ₹2,999 per night | Includes breakfast & WiFi | Seasonal rates apply | Deluxe Room: ₹4,500 | Suite: ₹8,000"
                 />
                 <p className="mt-1 text-xs text-stone-500">You can write full pricing details here</p>
@@ -767,7 +693,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     className="mt-1.5"
                     value={hotelLocation}
                     onChange={(e) => setHotelLocation(e.target.value)}
-                    disabled={locked}
                     required
                   >
                     <option value="">Select Location</option>
@@ -794,7 +719,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     className="mt-1.5"
                     value={rating}
                     onChange={(e) => setRating(e.target.value)}
-                    disabled={locked}
                   />
                 </div>
               </div>
@@ -809,7 +733,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={reviewsCount}
                   onChange={(e) => setReviewsCount(e.target.value)}
-                  disabled={locked}
                 />
               </div>
 
@@ -821,7 +744,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={googleMapsUrl}
                   onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                  disabled={locked}
                   placeholder="Enter Google review link (optional)"
                 />
               </div>
@@ -830,7 +752,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Hotel Image"
                 value={hotelImage}
                 onChange={setHotelImage}
-                disabled={locked}
               />
             </>
           ) : (
@@ -842,7 +763,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   className="mt-1.5"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  disabled={locked}
                   required
                 />
               </div>
@@ -850,13 +770,11 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Images (up to 6)"
                 value={galleryUrls}
                 onChange={setGalleryUrls}
-                disabled={locked}
               />
             </>
           )}
 
-          {!locked && (
-            <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-2">
               {tab === "hotels" ? (
                 <>
                   <Button type="button" onClick={() => void save()}>
@@ -881,7 +799,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 </>
               )}
             </div>
-          )}
         </div>
       </Modal>
     </>
@@ -891,21 +808,15 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 function ContentCard({
   item,
   imageCategory,
-  showTrending,
-  canEdit,
-  canDelete,
+  showStatus,
   onToggleStatus,
-  onToggleTrending,
   onEdit,
   onDelete,
 }: {
   item: WebsiteContentItem;
   imageCategory: PlaceholderCategory;
-  showTrending: boolean;
-  canEdit: boolean;
-  canDelete: boolean;
+  showStatus: boolean;
   onToggleStatus: (item: WebsiteContentItem, v: boolean) => void;
-  onToggleTrending: (item: WebsiteContentItem) => void;
   onEdit: (item: WebsiteContentItem) => void;
   onDelete: (item: WebsiteContentItem) => void;
 }) {
@@ -916,13 +827,14 @@ function ContentCard({
       imageCategory={imageCategory}
       minHeightClass="min-h-[220px]"
     >
-      <div className="flex justify-end">
-        <StatusToggle
-          active={item.show_on_website}
-          onChange={(v) => onToggleStatus(item, v)}
-          disabled={!canEdit}
-        />
-      </div>
+      {showStatus && (
+        <div className="flex justify-end">
+          <StatusToggle
+            active={item.show_on_website}
+            onChange={(v) => onToggleStatus(item, v)}
+          />
+        </div>
+      )}
       {images.length > 1 && (
         <div className="mt-2">
           <ImageThumbRow urls={images} size={36} max={4} />
@@ -942,47 +854,25 @@ function ContentCard({
           ) : null}
           <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
         </div>
-        <div className="flex items-center justify-between">
-          <div className="flex gap-1">
-            <Button
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="h-9 w-9 rounded-full p-0 shadow-md"
-              onClick={() => onEdit(item)}
-            >
-              {canEdit ? <Pencil className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
-            </Button>
-            {canDelete && (
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                className="h-9 w-9 rounded-full p-0 shadow-md"
-                onClick={() => onDelete(item)}
-              >
-                <Trash2 className="h-3.5 w-3.5 text-red-600" />
-              </Button>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            {item.is_trending && <Badge className="bg-amber-500/90 text-white">Trending</Badge>}
-            {showTrending && (
-              <button
-                type="button"
-                onClick={() => onToggleTrending(item)}
-                className="rounded-full bg-black/40 p-2.5 backdrop-blur-sm"
-                disabled={!canEdit}
-              >
-                <Star
-                  className={cn(
-                    "h-4 w-4",
-                    item.is_trending ? "fill-amber-400 text-amber-400" : "text-white"
-                  )}
-                />
-              </button>
-            )}
-          </div>
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-9 w-9 rounded-full p-0 shadow-md"
+            onClick={() => onEdit(item)}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-9 w-9 rounded-full p-0 shadow-md"
+            onClick={() => onDelete(item)}
+          >
+            <Trash2 className="h-3.5 w-3.5 text-red-600" />
+          </Button>
         </div>
       </div>
     </MediaOverlayCard>

@@ -1,35 +1,50 @@
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import {
-  mergeRevisionsForItinerary,
+  readItineraryBuilderState,
   replaceItineraryBuilderState,
+  mergeRevisionsForItinerary,
 } from "@/lib/itinerary-builder/state-store";
 import { listClientItineraries } from "@/lib/itinerary-builder/storage";
 import type { ClientItineraryRecord, ItineraryRevision } from "@/types/itinerary-builder";
 
+export type SyncResult = { ok: true } | { ok: false; error: string };
+
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === "string") return e;
+  return "Unknown sync error";
+}
+
 export async function syncRecordToSupabaseIfReal(
   record: ClientItineraryRecord,
   revision: ItineraryRevision
-): Promise<void> {
-  if (!isRealDataMode() || !isSupabaseConfigured()) return;
+): Promise<SyncResult> {
+  if (!isRealDataMode() || !isSupabaseConfigured()) return { ok: true };
   try {
     const { upsertClientItineraryToSupabase } = await import(
       "@/lib/supabase/itinerary-builder-queries"
     );
-    await upsertClientItineraryToSupabase(record, revision);
+    const state = readItineraryBuilderState();
+    const allRevisions = state.revisions[record.id] ?? [revision];
+    await upsertClientItineraryToSupabase(record, revision, allRevisions);
+    return { ok: true };
   } catch (e) {
     console.warn("[sync] Supabase upsert failed", e);
+    return { ok: false, error: errorMessage(e) };
   }
 }
 
-export async function syncRecordMetaToSupabaseIfReal(record: ClientItineraryRecord): Promise<void> {
-  if (!isRealDataMode() || !isSupabaseConfigured()) return;
+export async function syncRecordMetaToSupabaseIfReal(record: ClientItineraryRecord): Promise<SyncResult> {
+  if (!isRealDataMode() || !isSupabaseConfigured()) return { ok: true };
   try {
     const { upsertClientItineraryRecordOnly } = await import(
       "@/lib/supabase/itinerary-builder-queries"
     );
     await upsertClientItineraryRecordOnly(record);
+    return { ok: true };
   } catch (e) {
     console.warn("[sync] Supabase record update failed", e);
+    return { ok: false, error: errorMessage(e) };
   }
 }
 
@@ -46,13 +61,37 @@ export async function pullRecordsFromSupabaseIfReal(): Promise<ClientItineraryRe
   }
 }
 
-/** Replace local itinerary builder cache with Supabase records (Real mode). */
+/**
+ * Merge remote client itineraries into local cache without dropping
+ * unsynced local quotes (hydrate used to hard-replace and wipe them).
+ */
 export async function hydrateItineraryBuilderFromSupabaseIfReal(): Promise<ClientItineraryRecord[]> {
   const remote = await pullRecordsFromSupabaseIfReal();
   if (remote === null) return listClientItineraries();
 
-  replaceItineraryBuilderState(remote);
-  return remote;
+  const localState = readItineraryBuilderState();
+  const remoteById = new Map(remote.map((r) => [r.id, r]));
+  const mergedById = new Map(remote.map((r) => [r.id, r]));
+
+  for (const loc of localState.records) {
+    if (loc.type !== "client_itinerary") continue;
+    const rem = remoteById.get(loc.id);
+    if (!rem) {
+      // Pending cloud sync — keep local so Save results stay visible
+      mergedById.set(loc.id, loc);
+      continue;
+    }
+    if (new Date(loc.updated_at).getTime() > new Date(rem.updated_at).getTime()) {
+      mergedById.set(loc.id, loc);
+    }
+  }
+
+  const merged = [...mergedById.values()].sort(
+    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
+  );
+
+  replaceItineraryBuilderState(merged, localState.revisions);
+  return listClientItineraries();
 }
 
 export async function pullRevisionsFromSupabaseIfReal(

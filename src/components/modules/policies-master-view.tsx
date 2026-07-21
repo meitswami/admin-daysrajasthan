@@ -4,17 +4,11 @@ import { useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { PageMain } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import {
-  canCreateMasterData,
-  canDeleteMasterRecord,
-  canEditMasterRecord,
-  isMasterDataLocked,
-} from "@/lib/rbac/ownership";
+import { canCreateMasterData } from "@/lib/rbac/ownership";
 import {
   createMasterPolicy,
   deleteMasterPolicy,
@@ -23,7 +17,7 @@ import {
   type MasterPolicyLine,
   type PolicySectionKey,
 } from "@/lib/master-data/policies-store";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 const SECTIONS: { key: PolicySectionKey; title: string; tone: string }[] = [
   { key: "terms", title: "Terms & Conditions", tone: "bg-slate-50" },
@@ -37,7 +31,6 @@ export function PoliciesMasterView() {
   const [items, setItems] = useState<MasterPolicyLine[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MasterPolicyLine | null>(null);
-  const [locked, setLocked] = useState(false);
   const [section, setSection] = useState<PolicySectionKey>("terms");
   const [title, setTitle] = useState("");
 
@@ -57,7 +50,6 @@ export function PoliciesMasterView() {
       return;
     }
     setEditing(null);
-    setLocked(false);
     setSection(sec);
     setTitle("");
     setModalOpen(true);
@@ -65,23 +57,17 @@ export function PoliciesMasterView() {
 
   function openEdit(item: MasterPolicyLine) {
     setEditing(item);
-    setLocked(isMasterDataLocked(currentMember, item));
     setSection(item.section);
     setTitle(item.title);
     setModalOpen(true);
   }
 
   function save() {
-    if (locked) return;
     if (!title.trim()) {
       show("Policy text is required");
       return;
     }
     if (editing) {
-      if (!canEditMasterRecord(currentMember, editing)) {
-        show("You can only edit your own policies");
-        return;
-      }
       updateMasterPolicy(editing.id, title);
       show("Updated");
     } else {
@@ -93,10 +79,6 @@ export function PoliciesMasterView() {
   }
 
   function remove(item: MasterPolicyLine) {
-    if (!canDeleteMasterRecord(currentMember, item)) {
-      show("You can only delete your own policies (or need Admin)");
-      return;
-    }
     if (!confirm("Delete this policy line?")) return;
     deleteMasterPolicy(item.id);
     show("Deleted");
@@ -107,7 +89,7 @@ export function PoliciesMasterView() {
     <>
       <Header
         title="Policies"
-        description="Terms, Cancellation & Payment — editable with ownership locks"
+        description="Terms, Cancellation & Payment policies for packages"
       />
       <PageMain>
         <div className="space-y-6">
@@ -127,36 +109,30 @@ export function PoliciesMasterView() {
                   )}
                 </div>
                 <ul className="space-y-2">
-                  {lines.map((item, idx) => {
-                    const editable = canEditMasterRecord(currentMember, item);
-                    return (
-                      <li
-                        key={item.id}
-                        className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm"
-                      >
-                        <div>
-                          <p className="text-stone-800">
-                            <span className="mr-2 text-stone-400">{idx + 1}.</span>
-                            {item.title}
-                          </p>
-                          <p className="mt-1 text-xs text-stone-400">
-                            Created by {item.created_by_name ?? "Unknown"}
-                            {!editable && " · view only"}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                          </Button>
-                          {canDeleteMasterRecord(currentMember, item) && (
-                            <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {lines.map((item, idx) => (
+                    <li
+                      key={item.id}
+                      className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm"
+                    >
+                      <div>
+                        <p className="text-stone-800">
+                          <span className="mr-2 text-stone-400">{idx + 1}.</span>
+                          {item.title}
+                        </p>
+                        <p className="mt-1 text-xs text-stone-400">
+                          Created by {item.created_by_name ?? "Unknown"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 gap-1">
+                        <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               </section>
             );
@@ -167,28 +143,21 @@ export function PoliciesMasterView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? (locked ? "View policy" : "Edit policy") : "Add policy"}
+        title={editing ? "Edit policy" : "Add policy"}
       >
         <div className="space-y-4">
-          {locked && (
-            <Badge variant="warning" className="gap-1">
-              <Lock className="h-3 w-3" /> View only
-            </Badge>
-          )}
           <div>
             <Label>Policy text *</Label>
-            <Input className="mt-1.5" value={title} onChange={(e) => setTitle(e.target.value)} disabled={locked} />
+            <Input className="mt-1.5" value={title} onChange={(e) => setTitle(e.target.value)} />
           </div>
-          {!locked && (
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={save}>
-                Save
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={save}>
+              Save
+            </Button>
+          </div>
         </div>
       </Modal>
     </>

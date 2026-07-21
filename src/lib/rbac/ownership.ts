@@ -6,26 +6,19 @@ export type OwnedRecord = {
   created_by_name?: string | null;
 };
 
-function isOwner(actor: TeamMember, record: OwnedRecord): boolean {
-  if (!record.created_by_id) return false;
-  return record.created_by_id === actor.id;
+/** Edit is available to every staff member who can open master data (creator ignored). */
+export function canEditMasterRecord(_actor: TeamMember, _record: OwnedRecord): boolean {
+  return true;
 }
 
-export function canEditMasterRecord(actor: TeamMember, record: OwnedRecord): boolean {
-  if (hasPermission("master_data.edit_any", actor.role)) return true;
-  if (hasPermission("master_data.edit_own", actor.role) && isOwner(actor, record)) return true;
+/** Delete is available to every staff member who can open master data (creator ignored). */
+export function canDeleteMasterRecord(_actor: TeamMember, _record: OwnedRecord): boolean {
+  return true;
+}
+
+/** Always unlocked — ownership no longer restricts master-data fields. */
+export function isMasterDataLocked(_actor: TeamMember, _record: OwnedRecord): boolean {
   return false;
-}
-
-export function canDeleteMasterRecord(actor: TeamMember, record: OwnedRecord): boolean {
-  if (hasPermission("master_data.delete_any", actor.role)) return true;
-  if (hasPermission("master_data.delete_own", actor.role) && isOwner(actor, record)) return true;
-  return false;
-}
-
-/** True when the actor may view but must not change fields */
-export function isMasterDataLocked(actor: TeamMember, record: OwnedRecord): boolean {
-  return !canEditMasterRecord(actor, record);
 }
 
 export function canCreateMasterData(actor?: TeamMember): boolean {

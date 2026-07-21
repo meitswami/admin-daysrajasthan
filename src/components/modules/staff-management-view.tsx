@@ -38,6 +38,7 @@ import {
 import { SEED_PERMISSION_GROUP_ID } from "@/lib/rbac/staff-seed";
 import { getEffectivePermissions } from "@/lib/rbac/permission-overrides";
 import { cn } from "@/lib/utils";
+import { Toggle } from "@/components/ui/toggle";
 import { KeyRound, Pencil, Plus, Search, Shield, Trash2, UserPlus, Users } from "lucide-react";
 
 function resolveDraftPermissions(
@@ -212,6 +213,21 @@ export function StaffManagementView() {
       void refresh();
     } else {
       show("Failed to save — try again");
+    }
+  }
+
+  async function toggleMemberActive(member: TeamMember, active: boolean) {
+    if (!canManage) return;
+    const updated = await updateStaffMember(
+      member.id,
+      { is_active: active },
+      currentMember
+    );
+    if (updated) {
+      show(active ? `${member.name} marked active` : `${member.name} marked inactive`);
+      void refresh();
+    } else {
+      show("Failed to update status");
     }
   }
 
@@ -528,7 +544,6 @@ export function StaffManagementView() {
                   <th className="px-4 py-3">Role</th>
                   <th className="px-4 py-3">Permission group</th>
                   <th className="px-4 py-3">Access</th>
-                  <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3">Actions</th>
                 </tr>
               </thead>
@@ -570,29 +585,27 @@ export function StaffManagementView() {
                         </p>
                       </td>
                       <td className="px-4 py-3">
-                        {m.is_active ? (
-                          <Badge variant="success">Active</Badge>
-                        ) : (
-                          <Badge variant="default">Inactive</Badge>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap gap-2">
-                          <Button type="button" size="sm" variant="outline" onClick={() => openEdit(m)}>
-                            <Pencil className="h-3.5 w-3.5" /> Edit
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Toggle
+                            checked={m.is_active}
+                            onChange={(v) => void toggleMemberActive(m, v)}
+                          />
+                          <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(m)}>
+                            <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
                             onClick={() => openCredentials(m)}
+                            title="Reset password"
                           >
-                            <KeyRound className="h-3.5 w-3.5" /> Reset pwd
+                            <KeyRound className="h-4 w-4" />
                           </Button>
                           <Button
                             type="button"
                             size="sm"
-                            variant="destructive"
+                            variant="ghost"
                             disabled={m.id === currentMember.id}
                             title={
                               m.id === currentMember.id
@@ -601,7 +614,7 @@ export function StaffManagementView() {
                             }
                             onClick={() => setDeleteTarget(m)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" /> Delete
+                            <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         </div>
                       </td>
@@ -610,7 +623,7 @@ export function StaffManagementView() {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-stone-500">
+                    <td colSpan={5} className="px-4 py-10 text-center text-stone-500">
                       No staff match your filters
                     </td>
                   </tr>

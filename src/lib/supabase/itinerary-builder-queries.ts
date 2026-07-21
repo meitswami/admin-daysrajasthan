@@ -6,6 +6,7 @@ export async function fetchClientItinerariesFromSupabase(): Promise<ClientItiner
   const { data, error } = await supabase
     .from("client_itineraries")
     .select("*")
+    .eq("type", "client_itinerary")
     .is("deleted_at", null)
     .order("updated_at", { ascending: false });
 
@@ -69,20 +70,18 @@ export async function fetchRevisionsForItinerary(itineraryId: string): Promise<I
   }));
 }
 
-export async function upsertClientItineraryToSupabase(
+function recordPayload(
   record: ClientItineraryRecord,
-  revision: ItineraryRevision
-): Promise<void> {
-  const supabase = createClient();
-
-  const { error: recError } = await supabase.from("client_itineraries").upsert({
+  currentRevisionId: string | null
+) {
+  return {
     id: record.id,
     quote_id: record.quote_id,
     type: record.type,
     title: record.title,
     tour_code: record.tour_code,
     workflow_status: record.workflow_status,
-    current_revision_id: revision.id,
+    current_revision_id: currentRevisionId,
     current_version: record.current_version,
     client_name: record.client_name,
     client_email: record.client_email,
@@ -103,57 +102,120 @@ export async function upsertClientItineraryToSupabase(
     lead_source: record.lead_source,
     customer_id: record.customer_id,
     updated_at: record.updated_at,
-  });
+  };
+}
+
+/**
+ * Persist itinerary + revision(s). Ordered to satisfy fk_current_revision:
+ * record (null pointer) → revisions (version order) → record pointer update.
+ */
+export async function upsertClientItineraryToSupabase(
+  record: ClientItineraryRecord,
+  revision: ItineraryRevision,
+  allRevisions: ItineraryRevision[] = [revision]
+): Promise<void> {
+  const supabase = createClient();
+
+  const { error: recError } = await supabase
+    .from("client_itineraries")
+    .upsert(recordPayload(record, null));
 
   if (recError) throw recError;
 
-  const { error: revError } = await supabase.from("itinerary_revisions").upsert({
-    id: revision.id,
-    itinerary_id: record.id,
-    version_number: revision.version_number,
-    parent_revision_id: revision.parent_revision_id,
-    milestone_label: revision.milestone_label,
-    change_summary: revision.change_summary,
-    save_type: revision.save_type,
-    snapshot: revision.snapshot,
-    created_at: revision.created_at,
-  });
+  const byVersion = [...allRevisions].sort(
+    (a, b) => a.version_number - b.version_number
+  );
+  const knownIds = new Set(byVersion.map((r) => r.id));
+  if (!knownIds.has(revision.id)) {
+    byVersion.push(revision);
+    byVersion.sort((a, b) => a.version_number - b.version_number);
+    knownIds.add(revision.id);
+  }
 
-  if (revError) throw revError;
+  for (const rev of byVersion) {
+    const parentId =
+      rev.parent_revision_id && knownIds.has(rev.parent_revision_id)
+        ? rev.parent_revision_id
+        : null;
+
+    const { error: revError } = await supabase.from("itinerary_revisions").upsert({
+      id: rev.id,
+      itinerary_id: record.id,
+      version_number: rev.version_number,
+      parent_revision_id: parentId,
+      milestone_label: rev.milestone_label,
+      change_summary: rev.change_summary,
+      save_type: rev.save_type,
+      snapshot: rev.snapshot,
+      created_at: rev.created_at,
+    });
+
+    if (revError) throw revError;
+  }
+
+  const { error: pointerError } = await supabase
+    .from("client_itineraries")
+    .update({
+      current_revision_id: revision.id,
+      current_version: record.current_version,
+      updated_at: record.updated_at,
+    })
+    .eq("id", record.id);
+
+  if (pointerError) throw pointerError;
 }
 
 export async function upsertClientItineraryRecordOnly(record: ClientItineraryRecord): Promise<void> {
   const supabase = createClient();
 
-  const { error } = await supabase.from("client_itineraries").upsert({
-    id: record.id,
-    quote_id: record.quote_id,
-    type: record.type,
-    title: record.title,
-    tour_code: record.tour_code,
-    workflow_status: record.workflow_status,
-    current_revision_id: record.current_revision_id,
-    current_version: record.current_version,
-    client_name: record.client_name,
-    client_email: record.client_email,
-    client_phone: record.client_phone,
-    travel_date: record.travel_date,
-    adults: record.adults,
-    children: record.children,
-    rooms: record.rooms,
-    grand_total: record.grand_total,
-    category_totals: record.category_totals,
-    currency: record.currency,
-    margin_pct: record.margin_pct,
-    payment_status: record.payment_status,
-    amount_paid: record.amount_paid,
-    deleted_at: record.deleted_at,
-    source_package_id: record.source_package_id,
-    lead_id: record.lead_id,
-    lead_source: record.lead_source,
-    customer_id: record.customer_id,
-    updated_at: record.updated_at,
-  });
+  // Avoid fk_current_revision failures when the revision row is not remote yet:
+  // update fields only if the row exists; otherwise upsert with a null pointer.
+  const { data: existing, error: existingError } = await supabase
+    .from("client_itineraries")
+    .select("id, current_revision_id")
+    .eq("id", record.id)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  if (existing) {
+    const { error } = await supabase
+      .from("client_itineraries")
+      .update({
+        quote_id: record.quote_id,
+        type: record.type,
+        title: record.title,
+        tour_code: record.tour_code,
+        workflow_status: record.workflow_status,
+        current_version: record.current_version,
+        client_name: record.client_name,
+        client_email: record.client_email,
+        client_phone: record.client_phone,
+        travel_date: record.travel_date,
+        adults: record.adults,
+        children: record.children,
+        rooms: record.rooms,
+        grand_total: record.grand_total,
+        category_totals: record.category_totals,
+        currency: record.currency,
+        margin_pct: record.margin_pct,
+        payment_status: record.payment_status,
+        amount_paid: record.amount_paid,
+        deleted_at: record.deleted_at,
+        source_package_id: record.source_package_id,
+        lead_id: record.lead_id,
+        lead_source: record.lead_source,
+        customer_id: record.customer_id,
+        updated_at: record.updated_at,
+      })
+      .eq("id", record.id);
+    if (error) throw error;
+    return;
+  }
+
+  const { error } = await supabase
+    .from("client_itineraries")
+    .upsert(recordPayload(record, null));
 
   if (error) throw error;
 }

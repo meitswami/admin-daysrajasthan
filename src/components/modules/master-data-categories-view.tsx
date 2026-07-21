@@ -9,12 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import {
-  canCreateMasterData,
-  canDeleteMasterRecord,
-  canEditMasterRecord,
-  isMasterDataLocked,
-} from "@/lib/rbac/ownership";
+import { canCreateMasterData } from "@/lib/rbac/ownership";
 import {
   createMasterCategory,
   deleteMasterCategory,
@@ -22,7 +17,7 @@ import {
   updateMasterCategory,
   type MasterCategory,
 } from "@/lib/master-data/categories-store";
-import { Lock, Pencil, Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 export function MasterDataCategoriesView() {
   const { show } = useToast();
@@ -30,7 +25,6 @@ export function MasterDataCategoriesView() {
   const [items, setItems] = useState<MasterCategory[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MasterCategory | null>(null);
-  const [locked, setLocked] = useState(false);
   const [label, setLabel] = useState("");
   const [roomCategory, setRoomCategory] = useState("");
   const [key, setKey] = useState("");
@@ -51,7 +45,6 @@ export function MasterDataCategoriesView() {
       return;
     }
     setEditing(null);
-    setLocked(false);
     setLabel("");
     setRoomCategory("");
     setKey("");
@@ -60,7 +53,6 @@ export function MasterDataCategoriesView() {
 
   function openEdit(item: MasterCategory) {
     setEditing(item);
-    setLocked(isMasterDataLocked(currentMember, item));
     setLabel(item.label);
     setRoomCategory(item.room_category);
     setKey(item.key);
@@ -68,16 +60,11 @@ export function MasterDataCategoriesView() {
   }
 
   function save() {
-    if (locked) return;
     if (!label.trim() || !key.trim()) {
       show("Label and key are required");
       return;
     }
     if (editing) {
-      if (!canEditMasterRecord(currentMember, editing)) {
-        show("You can only edit your own categories");
-        return;
-      }
       updateMasterCategory(editing.id, { label, room_category: roomCategory, key });
       show("Updated");
     } else {
@@ -89,10 +76,6 @@ export function MasterDataCategoriesView() {
   }
 
   function remove(item: MasterCategory) {
-    if (!canDeleteMasterRecord(currentMember, item)) {
-      show("You can only delete your own categories (or need Admin)");
-      return;
-    }
     if (!confirm(`Delete “${item.label}”?`)) return;
     deleteMasterCategory(item.id);
     show("Deleted");
@@ -122,31 +105,25 @@ export function MasterDataCategoriesView() {
               </tr>
             </thead>
             <tbody>
-              {items.map((item) => {
-                const editable = canEditMasterRecord(currentMember, item);
-                return (
-                  <tr key={item.id} className="border-b border-stone-100 last:border-0">
-                    <td className="px-4 py-3 font-medium text-stone-900">{item.label}</td>
-                    <td className="px-4 py-3 text-stone-700">{item.room_category}</td>
-                    <td className="px-4 py-3 text-xs text-stone-500">
-                      {item.created_by_name ?? "Unknown"}
-                      {!editable && " · view only"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex gap-1">
-                        <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                          {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                        </Button>
-                        {canDeleteMasterRecord(currentMember, item) && (
-                          <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+              {items.map((item) => (
+                <tr key={item.id} className="border-b border-stone-100 last:border-0">
+                  <td className="px-4 py-3 font-medium text-stone-900">{item.label}</td>
+                  <td className="px-4 py-3 text-stone-700">{item.room_category}</td>
+                  <td className="px-4 py-3 text-xs text-stone-500">
+                    {item.created_by_name ?? "Unknown"}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex gap-1">
+                      <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -155,12 +132,12 @@ export function MasterDataCategoriesView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? (locked ? "View category" : "Edit category") : "Add category"}
+        title={editing ? "Edit category" : "Add category"}
       >
         <div className="space-y-4">
           <div>
             <Label>Label *</Label>
-            <Input className="mt-1.5" value={label} onChange={(e) => setLabel(e.target.value)} disabled={locked} />
+            <Input className="mt-1.5" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
           <div>
             <Label>Room category</Label>
@@ -168,23 +145,20 @@ export function MasterDataCategoriesView() {
               className="mt-1.5"
               value={roomCategory}
               onChange={(e) => setRoomCategory(e.target.value)}
-              disabled={locked}
             />
           </div>
           <div>
             <Label>Key *</Label>
-            <Input className="mt-1.5" value={key} onChange={(e) => setKey(e.target.value)} disabled={locked} />
+            <Input className="mt-1.5" value={key} onChange={(e) => setKey(e.target.value)} />
           </div>
-          {!locked && (
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={save}>
-                Save
-              </Button>
-            </div>
-          )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={save}>
+              Save
+            </Button>
+          </div>
         </div>
       </Modal>
     </>

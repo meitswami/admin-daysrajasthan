@@ -87,7 +87,7 @@ export function listClientItineraries(opts?: {
   confirmedOnly?: boolean;
 }): ClientItineraryRecord[] {
   const { records } = loadState();
-  let list = [...records];
+  let list = [...records].filter((r) => r.type === "client_itinerary");
   if (!opts?.includeDeleted) {
     list = list.filter((r) => !r.deleted_at);
   }
@@ -96,6 +96,11 @@ export function listClientItineraries(opts?: {
       ["booking_confirmed", "completed"].includes(r.workflow_status)
     );
   }
+  // Catalog rows mistakenly stored as quotes (client_name "Website Package")
+  list = list.filter((r) => {
+    const name = (r.client_name ?? "").trim().toLowerCase();
+    return name !== "website package";
+  });
   return list.sort(
     (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
   );
