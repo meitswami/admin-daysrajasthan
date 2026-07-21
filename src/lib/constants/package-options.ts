@@ -49,7 +49,7 @@ export type WebsiteModuleKey =
 
 export const WEBSITE_MODULES: { key: WebsiteModuleKey; label: string; color: string }[] = [
   { key: "countries", label: "Countries", color: "from-orange-500 to-orange-600" },
-  { key: "destinations", label: "Destinations", color: "from-red-500 to-red-600" },
+  { key: "destinations", label: "Locations", color: "from-red-500 to-red-600" },
   { key: "cities", label: "Cities", color: "from-violet-500 to-violet-600" },
   { key: "packages", label: "Packages", color: "from-purple-500 to-purple-600" },
   { key: "hotels", label: "Hotels", color: "from-emerald-500 to-emerald-600" },

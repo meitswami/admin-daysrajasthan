@@ -252,63 +252,6 @@ export type StaffCreateInput = {
   permission_group_id?: string | null;
 };
 
-export async function createStaffMember(
-  input: StaffCreateInput,
-  actor?: TeamMember
-): Promise<TeamMember> {
-  const member: TeamMember = {
-    id: crypto.randomUUID(),
-    name: input.name.trim(),
-    email: input.email.trim().toLowerCase(),
-    role: input.role,
-    mfa_enabled: false,
-    mfa_locked: false,
-    is_active: input.is_active !== false,
-    created_at: new Date().toISOString(),
-    permission_overrides: null,
-    permission_group_id: input.permission_group_id ?? null,
-  };
-
-  let persisted = false;
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_team_members").insert({
-        id: member.id,
-        name: member.name,
-        email: member.email,
-        role: member.role,
-        mfa_enabled: false,
-        mfa_locked: false,
-        is_active: member.is_active,
-        permission_overrides: null,
-        permission_group_id: member.permission_group_id,
-      });
-      if (!error) persisted = true;
-    } catch {
-      // fall through
-    }
-  }
-
-  if (!persisted) {
-    const list = readLocal();
-    list.push(member);
-    writeLocal(list);
-  }
-
-  logActivity({
-    action: "settings_change",
-    module: "staff",
-    summary: `Added staff ${member.name} (${member.role})`,
-    entity_type: "team_member",
-    entity_id: member.id,
-    metadata: { member, actor: actor?.email },
-  });
-
-  return member;
-}
-
 export async function deleteStaffMember(
   id: string,
   actor?: TeamMember
@@ -366,4 +309,195 @@ export async function sendStaffPasswordReset(email: string): Promise<{ ok: boole
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Failed" };
   }
+}
+
+export function findStaffByEmail(
+  members: TeamMember[],
+  email: string,
+  excludeId?: string
+): TeamMember | undefined {
+  const key = email.trim().toLowerCase();
+  if (!key) return undefined;
+  return members.find(
+    (m) => m.email.toLowerCase() === key && (excludeId ? m.id !== excludeId : true)
+  );
+}
+
+export type StaffCredentialsResult = {
+  ok: boolean;
+  error?: string;
+  email?: string;
+  password_set?: boolean;
+  email_changed?: boolean;
+};
+
+/** Super Admin: set password and/or change login email from Staff Management. */
+export async function updateStaffCredentials(
+  memberId: string,
+  input: { email?: string; password?: string },
+  actor?: TeamMember
+): Promise<StaffCredentialsResult> {
+  const email = input.email?.trim().toLowerCase() ?? "";
+  const password = input.password ?? "";
+
+  if (!email && !password) {
+    return { ok: false, error: "Provide a new email and/or password" };
+  }
+  if (password && password.length < 8) {
+    return { ok: false, error: "Password must be at least 8 characters" };
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data, error } = await supabase.rpc("td_admin_update_staff_credentials", {
+        p_member_id: memberId,
+        p_new_email: email || null,
+        p_new_password: password || null,
+      });
+
+      if (error) return { ok: false, error: error.message };
+
+      const result = (data ?? {}) as StaffCredentialsResult;
+      if (!result.ok) {
+        return { ok: false, error: result.error ?? "Could not update credentials" };
+      }
+
+      logActivity({
+        action: "settings_change",
+        module: "staff",
+        summary: `Updated credentials for staff ${memberId}`,
+        entity_type: "team_member",
+        entity_id: memberId,
+        metadata: {
+          email_changed: result.email_changed,
+          password_set: result.password_set,
+          email: result.email,
+          actor: actor?.email,
+        },
+      });
+
+      return {
+        ok: true,
+        email: result.email,
+        password_set: Boolean(result.password_set),
+        email_changed: Boolean(result.email_changed),
+      };
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Failed" };
+    }
+  }
+
+  // Demo / local mode
+  const list = readLocal();
+  const idx = list.findIndex((m) => m.id === memberId);
+  if (idx < 0) return { ok: false, error: "Staff member not found" };
+
+  let emailChanged = false;
+  if (email && email !== list[idx].email.toLowerCase()) {
+    if (findStaffByEmail(list, email, memberId)) {
+      return { ok: false, error: "This email is already used by another staff member" };
+    }
+    list[idx] = { ...list[idx], email };
+    emailChanged = true;
+  }
+  writeLocal(list);
+
+  const demoIdx = DEMO_TEAM.findIndex((m) => m.id === memberId);
+  if (demoIdx >= 0) DEMO_TEAM[demoIdx] = { ...list[idx] };
+
+  logActivity({
+    action: "settings_change",
+    module: "staff",
+    summary: `Updated credentials for ${list[idx].name}`,
+    entity_type: "team_member",
+    entity_id: memberId,
+    metadata: {
+      email_changed: emailChanged,
+      password_set: Boolean(password),
+      email: list[idx].email,
+      actor: actor?.email,
+    },
+  });
+
+  return {
+    ok: true,
+    email: list[idx].email,
+    password_set: Boolean(password),
+    email_changed: emailChanged,
+  };
+}
+
+export async function createStaffMember(
+  input: StaffCreateInput,
+  actor?: TeamMember
+): Promise<{ ok: true; member: TeamMember } | { ok: false; error: string }> {
+  const email = input.email.trim().toLowerCase();
+  if (!input.name.trim() || !email) {
+    return { ok: false, error: "Name and email are required" };
+  }
+
+  const existing = await listStaffMembers();
+  if (findStaffByEmail(existing, email)) {
+    return { ok: false, error: "This email is already used by another staff member" };
+  }
+
+  const member: TeamMember = {
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    email,
+    role: input.role,
+    mfa_enabled: false,
+    mfa_locked: false,
+    is_active: input.is_active !== false,
+    created_at: new Date().toISOString(),
+    permission_overrides: null,
+    permission_group_id: input.permission_group_id ?? null,
+  };
+
+  let persisted = false;
+  if (isSupabaseConfigured()) {
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { error } = await supabase.from("td_team_members").insert({
+        id: member.id,
+        name: member.name,
+        email: member.email,
+        role: member.role,
+        mfa_enabled: false,
+        mfa_locked: false,
+        is_active: member.is_active,
+        permission_overrides: null,
+        permission_group_id: member.permission_group_id,
+      });
+      if (error) {
+        if (error.code === "23505" || /duplicate|unique/i.test(error.message)) {
+          return { ok: false, error: "This email is already used by another staff member" };
+        }
+        return { ok: false, error: error.message };
+      }
+      persisted = true;
+    } catch (e) {
+      return { ok: false, error: e instanceof Error ? e.message : "Failed to add staff" };
+    }
+  }
+
+  if (!persisted) {
+    const list = readLocal();
+    list.push(member);
+    writeLocal(list);
+  }
+
+  logActivity({
+    action: "settings_change",
+    module: "staff",
+    summary: `Added staff ${member.name} (${member.role})`,
+    entity_type: "team_member",
+    entity_id: member.id,
+    metadata: { member, actor: actor?.email },
+  });
+
+  return { ok: true, member };
 }

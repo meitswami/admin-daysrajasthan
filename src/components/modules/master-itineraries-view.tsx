@@ -6,7 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { CoverImageUploadField, FileUploadField } from "@/components/ui/file-upload-field";
+import { FileUploadField } from "@/components/ui/file-upload-field";
+import {
+  GalleryImagesField,
+  ImageThumbRow,
+  collectDisplayImages,
+} from "@/components/ui/gallery-images-field";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
@@ -24,6 +29,7 @@ import {
   updateMasterItinerary,
 } from "@/lib/master-data/itinerary-store";
 import { Lock, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 const PACKAGE_TYPES: PackageType[] = [
   "Local Sight Seeing",
@@ -72,11 +78,10 @@ export function MasterItinerariesView() {
   const [packageType, setPackageType] = useState<PackageType>("Domestic");
   const [duration, setDuration] = useState("3 Days 2 Nights");
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
-  const [coverUrl, setCoverUrl] = useState<string | null>(null);
-  const [galleryText, setGalleryText] = useState("");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [inclusions, setInclusions] = useState("");
   const [exclusions, setExclusions] = useState("");
-  const [showOnWebsite, setShowOnWebsite] = useState(true);
+  const [statusActive, setStatusActive] = useState(true);
   const [isTrending, setIsTrending] = useState(false);
   const [status, setStatus] = useState<"active" | "inactive">("active");
 
@@ -108,11 +113,10 @@ export function MasterItinerariesView() {
     setPackageType("Domestic");
     setDuration("3 Days 2 Nights");
     setPdfUrl(null);
-    setCoverUrl(null);
-    setGalleryText("");
+    setGalleryUrls([]);
     setInclusions("");
     setExclusions("");
-    setShowOnWebsite(true);
+    setStatusActive(true);
     setIsTrending(false);
     setStatus("active");
   }
@@ -137,11 +141,10 @@ export function MasterItinerariesView() {
     setPackageType(item.package_type ?? "Domestic");
     setDuration(item.package_duration ?? "3 Days 2 Nights");
     setPdfUrl(item.pdf_url);
-    setCoverUrl(item.cover_image_url);
-    setGalleryText(linesToText(item.gallery_urls));
+    setGalleryUrls(collectDisplayImages(item.cover_image_url, item.gallery_urls));
     setInclusions(linesToText(item.inclusions));
     setExclusions(linesToText(item.exclusions));
-    setShowOnWebsite(item.show_on_website);
+    setStatusActive(item.show_on_website);
     setIsTrending(item.is_trending);
     setStatus(item.status);
     setModalOpen(true);
@@ -153,17 +156,18 @@ export function MasterItinerariesView() {
       show("Package name is required");
       return;
     }
+    const gallery = galleryUrls.filter(Boolean).slice(0, 4);
     const payload = {
       package_name: packageName,
       destination,
       package_type: packageType,
       package_duration: duration,
       pdf_url: pdfUrl,
-      cover_image_url: coverUrl,
-      gallery_urls: textToLines(galleryText),
+      cover_image_url: gallery[0] ?? null,
+      gallery_urls: gallery,
       inclusions: textToLines(inclusions),
       exclusions: textToLines(exclusions),
-      show_on_website: showOnWebsite,
+      show_on_website: statusActive,
       is_trending: isTrending,
       status,
     };
@@ -225,6 +229,7 @@ export function MasterItinerariesView() {
             <table className="w-full min-w-[720px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase text-stone-500">
                 <tr>
+                  <th className="px-3 py-2">Images</th>
                   <th className="px-3 py-2">Package</th>
                   <th className="px-3 py-2">Duration</th>
                   <th className="px-3 py-2">Created by</th>
@@ -237,6 +242,12 @@ export function MasterItinerariesView() {
                   const editable = canEditMasterRecord(currentMember, item);
                   return (
                     <tr key={item.id}>
+                      <td className="px-3 py-3">
+                        <ImageThumbRow
+                          urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
+                          size={44}
+                        />
+                      </td>
                       <td className="px-3 py-3">
                         <p className="font-medium text-stone-900">{item.package_name}</p>
                         <p className="text-xs text-stone-500">
@@ -251,9 +262,24 @@ export function MasterItinerariesView() {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <Badge variant={item.status === "active" ? "success" : "default"}>
-                          {item.status}
-                        </Badge>
+                        <div className="flex flex-col gap-2">
+                          <Badge variant={item.status === "active" ? "success" : "default"}>
+                            {item.status === "active" ? "Active" : "Inactive"}
+                          </Badge>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium text-stone-500">Status</span>
+                            <Toggle
+                              checked={item.show_on_website}
+                              disabled={!editable}
+                              label={item.show_on_website ? "Active" : "Inactive"}
+                              onChange={(v) => {
+                                void updateMasterItinerary(item.id, { show_on_website: v }, currentMember).then(
+                                  () => void refresh()
+                                );
+                              }}
+                            />
+                          </div>
+                        </div>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex gap-1">
@@ -272,7 +298,7 @@ export function MasterItinerariesView() {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-stone-500">
+                    <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
                       No itineraries yet. Add a package to get started.
                     </td>
                   </tr>
@@ -358,18 +384,7 @@ export function MasterItinerariesView() {
             onChange={setPdfUrl}
             disabled={locked}
           />
-          <CoverImageUploadField label="Cover image" value={coverUrl} onChange={setCoverUrl} disabled={locked} />
-          <div>
-            <Label>Gallery image URLs (one per line)</Label>
-            <Textarea
-              className="mt-1.5"
-              rows={3}
-              value={galleryText}
-              onChange={(e) => setGalleryText(e.target.value)}
-              disabled={locked}
-              placeholder="https://… or data URLs"
-            />
-          </div>
+          <GalleryImagesField value={galleryUrls} onChange={setGalleryUrls} disabled={locked} />
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Inclusions (one per line)</Label>
@@ -392,38 +407,41 @@ export function MasterItinerariesView() {
               />
             </div>
           </div>
-          <div className="flex flex-wrap gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={showOnWebsite}
-                onChange={(e) => setShowOnWebsite(e.target.checked)}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Status</Label>
+              <Select
+                className="mt-1.5"
+                value={statusActive ? "active" : "inactive"}
+                onChange={(e) => setStatusActive(e.target.value === "active")}
                 disabled={locked}
-              />
-              Show on website
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isTrending}
-                onChange={(e) => setIsTrending(e.target.checked)}
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </Select>
+            </div>
+            <div>
+              <Label>Package status</Label>
+              <Select
+                className="mt-1.5"
+                value={status}
+                onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
                 disabled={locked}
-              />
-              Trending
-            </label>
+              >
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </Select>
+            </div>
           </div>
-          <div>
-            <Label>Status</Label>
-            <Select
-              className="mt-1.5"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={isTrending}
+              onChange={(e) => setIsTrending(e.target.checked)}
               disabled={locked}
-            >
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-            </Select>
-          </div>
+            />
+            Trending
+          </label>
           {!locked && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>

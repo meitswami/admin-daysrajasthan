@@ -35,7 +35,7 @@ export const IDS = {
 
 export const blogCategories: BlogCategory[] = [
   { id: IDS.categories.travelTips, name: "Travel Tips", slug: "travel-tips", created_at: "2026-01-10T08:00:00Z" },
-  { id: IDS.categories.destinations, name: "Destinations", slug: "destinations", created_at: "2026-01-10T08:00:00Z" },
+  { id: IDS.categories.destinations, name: "Locations", slug: "destinations", created_at: "2026-01-10T08:00:00Z" },
   { id: IDS.categories.culture, name: "Culture & Heritage", slug: "culture-heritage", created_at: "2026-01-10T08:00:00Z" },
 ];
 

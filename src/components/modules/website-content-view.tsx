@@ -5,14 +5,18 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select } from "@/components/ui/input";
+import { Input, Label } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { CoverImageUploadField } from "@/components/ui/file-upload-field";
+import {
+  GalleryImagesField,
+  ImageThumbRow,
+  collectDisplayImages,
+} from "@/components/ui/gallery-images-field";
 import { useToast } from "@/components/ui/toast";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
-import { MediaOverlayCard, MediaThumb } from "@/components/shared/media-overlay-card";
+import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import type { DisplayMode, WebsiteContentItem } from "@/types/database";
 import { Grid3X3, List, Plus, Search, Star, Pencil, Trash2, Lock } from "lucide-react";
@@ -33,20 +37,21 @@ import {
 } from "@/lib/master-data/content-store";
 
 const TABS: { id: MasterContentEntity; label: string }[] = [
-  { id: "destinations", label: "Destinations" },
+  { id: "destinations", label: "Locations" },
   { id: "hotels", label: "Hotels" },
   { id: "vehicles", label: "Vehicles" },
 ];
 
 export type MasterDataEntity = MasterContentEntity | "countries" | "cities";
 
-const TAB_TITLES: Record<MasterContentEntity, { title: string; description: string }> = {
+const TAB_TITLES: Record<MasterContentEntity, { title: string; description: string; singular: string }> = {
   destinations: {
-    title: "Destinations",
-    description: "Location master for India (replaces Cities) — packages & website",
+    title: "Locations",
+    description: "Location master for India — packages & website",
+    singular: "Location",
   },
-  hotels: { title: "Hotels", description: "Hotel inventory for costing & website" },
-  vehicles: { title: "Vehicles", description: "Transport fleet master" },
+  hotels: { title: "Hotels", description: "Hotel inventory for costing & website", singular: "Hotel" },
+  vehicles: { title: "Vehicles", description: "Transport fleet master", singular: "Vehicle" },
 };
 
 function getImageCategory(tab: MasterContentEntity): PlaceholderCategory {
@@ -60,13 +65,35 @@ function normalizeEntity(entity?: MasterDataEntity): MasterContentEntity {
   return "destinations";
 }
 
+function StatusToggle({
+  active,
+  disabled,
+  onChange,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-stone-500">Status</span>
+      <Toggle
+        checked={active}
+        onChange={onChange}
+        label={active ? "Active" : "Inactive"}
+        disabled={disabled}
+      />
+    </div>
+  );
+}
+
 export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const router = useRouter();
   const { show } = useToast();
   const { currentMember, dataMode } = useSystem();
   const initialTab = normalizeEntity(entity);
   const [tab, setTab] = useState<MasterContentEntity>(initialTab);
-  const [viewMode, setViewMode] = useState<DisplayMode>("grid");
+  const [viewMode, setViewMode] = useState<DisplayMode>("list");
   const [search, setSearch] = useState("");
   const [items, setItems] = useState<WebsiteContentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,11 +102,10 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [locked, setLocked] = useState(false);
 
   const [name, setName] = useState("");
-  const [subtitle, setSubtitle] = useState("");
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [showOnWebsite, setShowOnWebsite] = useState(true);
-  const [isTrending, setIsTrending] = useState(false);
-  const [displayMode, setDisplayMode] = useState<DisplayMode>("grid");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [googleMapsUrl, setGoogleMapsUrl] = useState("");
+  const [vehicleType, setVehicleType] = useState("");
+  const [capacity, setCapacity] = useState("");
 
   const canCreate = canCreateMasterData(currentMember);
 
@@ -117,7 +143,10 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
       (i) =>
         !q ||
         i.name.toLowerCase().includes(q) ||
-        (i.subtitle?.toLowerCase().includes(q) ?? false)
+        (i.subtitle?.toLowerCase().includes(q) ?? false) ||
+        (i.vehicle_type?.toLowerCase().includes(q) ?? false) ||
+        (i.capacity?.toLowerCase().includes(q) ?? false) ||
+        (i.google_maps_url?.toLowerCase().includes(q) ?? false)
     );
   }, [items, search]);
 
@@ -129,11 +158,10 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setEditing(null);
     setLocked(false);
     setName("");
-    setSubtitle("");
-    setImageUrl(null);
-    setShowOnWebsite(true);
-    setIsTrending(false);
-    setDisplayMode("grid");
+    setGalleryUrls([]);
+    setGoogleMapsUrl("");
+    setVehicleType("");
+    setCapacity("");
     setModalOpen(true);
   }
 
@@ -142,20 +170,34 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setEditing(item);
     setLocked(isLocked);
     setName(item.name);
-    setSubtitle(item.subtitle ?? "");
-    setImageUrl(item.image_url ?? null);
-    setShowOnWebsite(item.show_on_website);
-    setIsTrending(Boolean(item.is_trending));
-    setDisplayMode(item.display_mode ?? "grid");
+    setGalleryUrls(collectDisplayImages(item.image_url, item.gallery_urls));
+    setGoogleMapsUrl(item.google_maps_url ?? "");
+    setVehicleType(item.vehicle_type ?? "");
+    setCapacity(item.capacity ?? "");
     setModalOpen(true);
   }
 
   async function save() {
     if (locked) return;
     if (!name.trim()) {
-      show("Name is required");
+      show(tab === "vehicles" ? "Model is required" : "Name is required");
       return;
     }
+
+    const gallery = galleryUrls.filter(Boolean).slice(0, 6);
+    const payload = {
+      name,
+      subtitle: null as string | null,
+      image_url: gallery[0] ?? null,
+      gallery_urls: gallery,
+      show_on_website: true,
+      is_trending: false,
+      display_mode: "list" as DisplayMode,
+      country: "India",
+      google_maps_url: tab === "hotels" ? googleMapsUrl.trim() || null : null,
+      vehicle_type: tab === "vehicles" ? vehicleType.trim() || null : null,
+      capacity: tab === "vehicles" ? capacity.trim() || null : null,
+    };
 
     if (editing) {
       if (!canEditMasterRecord(currentMember, editing)) {
@@ -163,29 +205,13 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         return;
       }
       await updateMasterContent(tab, editing.id, {
-        name,
-        subtitle,
-        image_url: imageUrl,
-        show_on_website: showOnWebsite,
-        is_trending: isTrending,
-        display_mode: displayMode,
-        country: "India",
+        ...payload,
+        show_on_website: editing.show_on_website,
+        is_trending: editing.is_trending ?? false,
       });
       show("Updated");
     } else {
-      await createMasterContent(
-        tab,
-        {
-          name,
-          subtitle,
-          image_url: imageUrl,
-          show_on_website: showOnWebsite,
-          is_trending: isTrending,
-          display_mode: displayMode,
-          country: "India",
-        },
-        currentMember
-      );
+      await createMasterContent(tab, payload, currentMember);
       show("Created");
     }
     setModalOpen(false);
@@ -203,14 +229,14 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     void refresh();
   }
 
-  async function toggleWebsite(item: WebsiteContentItem, v: boolean) {
+  async function toggleStatus(item: WebsiteContentItem, v: boolean) {
     if (!canEditMasterRecord(currentMember, item)) {
       show("View only — created by " + (item.created_by_name ?? "another user"));
       return;
     }
     await updateMasterContent(tab, item.id, { show_on_website: v });
     void refresh();
-    show(v ? "Visible on website" : "Hidden from website");
+    show(v ? "Status: Active" : "Status: Inactive");
   }
 
   async function toggleTrending(item: WebsiteContentItem) {
@@ -232,7 +258,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         description={
           entity
             ? heading.description
-            : "Destinations, hotels & vehicles for the public site"
+            : "Locations, hotels & vehicles for the public site"
         }
       />
       <PageMain>
@@ -317,7 +343,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 showTrending={tab === "destinations"}
                 canEdit={canEditMasterRecord(currentMember, item)}
                 canDelete={canDeleteMasterRecord(currentMember, item)}
-                onToggleWebsite={toggleWebsite}
+                onToggleStatus={toggleStatus}
                 onToggleTrending={toggleTrending}
                 onEdit={openEdit}
                 onDelete={remove}
@@ -325,70 +351,103 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
             ))}
           </div>
         ) : (
-          <div className="space-y-2">
-            {filtered.map((item) => {
-              const editable = canEditMasterRecord(currentMember, item);
-              return (
-                <div
-                  key={item.id}
-                  className="flex flex-col gap-3 rounded-xl border border-stone-200 bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <MediaThumb
-                      imageUrl={item.image_url}
-                      imageCategory={getImageCategory(tab)}
-                      className="h-12 w-16 rounded-lg"
-                      width={64}
-                      height={48}
-                    />
-                    <div>
-                      <p className="font-semibold text-stone-900">{item.name}</p>
-                      {item.subtitle && <p className="text-sm text-stone-500">{item.subtitle}</p>}
-                      <p className="text-xs text-stone-400">
-                        Created by {item.created_by_name ?? "Unknown"}
-                        {!editable && " · view only"}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <Toggle
-                      checked={item.show_on_website}
-                      onChange={(v) => void toggleWebsite(item, v)}
-                      label="Website"
-                      disabled={!editable}
-                    />
-                    {tab === "destinations" && (
-                      <button
-                        type="button"
-                        onClick={() => void toggleTrending(item)}
-                        className="rounded-lg p-2 hover:bg-amber-50"
-                        disabled={!editable}
-                      >
-                        <Star
-                          className={cn(
-                            "h-4 w-4",
-                            item.is_trending ? "fill-amber-500 text-amber-500" : "text-stone-400"
-                          )}
+          <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="px-3 py-2 w-12">S.No.</th>
+                  <th className="px-3 py-2">Images</th>
+                  <th className="px-3 py-2">{heading.singular} name</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100">
+                {filtered.map((item, index) => {
+                  const editable = canEditMasterRecord(currentMember, item);
+                  const images = collectDisplayImages(item.image_url, item.gallery_urls);
+                  return (
+                    <tr key={item.id}>
+                      <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
+                      <td className="px-3 py-3">
+                        <ImageThumbRow urls={images} size={48} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-stone-900">{item.name}</p>
+                        {tab === "vehicles" ? (
+                          <p className="text-sm text-stone-500">
+                            {[item.vehicle_type, item.capacity ? `${item.capacity} seater` : null]
+                              .filter(Boolean)
+                              .join(" · ") || "—"}
+                          </p>
+                        ) : tab === "hotels" && item.google_maps_url ? (
+                          <a
+                            href={item.google_maps_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-sm text-amber-700 hover:underline"
+                          >
+                            Google link
+                          </a>
+                        ) : item.subtitle ? (
+                          <p className="text-sm text-stone-500">{item.subtitle}</p>
+                        ) : null}
+                        <p className="text-xs text-stone-400">
+                          Created by {item.created_by_name ?? "Unknown"}
+                          {!editable && " · view only"}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3">
+                        <StatusToggle
+                          active={item.show_on_website}
+                          disabled={!editable}
+                          onChange={(v) => void toggleStatus(item, v)}
                         />
-                      </button>
-                    )}
-                    <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                      {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-                    </Button>
-                    {canDeleteMasterRecord(currentMember, item) && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => void remove(item)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex flex-wrap items-center gap-1">
+                          {tab === "destinations" && (
+                            <button
+                              type="button"
+                              onClick={() => void toggleTrending(item)}
+                              className="rounded-lg p-2 hover:bg-amber-50"
+                              disabled={!editable}
+                            >
+                              <Star
+                                className={cn(
+                                  "h-4 w-4",
+                                  item.is_trending ? "fill-amber-500 text-amber-500" : "text-stone-400"
+                                )}
+                              />
+                            </button>
+                          )}
+                          <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
+                            {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                          </Button>
+                          {canDeleteMasterRecord(currentMember, item) && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => void remove(item)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {!filtered.length && (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-8 text-center text-stone-500">
+                      No {heading.title.toLowerCase()} yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         )}
       </PageMain>
@@ -399,9 +458,11 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         title={
           editing
             ? locked
-              ? `View ${heading.title.slice(0, -1)}`
-              : `Edit ${heading.title.slice(0, -1)}`
-            : `Add ${heading.title.slice(0, -1)}`
+              ? `View ${heading.singular}`
+              : `Edit ${heading.singular}`
+            : tab === "vehicles"
+              ? "Add New Vehicle"
+              : `Add ${heading.singular}`
         }
         description={
           editing
@@ -416,72 +477,93 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
               <Lock className="h-3 w-3" /> View only
             </Badge>
           )}
-          <div>
-            <Label htmlFor="md-name">Name *</Label>
-            <Input
-              id="md-name"
-              className="mt-1.5"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              disabled={locked}
-              required
-            />
-          </div>
-          <div>
-            <Label htmlFor="md-subtitle">Subtitle</Label>
-            <Input
-              id="md-subtitle"
-              className="mt-1.5"
-              value={subtitle}
-              onChange={(e) => setSubtitle(e.target.value)}
-              disabled={locked}
-            />
-          </div>
-          <CoverImageUploadField
-            label="Image"
-            value={imageUrl}
-            onChange={(v) => setImageUrl(v)}
-            disabled={locked}
-          />
-          <div>
-            <Label>Display mode</Label>
-            <Select
-              className="mt-1.5"
-              value={displayMode}
-              onChange={(e) => setDisplayMode(e.target.value as DisplayMode)}
-              disabled={locked}
-            >
-              <option value="grid">Grid</option>
-              <option value="list">List</option>
-            </Select>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showOnWebsite}
-              onChange={(e) => setShowOnWebsite(e.target.checked)}
-              disabled={locked}
-            />
-            Show on website
-          </label>
-          {tab === "destinations" && (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isTrending}
-                onChange={(e) => setIsTrending(e.target.checked)}
+
+          {tab === "vehicles" ? (
+            <>
+              <div>
+                <Label htmlFor="md-model">Model *</Label>
+                <Input
+                  id="md-model"
+                  className="mt-1.5"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={locked}
+                  placeholder="e.g., Corolla"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="md-type">Type</Label>
+                <Input
+                  id="md-type"
+                  className="mt-1.5"
+                  value={vehicleType}
+                  onChange={(e) => setVehicleType(e.target.value)}
+                  disabled={locked}
+                  placeholder="e.g., Sedan"
+                />
+              </div>
+              <div>
+                <Label htmlFor="md-capacity">Capacity</Label>
+                <Input
+                  id="md-capacity"
+                  className="mt-1.5"
+                  value={capacity}
+                  onChange={(e) => setCapacity(e.target.value)}
+                  disabled={locked}
+                  placeholder="e.g., 5"
+                />
+              </div>
+              <GalleryImagesField
+                label="Vehicle images (up to 6)"
+                value={galleryUrls}
+                onChange={setGalleryUrls}
                 disabled={locked}
               />
-              Trending on home
-            </label>
+            </>
+          ) : (
+            <>
+              <div>
+                <Label htmlFor="md-name">Name *</Label>
+                <Input
+                  id="md-name"
+                  className="mt-1.5"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={locked}
+                  required
+                />
+              </div>
+              {tab === "hotels" && (
+                <div>
+                  <Label htmlFor="md-google">Google link</Label>
+                  <Input
+                    id="md-google"
+                    type="url"
+                    className="mt-1.5"
+                    value={googleMapsUrl}
+                    onChange={(e) => setGoogleMapsUrl(e.target.value)}
+                    disabled={locked}
+                    placeholder="https://maps.google.com/…"
+                  />
+                </div>
+              )}
+              <GalleryImagesField
+                label={tab === "hotels" ? "Hotel images (up to 6)" : "Images (up to 6)"}
+                value={galleryUrls}
+                onChange={setGalleryUrls}
+                disabled={locked}
+              />
+            </>
           )}
+
           {!locked && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
                 Cancel
               </Button>
               <Button type="button" onClick={() => void save()}>
-                {editing ? "Save" : "Create"}
+                {editing ? "Save" : tab === "vehicles" ? "Add Vehicle" : "Create"}
               </Button>
             </div>
           )}
@@ -497,7 +579,7 @@ function ContentCard({
   showTrending,
   canEdit,
   canDelete,
-  onToggleWebsite,
+  onToggleStatus,
   onToggleTrending,
   onEdit,
   onDelete,
@@ -507,28 +589,42 @@ function ContentCard({
   showTrending: boolean;
   canEdit: boolean;
   canDelete: boolean;
-  onToggleWebsite: (item: WebsiteContentItem, v: boolean) => void;
+  onToggleStatus: (item: WebsiteContentItem, v: boolean) => void;
   onToggleTrending: (item: WebsiteContentItem) => void;
   onEdit: (item: WebsiteContentItem) => void;
   onDelete: (item: WebsiteContentItem) => void;
 }) {
+  const images = collectDisplayImages(item.image_url, item.gallery_urls);
   return (
     <MediaOverlayCard
-      imageUrl={item.image_url}
+      imageUrl={images[0] ?? item.image_url}
       imageCategory={imageCategory}
       minHeightClass="min-h-[220px]"
     >
       <div className="flex justify-end">
-        <Toggle
-          checked={item.show_on_website}
-          onChange={(v) => onToggleWebsite(item, v)}
+        <StatusToggle
+          active={item.show_on_website}
+          onChange={(v) => onToggleStatus(item, v)}
           disabled={!canEdit}
         />
       </div>
+      {images.length > 1 && (
+        <div className="mt-2">
+          <ImageThumbRow urls={images} size={36} />
+        </div>
+      )}
       <div className="mt-auto space-y-3 pt-6">
         <div>
           <p className="text-lg font-bold drop-shadow-sm">{item.name}</p>
-          {item.subtitle && <p className="text-sm text-white/90">{item.subtitle}</p>}
+          {item.vehicle_type || item.capacity ? (
+            <p className="text-sm text-white/90">
+              {[item.vehicle_type, item.capacity ? `${item.capacity} seater` : null]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          ) : item.subtitle ? (
+            <p className="text-sm text-white/90">{item.subtitle}</p>
+          ) : null}
           <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
         </div>
         <div className="flex items-center justify-between">

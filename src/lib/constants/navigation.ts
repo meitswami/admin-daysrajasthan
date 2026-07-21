@@ -119,7 +119,7 @@ export const operationsNav: NavGroup = {
 export const masterDataNav: NavGroup = {
   label: "Master Data",
   items: [
-    { label: "Destinations", href: "/master-data/destinations", icon: MapPin, description: "Destination / location master (India)" },
+    { label: "Locations", href: "/master-data/destinations", icon: MapPin, description: "Location master (India) — packages & website" },
     { label: "Hotels", href: "/master-data/hotels", icon: Building2, description: "Hotel inventory" },
     { label: "Vehicles", href: "/master-data/vehicles", icon: Car, description: "Transport fleet" },
     {

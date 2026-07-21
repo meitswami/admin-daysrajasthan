@@ -28,9 +28,11 @@ import {
 import {
   createStaffMember,
   deleteStaffMember,
+  findStaffByEmail,
   listStaffMembers,
   memberEffectivePermissions,
   sendStaffPasswordReset,
+  updateStaffCredentials,
   updateStaffMember,
 } from "@/lib/rbac/staff-store";
 import { SEED_PERMISSION_GROUP_ID } from "@/lib/rbac/staff-seed";
@@ -71,6 +73,11 @@ export function StaffManagementView() {
   const [useCustomPerms, setUseCustomPerms] = useState(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [credentialsTarget, setCredentialsTarget] = useState<TeamMember | null>(null);
+  const [credEmail, setCredEmail] = useState("");
+  const [credPassword, setCredPassword] = useState("");
+  const [credConfirm, setCredConfirm] = useState("");
+  const [credSaving, setCredSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<TeamMember | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -89,6 +96,17 @@ export function StaffManagementView() {
   const [newGroupName, setNewGroupName] = useState("");
 
   const canManage = can("team.manage");
+  const isSuperAdmin = currentMember.role === "superadmin";
+
+  const credEmailDuplicate = useMemo(() => {
+    if (!credentialsTarget || !credEmail.trim()) return null;
+    return findStaffByEmail(members, credEmail, credentialsTarget.id) ?? null;
+  }, [credentialsTarget, credEmail, members]);
+
+  const newEmailDuplicate = useMemo(() => {
+    if (!newEmail.trim()) return null;
+    return findStaffByEmail(members, newEmail) ?? null;
+  }, [members, newEmail]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -197,13 +215,81 @@ export function StaffManagementView() {
     }
   }
 
-  async function resetPassword(email: string) {
+  function openCredentials(member: TeamMember) {
+    setCredentialsTarget(member);
+    setCredEmail(member.email);
+    setCredPassword("");
+    setCredConfirm("");
+  }
+
+  function closeCredentials() {
+    setCredentialsTarget(null);
+    setCredEmail("");
+    setCredPassword("");
+    setCredConfirm("");
+  }
+
+  async function saveCredentials() {
+    if (!credentialsTarget || !canManage) return;
+    const email = credEmail.trim().toLowerCase();
+    if (!email) {
+      show("Email is required");
+      return;
+    }
+    if (credEmailDuplicate) {
+      show(`Email already used by ${credEmailDuplicate.name}`);
+      return;
+    }
+    if (credPassword && credPassword.length < 8) {
+      show("Password must be at least 8 characters");
+      return;
+    }
+    if (credPassword && credPassword !== credConfirm) {
+      show("Passwords do not match");
+      return;
+    }
+    const emailChanged = email !== credentialsTarget.email.toLowerCase();
+    if (!emailChanged && !credPassword) {
+      show("Change the email or enter a new password");
+      return;
+    }
+
+    setCredSaving(true);
+    const result = await updateStaffCredentials(
+      credentialsTarget.id,
+      {
+        email,
+        password: credPassword || undefined,
+      },
+      currentMember
+    );
+    setCredSaving(false);
+
+    if (!result.ok) {
+      show(result.error ?? "Could not update credentials");
+      return;
+    }
+
+    const parts: string[] = [];
+    if (result.password_set) parts.push("password updated");
+    if (result.email_changed) parts.push("email updated");
+    show(
+      parts.length
+        ? `Saved for ${credentialsTarget.name}: ${parts.join(" & ")}`
+        : `Saved credentials for ${credentialsTarget.name}`
+    );
+    closeCredentials();
+    void refresh();
+  }
+
+  async function sendResetLink() {
+    if (!credentialsTarget) return;
     setResetting(true);
-    const result = await sendStaffPasswordReset(email);
+    const result = await sendStaffPasswordReset(credentialsTarget.email);
     setResetting(false);
     show(
       result.ok
-        ? `Password reset link sent to ${email}`
+        ? `Password reset link sent to ${credentialsTarget.email}`
         : result.error ?? "Could not send reset email"
     );
   }
@@ -229,7 +315,11 @@ export function StaffManagementView() {
       show("Name and email are required");
       return;
     }
-    await createStaffMember(
+    if (newEmailDuplicate) {
+      show(`Email already used by ${newEmailDuplicate.name}`);
+      return;
+    }
+    const result = await createStaffMember(
       {
         name: newName,
         email: newEmail,
@@ -239,7 +329,11 @@ export function StaffManagementView() {
       },
       currentMember
     );
-    show(`Added ${newName}`);
+    if (!result.ok) {
+      show(result.error);
+      return;
+    }
+    show(`Added ${result.member.name}`);
     setAddOpen(false);
     setNewName("");
     setNewEmail("");
@@ -491,8 +585,7 @@ export function StaffManagementView() {
                             type="button"
                             size="sm"
                             variant="ghost"
-                            disabled={resetting}
-                            onClick={() => void resetPassword(m.email)}
+                            onClick={() => openCredentials(m)}
                           >
                             <KeyRound className="h-3.5 w-3.5" /> Reset pwd
                           </Button>
@@ -549,7 +642,7 @@ export function StaffManagementView() {
                 <Label>Email</Label>
                 <Input className="mt-1.5" value={selected.email} disabled />
                 <p className="mt-1 text-xs text-stone-500">
-                  Email is the login ID — use password reset to change access.
+                  To change login email or password, use <strong>Reset pwd</strong>.
                 </p>
               </div>
               <div>
@@ -786,6 +879,112 @@ export function StaffManagementView() {
         </div>
       </Modal>
 
+      <Modal
+        open={Boolean(credentialsTarget)}
+        onClose={() => {
+          if (!credSaving && !resetting) closeCredentials();
+        }}
+        title={
+          credentialsTarget
+            ? `Login access — ${credentialsTarget.name}`
+            : "Login access"
+        }
+        description="Set a new password here, or update the login email."
+      >
+        {credentialsTarget && (
+          <div className="space-y-4">
+            <div>
+              <Label>Login email</Label>
+              <Input
+                className="mt-1.5"
+                type="email"
+                value={credEmail}
+                disabled={!isSuperAdmin || credSaving}
+                onChange={(e) => setCredEmail(e.target.value)}
+              />
+              {credEmailDuplicate ? (
+                <p className="mt-1 text-xs text-red-600">
+                  Already used by {credEmailDuplicate.name} ({credEmailDuplicate.email})
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-stone-500">
+                  Must be unique — cannot match another staff member.
+                </p>
+              )}
+            </div>
+            <div>
+              <Label>New password</Label>
+              <Input
+                className="mt-1.5"
+                type="password"
+                autoComplete="new-password"
+                value={credPassword}
+                disabled={!isSuperAdmin || credSaving}
+                onChange={(e) => setCredPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </div>
+            <div>
+              <Label>Confirm password</Label>
+              <Input
+                className="mt-1.5"
+                type="password"
+                autoComplete="new-password"
+                value={credConfirm}
+                disabled={!isSuperAdmin || credSaving}
+                onChange={(e) => setCredConfirm(e.target.value)}
+                placeholder="Repeat new password"
+              />
+              {credPassword && credConfirm && credPassword !== credConfirm && (
+                <p className="mt-1 text-xs text-red-600">Passwords do not match</p>
+              )}
+            </div>
+            {!isSuperAdmin && (
+              <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Only a Super Admin can set password/email directly. You can still send a reset
+                link.
+              </p>
+            )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={resetting || credSaving}
+                onClick={() => void sendResetLink()}
+              >
+                {resetting ? "Sending…" : "Send reset link"}
+              </Button>
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={credSaving || resetting}
+                  onClick={closeCredentials}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={
+                    !isSuperAdmin ||
+                    credSaving ||
+                    Boolean(credEmailDuplicate) ||
+                    (!credPassword &&
+                      credEmail.trim().toLowerCase() ===
+                        credentialsTarget.email.toLowerCase()) ||
+                    Boolean(credPassword && credPassword !== credConfirm)
+                  }
+                  onClick={() => void saveCredentials()}
+                >
+                  <KeyRound className="h-4 w-4" />
+                  {credSaving ? "Saving…" : "Save changes"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add staff member">
         <div className="space-y-4">
           <div>
@@ -801,6 +1000,13 @@ export function StaffManagementView() {
               onChange={(e) => setNewEmail(e.target.value)}
               placeholder="name@rajasthantouring.com"
             />
+            {newEmailDuplicate ? (
+              <p className="mt-1 text-xs text-red-600">
+                Already used by {newEmailDuplicate.name}
+              </p>
+            ) : (
+              <p className="mt-1 text-xs text-stone-500">Must be unique across staff.</p>
+            )}
           </div>
           <div>
             <Label>Permission group</Label>
@@ -833,13 +1039,18 @@ export function StaffManagementView() {
             </Select>
           </div>
           <p className="text-xs text-stone-500">
-            After adding, use <strong>Reset pwd</strong> so they receive a secure password link.
+            After adding, use <strong>Reset pwd</strong> to set their password or send a reset
+            link.
           </p>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={() => void addMember()}>
+            <Button
+              type="button"
+              disabled={Boolean(newEmailDuplicate)}
+              onClick={() => void addMember()}
+            >
               <Plus className="h-4 w-4" /> Add
             </Button>
           </div>

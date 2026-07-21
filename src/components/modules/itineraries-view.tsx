@@ -1,11 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { PackageTypeSelect, PackageDurationSelect } from "@/components/ui/package-selects";
-import { PdfUploadField, CoverImageUploadField } from "@/components/ui/file-upload-field";
+import { PdfUploadField } from "@/components/ui/file-upload-field";
+import {
+  GalleryImagesField,
+  ImageThumbRow,
+  collectDisplayImages,
+} from "@/components/ui/gallery-images-field";
 import { Toggle } from "@/components/ui/toggle";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -14,7 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { Sheet } from "@/components/ui/sheet";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerLinkPanel } from "@/components/shared/customer-link-panel";
-import { MediaOverlayCard, MediaThumb } from "@/components/shared/media-overlay-card";
+import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import { getCustomerByEmail } from "@/lib/data/customer-links";
 import { downloadCsv } from "@/lib/utils/csv";
@@ -53,8 +57,13 @@ function parseForm(fd: FormData, base?: Itinerary): Omit<Itinerary, "id" | "down
     package_duration: String(fd.get("package_duration") || "3 Days 2 Nights"),
     show_on_website: fd.get("show_on_website") === "on",
     is_trending: fd.get("is_trending") === "on",
-    display_mode: (fd.get("display_mode") as DisplayMode) || "grid",
+    display_mode: (fd.get("display_mode") as DisplayMode) || "list",
     status: (fd.get("status") as ItineraryStatus) || "active",
+    gallery_urls: String(fd.get("gallery_urls") || "")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 4),
     updated_at: new Date().toISOString(),
   };
 }
@@ -74,12 +83,14 @@ function ItineraryFormFields({
 }) {
   const seed = item ?? cloneSource ?? null;
   const [pdfUrl, setPdfUrl] = useState(seed?.pdf_url ?? "");
-  const [coverUrl, setCoverUrl] = useState<string | null>(seed?.cover_image_url ?? null);
+  const [galleryUrls, setGalleryUrls] = useState<string[]>(
+    collectDisplayImages(seed?.cover_image_url, seed?.gallery_urls)
+  );
 
   useEffect(() => {
     const next = item ?? cloneSource ?? null;
     setPdfUrl(next?.pdf_url ?? "");
-    setCoverUrl(next?.cover_image_url ?? null);
+    setGalleryUrls(collectDisplayImages(next?.cover_image_url, next?.gallery_urls));
   }, [item, cloneSource, cloneFrom]);
 
   return (
@@ -93,7 +104,7 @@ function ItineraryFormFields({
               <option key={p.id} value={p.id}>{p.package_name} — {p.package_duration}</option>
             ))}
           </Select>
-          <p className="mt-1 text-xs text-stone-500">Clone PDF & cover for a client/lead variant</p>
+          <p className="mt-1 text-xs text-stone-500">Clone PDF & images for a client/lead variant</p>
         </div>
       )}
 
@@ -106,14 +117,10 @@ function ItineraryFormFields({
           onChange={(v) => setPdfUrl(v ?? "")}
           required
         />
-        <CoverImageUploadField
-          label="Upload Cover Image"
-          hint="Recommended 800×600 — png, jpg, jpeg, gif, webp"
-          value={coverUrl}
-          onChange={setCoverUrl}
-        />
+        <GalleryImagesField value={galleryUrls} onChange={setGalleryUrls} />
         <input type="hidden" name="pdf_url" value={pdfUrl} />
-        <input type="hidden" name="cover_image_url" value={coverUrl ?? ""} />
+        <input type="hidden" name="cover_image_url" value={galleryUrls[0] ?? ""} />
+        <input type="hidden" name="gallery_urls" value={galleryUrls.join("\n")} />
       </div>
 
       <div>
@@ -130,14 +137,14 @@ function ItineraryFormFields({
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label htmlFor="display_mode">Website display</Label>
-          <Select id="display_mode" name="display_mode" defaultValue={seed?.display_mode ?? "grid"} className="mt-1.5">
-            <option value="grid">Grid view</option>
+          <Label htmlFor="display_mode">List / Grid preference</Label>
+          <Select id="display_mode" name="display_mode" defaultValue={seed?.display_mode ?? "list"} className="mt-1.5">
             <option value="list">List view</option>
+            <option value="grid">Grid view</option>
           </Select>
         </div>
         <div>
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">Package status</Label>
           <Select id="status" name="status" defaultValue={seed?.status ?? "active"} className="mt-1.5">
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
@@ -147,7 +154,7 @@ function ItineraryFormFields({
       <div className="flex flex-wrap gap-6 rounded-xl border border-stone-100 bg-stone-50 p-4">
         <label className="flex items-center gap-2">
           <input type="checkbox" name="show_on_website" defaultChecked={seed?.show_on_website ?? true} className="rounded border-stone-300" />
-          <span className="text-sm font-medium text-stone-700">Show on website</span>
+          <span className="text-sm font-medium text-stone-700">Status: Active</span>
         </label>
         <label className="flex items-center gap-2">
           <input type="checkbox" name="is_trending" defaultChecked={seed?.is_trending ?? false} className="rounded border-stone-300" />
@@ -169,7 +176,7 @@ export function ItinerariesView({
   const [downloads, setDownloads] = useState(initialDownloads);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
-  const [viewMode, setViewMode] = useState<DisplayMode>("grid");
+  const [viewMode, setViewMode] = useState<DisplayMode>("list");
   const [addOpen, setAddOpen] = useState(false);
   const [editItem, setEditItem] = useState<Itinerary | null>(null);
   const [detailEmail, setDetailEmail] = useState<string | null>(null);
@@ -230,7 +237,7 @@ export function ItinerariesView({
     }
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, show_on_website: v } : i)));
     void updateMasterItinerary(id, { show_on_website: v }, currentMember);
-    show(v ? "Visible on website" : "Hidden from website");
+    show(v ? "Status: Active" : "Status: Inactive");
   }
 
   function toggleTrending(id: string) {
@@ -247,31 +254,49 @@ export function ItinerariesView({
 
   const columns: Column<Itinerary>[] = [
     {
+      key: "images",
+      header: "Images",
+      cell: (row) => (
+        <ImageThumbRow
+          urls={collectDisplayImages(row.cover_image_url, row.gallery_urls)}
+          size={44}
+        />
+      ),
+      hideOnMobile: true,
+    },
+    {
       key: "package",
       header: "Package",
       cell: (row) => (
-        <div className="flex items-center gap-3">
-          {row.cover_image_url && (
-            <Image src={row.cover_image_url} alt="" width={48} height={48} className="hidden h-12 w-12 rounded-lg object-cover sm:block" />
-          )}
-          <div>
-            <p className="font-medium text-stone-900">{row.package_name}</p>
-            <p className="text-xs text-stone-500">{row.destination} · {row.package_duration}</p>
-          </div>
+        <div>
+          <p className="font-medium text-stone-900">{row.package_name}</p>
+          <p className="text-xs text-stone-500">{row.destination} · {row.package_duration}</p>
         </div>
       ),
     },
     { key: "type", header: "Type", cell: (row) => <Badge variant="info">{row.package_type}</Badge>, hideOnMobile: true },
-    { key: "status", header: "Status", cell: (row) => <StatusBadge status={row.status} /> },
     {
-      key: "website",
-      header: "Website",
+      key: "status",
+      header: "Status",
       cell: (row) => (
-        <div className="flex items-center gap-2">
-          <Toggle checked={row.show_on_website} onChange={(v) => toggleWebsite(row.id, v)} />
-          {row.is_trending && <Star className="h-4 w-4 fill-amber-500 text-amber-500" />}
+        <div className="flex flex-col gap-2">
+          <StatusBadge status={row.status} />
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-stone-500">Status</span>
+            <Toggle
+              checked={row.show_on_website}
+              onChange={(v) => toggleWebsite(row.id, v)}
+              label={row.show_on_website ? "Active" : "Inactive"}
+            />
+          </div>
         </div>
       ),
+    },
+    {
+      key: "trending",
+      header: "",
+      cell: (row) =>
+        row.is_trending ? <Star className="h-4 w-4 fill-amber-500 text-amber-500" /> : null,
       hideOnMobile: true,
     },
     {
@@ -337,10 +362,10 @@ export function ItinerariesView({
   function handleExport() {
     downloadCsv(
       "itineraries.csv",
-      ["Package", "Type", "Duration", "Destination", "Website", "Trending", "Status", "Downloads", "Created by"],
+      ["Package", "Type", "Duration", "Destination", "Status", "Trending", "Package status", "Downloads", "Created by"],
       filtered.map((r) => [
         r.package_name, r.package_type ?? "", r.package_duration ?? "", r.destination ?? "",
-        r.show_on_website ? "yes" : "no", r.is_trending ? "yes" : "no", r.status, String(r.download_count),
+        r.show_on_website ? "Active" : "Inactive", r.is_trending ? "yes" : "no", r.status, String(r.download_count),
         r.created_by_name ?? "",
       ])
     );
@@ -367,6 +392,7 @@ export function ItinerariesView({
         package_duration: parsed.package_duration,
         pdf_url: parsed.pdf_url,
         cover_image_url: parsed.cover_image_url,
+        gallery_urls: parsed.gallery_urls ?? [],
         show_on_website: parsed.show_on_website,
         is_trending: parsed.is_trending,
         display_mode: parsed.display_mode,
@@ -405,6 +431,7 @@ export function ItinerariesView({
         package_duration: parsed.package_duration,
         pdf_url: parsed.pdf_url,
         cover_image_url: parsed.cover_image_url,
+        gallery_urls: parsed.gallery_urls ?? [],
         show_on_website: parsed.show_on_website,
         is_trending: parsed.is_trending,
         display_mode: parsed.display_mode,
@@ -466,7 +493,14 @@ export function ItinerariesView({
             >
               <div className="flex items-start justify-between gap-2">
                 <Badge className="bg-white/20 text-white backdrop-blur">{row.package_type}</Badge>
-                <Toggle checked={row.show_on_website} onChange={(v) => toggleWebsite(row.id, v)} />
+                <div className="flex items-center gap-2 rounded-full bg-black/40 px-2 py-1 backdrop-blur-sm">
+                  <span className="text-[10px] font-medium uppercase tracking-wide text-white/80">Status</span>
+                  <Toggle
+                    checked={row.show_on_website}
+                    onChange={(v) => toggleWebsite(row.id, v)}
+                    label={row.show_on_website ? "Active" : "Inactive"}
+                  />
+                </div>
               </div>
               <div className="mt-auto space-y-3 pt-6">
                 <div>
@@ -505,19 +539,23 @@ export function ItinerariesView({
           mobileCard={(row) => (
             <div className="space-y-2">
               <div className="flex gap-3">
-                <MediaThumb
-                  imageUrl={row.cover_image_url}
-                  imageCategory={itineraryImageCategory(row)}
-                  className="h-16 w-16"
-                  width={64}
-                  height={64}
+                <ImageThumbRow
+                  urls={collectDisplayImages(row.cover_image_url, row.gallery_urls)}
+                  size={48}
                 />
                 <div className="flex-1">
                   <p className="font-semibold">{row.package_name}</p>
                   <p className="text-sm text-stone-500">{row.package_type} · {row.package_duration}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     <StatusBadge status={row.status} />
-                    <Toggle checked={row.show_on_website} onChange={(v) => toggleWebsite(row.id, v)} label="Web" />
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium text-stone-500">Status</span>
+                      <Toggle
+                        checked={row.show_on_website}
+                        onChange={(v) => toggleWebsite(row.id, v)}
+                        label={row.show_on_website ? "Active" : "Inactive"}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

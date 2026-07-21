@@ -51,11 +51,19 @@ export interface WebsiteContentItem {
   name: string;
   subtitle?: string | null;
   image_url?: string | null;
+  /** Up to 6 gallery images (cover + extras) */
+  gallery_urls?: string[];
   show_on_website: boolean;
   is_trending?: boolean;
   display_mode: DisplayMode;
   country?: string | null;
   region?: CountryRegion | null;
+  /** Hotels: Google Maps / listing URL */
+  google_maps_url?: string | null;
+  /** Vehicles: type e.g. Sedan, SUV */
+  vehicle_type?: string | null;
+  /** Vehicles: seating capacity */
+  capacity?: string | null;
   created_at: string;
   created_by_id?: string | null;
   created_by_name?: string | null;

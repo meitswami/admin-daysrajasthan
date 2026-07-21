@@ -66,16 +66,34 @@ function writeLocal(entity: MasterContentEntity, items: WebsiteContentItem[]) {
   localStorage.setItem(storageKey(entity), JSON.stringify(items));
 }
 
+function parseGallery(row: Record<string, unknown>): string[] {
+  const raw = row.gallery_urls;
+  if (Array.isArray(raw)) return raw.filter((u): u is string => typeof u === "string" && Boolean(u));
+  return [];
+}
+
 function mapRow(entity: MasterContentEntity, row: Record<string, unknown>): WebsiteContentItem {
+  const gallery = parseGallery(row);
+  const imageUrl = (row.image_url as string | null) ?? gallery[0] ?? null;
   return {
     id: String(row.id),
     name: String(row.name ?? ""),
     subtitle: (row.subtitle as string | null) ?? null,
-    image_url: (row.image_url as string | null) ?? null,
+    image_url: imageUrl,
+    gallery_urls: gallery.length
+      ? gallery
+      : imageUrl
+        ? [imageUrl]
+        : [],
     show_on_website: Boolean(row.show_on_website ?? true),
     is_trending: entity === "destinations" ? Boolean(row.is_trending) : undefined,
-    display_mode: ((row.display_mode as DisplayMode) ?? "grid") as DisplayMode,
+    display_mode: ((row.display_mode as DisplayMode) ?? "list") as DisplayMode,
     country: (row.country as string | null) ?? "India",
+    google_maps_url:
+      entity === "hotels" ? ((row.google_maps_url as string | null) ?? null) : undefined,
+    vehicle_type:
+      entity === "vehicles" ? ((row.vehicle_type as string | null) ?? null) : undefined,
+    capacity: entity === "vehicles" ? ((row.capacity as string | null) ?? null) : undefined,
     created_at: String(row.created_at ?? new Date().toISOString()),
     created_by_id: (row.created_by as string | null) ?? null,
     created_by_name: (row.created_by_name as string | null) ?? null,
@@ -110,10 +128,14 @@ export type MasterContentInput = {
   name: string;
   subtitle?: string | null;
   image_url?: string | null;
+  gallery_urls?: string[];
   show_on_website?: boolean;
   is_trending?: boolean;
   display_mode?: DisplayMode;
   country?: string | null;
+  google_maps_url?: string | null;
+  vehicle_type?: string | null;
+  capacity?: string | null;
 };
 
 export async function createMasterContent(
@@ -122,15 +144,21 @@ export async function createMasterContent(
   actor: TeamMember
 ): Promise<WebsiteContentItem> {
   const now = new Date().toISOString();
+  const gallery = (input.gallery_urls ?? []).filter(Boolean).slice(0, 6);
+  const cover = input.image_url || gallery[0] || null;
   const item: WebsiteContentItem = {
     id: crypto.randomUUID(),
     name: input.name.trim(),
     subtitle: input.subtitle?.trim() || null,
-    image_url: input.image_url || null,
+    image_url: cover,
+    gallery_urls: gallery.length ? gallery : cover ? [cover] : [],
     show_on_website: input.show_on_website ?? true,
     is_trending: entity === "destinations" ? Boolean(input.is_trending) : undefined,
-    display_mode: input.display_mode ?? "grid",
+    display_mode: input.display_mode ?? "list",
     country: input.country ?? "India",
+    google_maps_url: entity === "hotels" ? input.google_maps_url?.trim() || null : undefined,
+    vehicle_type: entity === "vehicles" ? input.vehicle_type?.trim() || null : undefined,
+    capacity: entity === "vehicles" ? input.capacity?.trim() || null : undefined,
     created_at: now,
     updated_at: now,
     created_by_id: actor.id,
@@ -147,6 +175,7 @@ export async function createMasterContent(
         name: item.name,
         subtitle: item.subtitle,
         image_url: item.image_url,
+        gallery_urls: item.gallery_urls ?? [],
         show_on_website: item.show_on_website,
         display_mode: item.display_mode,
         created_by: actor.id,
@@ -154,6 +183,11 @@ export async function createMasterContent(
       };
       if (entity !== "vehicles") payload.country = item.country ?? "India";
       if (entity === "destinations") payload.is_trending = item.is_trending ?? false;
+      if (entity === "hotels") payload.google_maps_url = item.google_maps_url ?? null;
+      if (entity === "vehicles") {
+        payload.vehicle_type = item.vehicle_type ?? null;
+        payload.capacity = item.capacity ?? null;
+      }
 
       const { error } = await supabase.from(TABLE_MAP[entity]).insert(payload);
       if (!error) persisted = true;
@@ -197,11 +231,20 @@ export async function updateMasterContent(
       const payload: Record<string, unknown> = { updated_at: now };
       if (patch.name !== undefined) payload.name = patch.name.trim();
       if (patch.subtitle !== undefined) payload.subtitle = patch.subtitle;
-      if (patch.image_url !== undefined) payload.image_url = patch.image_url;
+      if (patch.gallery_urls !== undefined) {
+        const gallery = patch.gallery_urls.slice(0, 6);
+        payload.gallery_urls = gallery;
+        payload.image_url = patch.image_url !== undefined ? patch.image_url : gallery[0] ?? null;
+      } else if (patch.image_url !== undefined) {
+        payload.image_url = patch.image_url;
+      }
       if (patch.show_on_website !== undefined) payload.show_on_website = patch.show_on_website;
       if (patch.display_mode !== undefined) payload.display_mode = patch.display_mode;
       if (patch.country !== undefined) payload.country = patch.country;
       if (patch.is_trending !== undefined) payload.is_trending = patch.is_trending;
+      if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
+      if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
+      if (patch.capacity !== undefined) payload.capacity = patch.capacity;
 
       const { data, error } = await supabase
         .from(TABLE_MAP[entity])
@@ -230,10 +273,20 @@ export async function updateMasterContent(
   const list = readLocal(entity);
   const idx = list.findIndex((i) => i.id === id);
   if (idx < 0) return null;
+  const gallery =
+    patch.gallery_urls !== undefined
+      ? patch.gallery_urls.filter(Boolean).slice(0, 6)
+      : list[idx].gallery_urls;
+  const cover =
+    patch.image_url !== undefined
+      ? patch.image_url
+      : gallery?.[0] ?? list[idx].image_url;
   list[idx] = {
     ...list[idx],
     ...patch,
     name: patch.name !== undefined ? patch.name.trim() : list[idx].name,
+    gallery_urls: gallery,
+    image_url: cover,
     updated_at: now,
   };
   writeLocal(entity, list);
