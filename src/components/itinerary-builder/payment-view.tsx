@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input, Label } from "@/components/ui/input";
+import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
 import {
   advanceRateFromPercent,
@@ -23,7 +25,11 @@ import {
   saveSnapshotRevision,
   updatePaymentStatus,
 } from "@/lib/itinerary-builder/storage";
-import type { ClientItineraryRecord, ItinerarySnapshot } from "@/types/itinerary-builder";
+import type {
+  ClientItineraryRecord,
+  ItinerarySnapshot,
+  PaymentStatus,
+} from "@/types/itinerary-builder";
 import { cn } from "@/lib/utils";
 import {
   Building2,
@@ -31,9 +37,17 @@ import {
   Copy,
   CreditCard,
   Download,
+  Pencil,
   QrCode,
   Smartphone,
+  Trash2,
 } from "lucide-react";
+
+function statusForAmount(amount: number, total: number): PaymentStatus {
+  if (amount <= 0) return "unpaid";
+  if (total > 0 && amount >= total) return "paid";
+  return "partial";
+}
 
 export function PaymentView({ itineraryId }: { itineraryId: string }) {
   const router = useRouter();
@@ -41,6 +55,8 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
   const [snapshot, setSnapshot] = useState<ItinerarySnapshot | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editAmount, setEditAmount] = useState(0);
 
   useEffect(() => {
     const r = getClientItinerary(itineraryId);
@@ -113,17 +129,47 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
     return result;
   }
 
-  function handleRecordAdvance() {
+  function handleRecordPayment() {
     const saved = handleSave();
     if (!saved) return;
     const amount = primaryAdvance;
     const updated = updatePaymentStatus(
       itineraryId,
-      amount >= primaryTotal && primaryTotal > 0 ? "paid" : "partial",
+      statusForAmount(amount, primaryTotal),
       amount
     );
     if (updated) setRecord(updated);
-    show(`Advance of ${formatInr(amount)} recorded (${advancePercent}%)`);
+    show(`Payment of ${formatInr(amount)} recorded (${advancePercent}%)`);
+  }
+
+  function openEditPayment() {
+    if (!record) return;
+    setEditAmount(record.amount_paid);
+    setEditOpen(true);
+  }
+
+  function handleSaveEditedPayment() {
+    const amount = Math.max(0, Math.round(editAmount) || 0);
+    const updated = updatePaymentStatus(
+      itineraryId,
+      statusForAmount(amount, primaryTotal),
+      amount
+    );
+    if (updated) setRecord(updated);
+    setEditOpen(false);
+    show(
+      amount <= 0
+        ? "Payment cleared"
+        : `Payment updated to ${formatInr(amount)}`
+    );
+  }
+
+  function handleDeletePayment() {
+    if (!window.confirm("Clear the recorded payment for this quote?")) return;
+    const updated = updatePaymentStatus(itineraryId, "unpaid", 0);
+    if (updated) setRecord(updated);
+    setEditOpen(false);
+    show("Payment deleted");
   }
 
   /** Agents may skip collecting payment and go straight to the quotation PDF */
@@ -359,10 +405,10 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
               <Button
                 type="button"
                 className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
-                onClick={handleRecordAdvance}
+                onClick={handleRecordPayment}
                 disabled={primaryAdvance <= 0}
               >
-                Record Advance Payment
+                Record Payment
               </Button>
             </div>
             <p className="text-right text-xs text-stone-500">
@@ -371,13 +417,77 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
           </div>
         </div>
 
-        {record.payment_status !== "unpaid" && (
-          <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center text-sm text-emerald-800">
-            Payment status: <strong>{record.payment_status}</strong> · Amount paid:{" "}
-            {formatInr(record.amount_paid)}
-          </p>
+        {(record.payment_status !== "unpaid" || record.amount_paid > 0) && (
+          <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <p>
+              Payment status: <strong>{record.payment_status}</strong> · Amount paid:{" "}
+              {formatInr(record.amount_paid)}
+            </p>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={openEditPayment}
+                className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-white px-2.5 py-1 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePayment}
+                className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
+              </button>
+            </div>
+          </div>
         )}
       </div>
+
+      <Modal
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        title="Edit payment"
+        description="Update the amount paid for this quote"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-stone-600">
+            Package total: {formatInr(primaryTotal)}
+          </p>
+          <div>
+            <Label htmlFor="edit-amount-paid">Amount paid (₹)</Label>
+            <Input
+              id="edit-amount-paid"
+              type="number"
+              min={0}
+              value={editAmount}
+              onChange={(e) => setEditAmount(Number(e.target.value) || 0)}
+              className="mt-1.5"
+            />
+            <p className="mt-1.5 text-xs text-stone-500">
+              Status will be set to{" "}
+              <strong>
+                {statusForAmount(Math.max(0, Math.round(editAmount) || 0), primaryTotal)}
+              </strong>
+              .
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="flex-1"
+              onClick={() => setEditOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" className="flex-1" onClick={handleSaveEditedPayment}>
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

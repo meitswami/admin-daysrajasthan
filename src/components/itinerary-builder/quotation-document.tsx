@@ -16,10 +16,41 @@ import {
   getPreviewTheme,
   type PreviewTheme,
 } from "@/lib/itinerary-builder/preview-themes";
+import { PREVIEW_CONTACTS, contentBlocksToStrings } from "@/lib/itinerary-builder/policy-master";
 import type { CategoryTotalSummary, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
 import { DocumentBrandFooter } from "@/components/branding/document-brand";
 import { QuotationThemeHero } from "@/components/itinerary-builder/quotation-theme-heroes";
+
+function brandWithSelectedContact(
+  brand: ReportBrand,
+  contactId: string | null | undefined
+): ReportBrand {
+  const contact = contactId
+    ? PREVIEW_CONTACTS.find((c) => c.id === contactId)
+    : undefined;
+  if (!contact) return brand;
+  return {
+    ...brand,
+    phone: contact.phone,
+    email: contact.email,
+  };
+}
+
+function policyLinesFromSnapshot(snapshot: ItinerarySnapshot): {
+  inclusions: string[];
+  exclusions: string[];
+} {
+  const inclusions =
+    snapshot.inclusions?.length > 0
+      ? snapshot.inclusions
+      : contentBlocksToStrings(snapshot.inclusion_items ?? []);
+  const exclusions =
+    snapshot.exclusions?.length > 0
+      ? snapshot.exclusions
+      : contentBlocksToStrings(snapshot.exclusion_items ?? []);
+  return { inclusions, exclusions };
+}
 
 function StarRating({ rating }: { rating: number }) {
   const full = Math.floor(rating);
@@ -340,8 +371,13 @@ export function QuotationDocument({
   categoryTotals?: CategoryTotalSummary[];
   mode?: "screen" | "print";
 }) {
-  const { header, client, days, inclusions, exclusions, terms, cost_sheet, category_pricing } = snapshot;
+  const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
+  const { inclusions, exclusions } = policyLinesFromSnapshot(snapshot);
   const theme = getPreviewTheme(snapshot.preview_theme);
+  const displayBrand = brandWithSelectedContact(brand, snapshot.selected_contact_id);
+  const selectedContact = snapshot.selected_contact_id
+    ? PREVIEW_CONTACTS.find((c) => c.id === snapshot.selected_contact_id) ?? null
+    : null;
   const clientLabel = [client.title, client.client_name].filter(Boolean).join(" ");
   const nightSegments = buildNightSegments(days, client.travel_date);
   const destinationsSummary = formatDestinationsSummary(nightSegments);
@@ -358,18 +394,21 @@ export function QuotationDocument({
       style={{
         backgroundColor:
           theme.id === 3 ? "#FBF7F0" : theme.id === 1 ? "#FFFDF6" : theme.id === 5 ? "#F8FAFC" : "#ffffff",
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
       }}
       data-theme={theme.id}
     >
       <QuotationThemeHero
         theme={theme}
-        brand={brand}
+        brand={displayBrand}
         clientLabel={clientLabel}
         client={client}
         header={header}
         destinationsSummary={destinationsSummary}
         quoteId={quoteId}
         versionNumber={versionNumber}
+        contactName={selectedContact?.name ?? null}
       />
 
       <div className="space-y-8 px-6 py-8">
@@ -534,7 +573,7 @@ export function QuotationDocument({
           </p>
         </section>
 
-        <DocumentBrandFooter brand={brand} />
+        <DocumentBrandFooter brand={displayBrand} />
         <p className="text-center text-[10px] text-stone-400">
           This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme {theme.id}{" "}
           {theme.styleName}

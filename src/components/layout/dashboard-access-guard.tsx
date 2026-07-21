@@ -5,11 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { canAccessModule } from "@/lib/rbac/permissions";
 import { ensureClientSession } from "@/lib/auth/ensure-client-session";
 import { needsMfaChallenge } from "@/lib/auth/demo-session";
-import {
-  findSuperAdminMemberId,
-  getCurrentTeamMember,
-  setCurrentTeamMemberId,
-} from "@/lib/rbac/current-user";
+import { getCurrentTeamMember } from "@/lib/rbac/current-user";
 import { ShieldOff } from "lucide-react";
 
 export function DashboardAccessGuard({ children }: { children: ReactNode }) {
@@ -49,12 +45,6 @@ export function DashboardAccessGuard({ children }: { children: ReactNode }) {
     };
   }, [pathname, router]);
 
-  function continueAsSuperAdmin() {
-    setCurrentTeamMemberId(findSuperAdminMemberId());
-    // Full reload so sidebar + guard pick up the new role
-    window.location.assign(pathname || "/settings");
-  }
-
   if (!ready) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-stone-500">
@@ -70,16 +60,6 @@ export function DashboardAccessGuard({ children }: { children: ReactNode }) {
         <h1 className="text-lg font-semibold text-stone-900">Access denied</h1>
         <p className="max-w-md text-sm text-stone-600">
           Current role{roleLabel ? `: ${roleLabel}` : ""} does not have permission to view this page.
-        </p>
-        <button
-          type="button"
-          onClick={continueAsSuperAdmin}
-          className="mt-2 rounded-lg bg-amber-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-amber-700"
-        >
-          Continue as Super Admin
-        </button>
-        <p className="max-w-md text-xs text-stone-500">
-          Restores the Super Admin session (Real DB admin@daysrajasthan.com when signed in).
         </p>
       </div>
     );

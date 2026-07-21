@@ -29,8 +29,20 @@ body {
   .print\:hidden,
   aside,
   nav[class*="sidebar"],
-  header.no-print-header {
+  header.no-print-header,
+  [data-chat-widget],
+  [class*="chat-widget"] {
     display: none !important;
+  }
+
+  /* Keep themed quotation colors, gradients, and image fills in PDF */
+  html,
+  body,
+  .quotation-document,
+  .quotation-document * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
 
   body {
@@ -41,16 +53,38 @@ body {
     padding-left: 0 !important;
   }
 
+  @page {
+    margin: 10mm;
+  }
+
   .quotation-document {
     box-shadow: none !important;
     border: none !important;
     max-width: 100% !important;
+    width: 100% !important;
+    border-radius: 0 !important;
   }
 
   .quotation-document section,
-  .quotation-document .break-inside-avoid {
+  .quotation-document .break-inside-avoid,
+  .quotation-document header {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+
+  /* Preserve cover/hero image height when absolutely positioned */
+  .quotation-hero-cover {
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  .quotation-hero-cover > img {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
   }
 
   .print-report {

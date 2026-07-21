@@ -51,8 +51,8 @@ export function ClientProposalView({
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-amber-50/80 to-stone-100 print:bg-white">
-      <div className="no-print sticky top-0 z-10 border-b border-amber-200/60 bg-white/90 backdrop-blur">
+    <div className="min-h-screen bg-gradient-to-b from-amber-50/80 to-stone-100 print:bg-transparent">
+      <div className="no-print sticky top-0 z-10 border-b border-amber-200/60 bg-white/90 backdrop-blur print:hidden">
         <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">

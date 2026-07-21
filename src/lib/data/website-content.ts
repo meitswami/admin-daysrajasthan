@@ -81,9 +81,50 @@ export const cities: WebsiteContentItem[] = [
 ];
 
 export const hotels: WebsiteContentItem[] = [
-  { id: "h-001", name: "Heritage Palace Hotel", subtitle: "Jaipur · 5 Star", country: "India", image_url: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80", show_on_website: true, display_mode: "list", created_at: "2026-01-10T08:00:00Z" },
-  { id: "h-002", name: "Lake View Resort", subtitle: "Udaipur · 4 Star", country: "India", image_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80", show_on_website: true, display_mode: "list", created_at: "2026-01-10T08:00:00Z" },
-  { id: "h-003", name: "Desert Camp Luxury", subtitle: "Jaisalmer", country: "India", image_url: "https://images.unsplash.com/photo-1477587458883-47145ed94245?w=800&q=80", show_on_website: false, display_mode: "list", created_at: "2026-01-10T08:00:00Z" },
+  {
+    id: "h-001",
+    name: "Heritage Palace Hotel",
+    category: "Deluxe Hotels",
+    location: "Jaipur",
+    price_description: "Starting from ₹4,500 per night | Includes breakfast",
+    rating: 4.5,
+    reviews_count: 320,
+    google_maps_url: "https://maps.google.com",
+    country: "India",
+    image_url: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
+    show_on_website: true,
+    display_mode: "list",
+    created_at: "2026-01-10T08:00:00Z",
+  },
+  {
+    id: "h-002",
+    name: "Lake View Resort",
+    category: "Super Deluxe Hotels",
+    location: "Udaipur",
+    price_description: null,
+    rating: 4.2,
+    reviews_count: 180,
+    google_maps_url: "https://maps.google.com",
+    country: "India",
+    image_url: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80",
+    show_on_website: true,
+    display_mode: "list",
+    created_at: "2026-01-10T08:00:00Z",
+  },
+  {
+    id: "h-003",
+    name: "Desert Camp Luxury",
+    category: "Luxury Hotels",
+    location: "Jaisalmer",
+    price_description: "Not specified",
+    rating: 4.0,
+    reviews_count: 95,
+    country: "India",
+    image_url: "https://images.unsplash.com/photo-1477587458883-47145ed94245?w=800&q=80",
+    show_on_website: false,
+    display_mode: "list",
+    created_at: "2026-01-10T08:00:00Z",
+  },
 ];
 
 export const vehicles: WebsiteContentItem[] = [

@@ -1,6 +1,7 @@
 import type { ReportBrand } from "@/lib/branding/report-brand";
 import type { PreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 import type { ItinerarySnapshot } from "@/types/itinerary-builder";
+import { formatDate } from "@/lib/utils";
 import { Mail, MapPin, Phone, Printer } from "lucide-react";
 
 type HeroProps = {
@@ -12,6 +13,7 @@ type HeroProps = {
   destinationsSummary: string;
   quoteId: string;
   versionNumber: number;
+  contactName?: string | null;
 };
 
 function BrandMark({ brand }: { brand: ReportBrand }) {
@@ -41,7 +43,9 @@ export function Theme1Hero({
   header,
   destinationsSummary,
   quoteId,
+  contactName,
 }: HeroProps) {
+  const travelDateLabel = client.travel_date ? formatDate(client.travel_date) : null;
   return (
     <header className="overflow-hidden">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#E8D48B] bg-[#FFF8E7] px-6 py-4">
@@ -49,7 +53,11 @@ export function Theme1Hero({
           <BrandMark brand={brand} />
           <div>
             <p className="text-sm font-bold uppercase tracking-wide text-[#8B6914]">{brand.companyName}</p>
-            <p className="text-[11px] text-stone-500">{brand.email}</p>
+            {contactName ? (
+              <p className="text-[11px] text-stone-600">Consultant: {contactName}</p>
+            ) : (
+              <p className="text-[11px] text-stone-500">{brand.email}</p>
+            )}
           </div>
         </div>
         <div className="max-w-xs text-right text-[11px] leading-relaxed text-stone-600">
@@ -70,7 +78,7 @@ export function Theme1Hero({
         </div>
       </div>
 
-      <div className="relative min-h-[280px]">
+      <div className="quotation-hero-cover relative min-h-[280px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={theme.heroImage}
@@ -91,13 +99,14 @@ export function Theme1Hero({
         <p className="mt-1 text-sm text-amber-50">
           {header.duration_label}
           {client.adults ? ` · ${client.adults} Adults` : ""}
+          {client.rooms ? ` · ${client.rooms} Rooms` : ""}
         </p>
         <p className="mt-2 text-xs uppercase tracking-widest text-amber-100">{header.title}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 bg-[#1e293b] px-6 py-2 text-xs text-amber-200">
         <span>{quoteId}</span>
-        {client.travel_date && <span>Travel Date: {client.travel_date}</span>}
+        {travelDateLabel && <span>Travel Date: {travelDateLabel}</span>}
         {destinationsSummary && <span className="truncate">{destinationsSummary}</span>}
       </div>
 
@@ -123,6 +132,7 @@ export function Theme2Hero({
   client,
   header,
   destinationsSummary,
+  contactName,
 }: HeroProps) {
   return (
     <header className="bg-white px-6 py-6">
@@ -131,7 +141,9 @@ export function Theme2Hero({
           <BrandMark brand={brand} />
           <div>
             <p className="text-sm font-bold text-stone-900">{brand.companyName}</p>
-            <p className="text-[11px] text-stone-500">Experience the World</p>
+            <p className="text-[11px] text-stone-500">
+              {contactName ? `Consultant: ${contactName}` : "Experience the World"}
+            </p>
           </div>
         </div>
         <a
@@ -207,6 +219,7 @@ export function Theme3Hero({
   client,
   header,
   destinationsSummary,
+  contactName,
 }: HeroProps) {
   const circles = theme.gallery.slice(0, 3);
   return (
@@ -229,7 +242,10 @@ export function Theme3Hero({
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <BrandMark brand={brand} />
-          <p className="text-sm font-bold text-[#7B1E2E]">{brand.companyName}</p>
+          <div>
+            <p className="text-sm font-bold text-[#7B1E2E]">{brand.companyName}</p>
+            {contactName && <p className="text-[11px] text-stone-500">{contactName}</p>}
+          </div>
         </div>
         <a
           href={`https://wa.me/${brand.phone.replace(/\D/g, "")}`}
@@ -318,10 +334,12 @@ export function Theme4Hero({
   header,
   destinationsSummary,
   quoteId,
+  contactName,
 }: HeroProps) {
+  const travelDateLabel = client.travel_date ? formatDate(client.travel_date) : null;
   return (
     <header className="overflow-hidden">
-      <div className="relative min-h-[300px]">
+      <div className="quotation-hero-cover relative min-h-[300px]">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={theme.heroImage} alt="" className="absolute inset-0 h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-r from-[#8B3A1A]/90 via-[#C45C26]/75 to-transparent" />
@@ -329,7 +347,10 @@ export function Theme4Hero({
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <BrandMark brand={brand} />
-              <p className="text-sm font-bold">{brand.companyName}</p>
+              <div>
+                <p className="text-sm font-bold">{brand.companyName}</p>
+                {contactName && <p className="text-[11px] text-orange-100">{contactName}</p>}
+              </div>
             </div>
             <span className="rounded-full bg-white/20 px-3 py-1 text-xs backdrop-blur">{quoteId}</span>
           </div>
@@ -342,8 +363,8 @@ export function Theme4Hero({
             )}
             <h1 className="mt-3 text-2xl font-bold uppercase leading-tight sm:text-3xl">{header.title}</h1>
             {destinationsSummary && <p className="mt-2 text-sm text-orange-50">{destinationsSummary}</p>}
-            {client.travel_date && (
-              <p className="mt-2 text-xs text-orange-100">Travel Date: {client.travel_date}</p>
+            {travelDateLabel && (
+              <p className="mt-2 text-xs text-orange-100">Travel Date: {travelDateLabel}</p>
             )}
           </div>
         </div>
@@ -364,7 +385,9 @@ export function Theme5Hero({
   header,
   destinationsSummary,
   quoteId,
+  contactName,
 }: HeroProps) {
+  const travelDateLabel = client.travel_date ? formatDate(client.travel_date) : null;
   return (
     <header className="overflow-hidden bg-[#0D1B2A] text-white">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
@@ -372,7 +395,9 @@ export function Theme5Hero({
           <BrandMark brand={brand} />
           <div>
             <p className="text-sm font-bold">{brand.companyName}</p>
-            <p className="text-[11px] text-sky-200/80">{brand.phone}</p>
+            <p className="text-[11px] text-sky-200/80">
+              {contactName ? `${contactName} · ${brand.phone}` : brand.phone}
+            </p>
           </div>
         </div>
         <span className="rounded-full border border-amber-300/40 px-3 py-1 text-xs text-amber-200">
@@ -392,8 +417,8 @@ export function Theme5Hero({
             {header.title}
           </h1>
           {destinationsSummary && <p className="mt-3 text-sm text-sky-100/90">{destinationsSummary}</p>}
-          {client.travel_date && (
-            <p className="mt-2 text-xs text-sky-200/70">Travel Date: {client.travel_date}</p>
+          {travelDateLabel && (
+            <p className="mt-2 text-xs text-sky-200/70">Travel Date: {travelDateLabel}</p>
           )}
         </div>
         <div className="relative mx-auto w-full max-w-sm">

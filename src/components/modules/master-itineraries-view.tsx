@@ -30,6 +30,7 @@ import {
 import { listMasterContent } from "@/lib/master-data/content-store";
 import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
 import { Lock, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { Toggle } from "@/components/ui/toggle";
 
 const PACKAGE_TYPES: PackageType[] = [
   "Local Sight Seeing",
@@ -66,6 +67,53 @@ function destinationFromDays(days: ItineraryDayPlan[]): string | null {
     ...new Set(days.map((d) => d.location.trim()).filter(Boolean)),
   ];
   return locations.length ? locations.join(" · ") : null;
+}
+
+/** Tour code from slug prefix (e.g. dr004-02-days-… → DR004) */
+function tourCodeOf(item: Itinerary): string {
+  const slug = item.slug?.trim();
+  if (!slug) return "—";
+  const match = slug.match(/^([a-zA-Z]+\d+)/);
+  return (match?.[1] ?? slug.split("-")[0] ?? slug).toUpperCase();
+}
+
+/** Locations with night counts from day plan, else destination fallback */
+function locationsCountOf(item: Itinerary): string {
+  const days = item.days ?? [];
+  const segments: { name: string; nights: number }[] = [];
+  for (const day of days) {
+    const name = day.location.trim();
+    if (!name) continue;
+    const last = segments[segments.length - 1];
+    if (last && last.name === name) last.nights += 1;
+    else segments.push({ name, nights: 1 });
+  }
+  if (segments.length) {
+    return segments.map((s) => `${s.name} ${s.nights}-N`).join(", ");
+  }
+  return item.destination?.trim() || "—";
+}
+
+function StatusToggle({
+  active,
+  disabled,
+  onChange,
+}: {
+  active: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-medium text-stone-500">Status</span>
+      <Toggle
+        checked={active}
+        onChange={onChange}
+        label={active ? "Active" : "Inactive"}
+        disabled={disabled}
+      />
+    </div>
+  );
 }
 
 function StringListField({
@@ -176,13 +224,18 @@ export function MasterItinerariesView() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return items.filter(
-      (i) =>
-        !q ||
+    return items.filter((i) => {
+      if (!q) return true;
+      return (
         i.package_name.toLowerCase().includes(q) ||
         (i.destination?.toLowerCase().includes(q) ?? false) ||
-        (i.days ?? []).some((d) => d.location.toLowerCase().includes(q) || d.title.toLowerCase().includes(q))
-    );
+        (i.package_duration?.toLowerCase().includes(q) ?? false) ||
+        tourCodeOf(i).toLowerCase().includes(q) ||
+        (i.days ?? []).some(
+          (d) => d.location.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+        )
+      );
+    });
   }, [items, search]);
 
   function resetForm() {
@@ -314,6 +367,17 @@ export function MasterItinerariesView() {
     void refresh();
   }
 
+  async function toggleStatus(item: Itinerary, active: boolean) {
+    if (!canEditMasterRecord(currentMember, item)) {
+      show("You can only edit your own itineraries");
+      return;
+    }
+    const status = active ? "active" : "inactive";
+    setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, status } : row)));
+    await updateMasterItinerary(item.id, { status }, currentMember);
+    show(active ? "Marked active" : "Marked inactive");
+  }
+
   return (
     <>
       <Header
@@ -342,25 +406,24 @@ export function MasterItinerariesView() {
           <p className="text-sm text-stone-500">Loading…</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="bg-stone-50 text-left text-xs uppercase text-stone-500">
+            <table className="w-full min-w-[880px] text-sm">
+              <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
-                  <th className="px-3 py-2">Images</th>
-                  <th className="px-3 py-2">Package</th>
+                  <th className="w-12 px-3 py-2">S.No.</th>
+                  <th className="px-3 py-2">Image</th>
+                  <th className="px-3 py-2">Package Title</th>
                   <th className="px-3 py-2">Duration</th>
-                  <th className="px-3 py-2">Created by</th>
-                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Locations (Count)</th>
+                  <th className="px-3 py-2">Tour Code</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
-                {filtered.map((item) => {
+                {filtered.map((item, index) => {
                   const editable = canEditMasterRecord(currentMember, item);
-                  const dayLocations = [
-                    ...new Set((item.days ?? []).map((d) => d.location).filter(Boolean)),
-                  ];
                   return (
                     <tr key={item.id}>
+                      <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                       <td className="px-3 py-3">
                         <ImageThumbRow
                           urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
@@ -369,26 +432,22 @@ export function MasterItinerariesView() {
                       </td>
                       <td className="px-3 py-3">
                         <p className="font-medium text-stone-900">{item.package_name}</p>
-                        <p className="text-xs text-stone-500">
-                          {(dayLocations.length ? dayLocations.join(" · ") : item.destination) ||
-                            "—"}{" "}
-                          · {item.package_type}
-                        </p>
+                        {!editable && <p className="text-xs text-amber-700">View only</p>}
                       </td>
-                      <td className="px-3 py-3 text-stone-600">{item.package_duration}</td>
                       <td className="px-3 py-3 text-stone-600">
-                        {item.created_by_name ?? "Unknown"}
-                        {!editable && (
-                          <span className="ml-1 text-xs text-amber-700">(view only)</span>
-                        )}
+                        {item.package_duration ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-stone-600">{locationsCountOf(item)}</td>
+                      <td className="px-3 py-3 font-mono font-medium text-stone-800">
+                        {tourCodeOf(item)}
                       </td>
                       <td className="px-3 py-3">
-                        <Badge variant={item.status === "active" ? "success" : "default"}>
-                          {item.status === "active" ? "Active" : "Inactive"}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusToggle
+                            active={item.status === "active"}
+                            disabled={!editable}
+                            onChange={(v) => void toggleStatus(item, v)}
+                          />
                           <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
                             {editable ? <Pencil className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
                           </Button>
@@ -404,7 +463,7 @@ export function MasterItinerariesView() {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-stone-500">
+                    <td colSpan={7} className="px-3 py-8 text-center text-stone-500">
                       No itineraries yet. Add a package to get started.
                     </td>
                   </tr>

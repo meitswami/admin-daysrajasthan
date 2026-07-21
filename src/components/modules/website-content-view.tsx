@@ -115,13 +115,31 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [hotelCategory, setHotelCategory] = useState("");
+  const [hotelLocation, setHotelLocation] = useState("");
+  const [priceDescription, setPriceDescription] = useState("");
+  const [rating, setRating] = useState("0");
+  const [reviewsCount, setReviewsCount] = useState("0");
+  const [hotelImage, setHotelImage] = useState<string | null>(null);
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterLocation, setFilterLocation] = useState("");
+  const [locations, setLocations] = useState<string[]>([]);
 
   const canCreate = canCreateMasterData(currentMember);
+  const categoryOptions = useMemo(() => hotelCategoryOptions(), []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     const rows = await listMasterContent(tab);
     setItems(rows);
+    if (tab === "hotels") {
+      const dests = await listMasterContent("destinations");
+      const names = dests.map((d) => d.name).filter(Boolean);
+      const fromHotels = rows
+        .map((r) => r.location)
+        .filter((v): v is string => Boolean(v));
+      setLocations([...new Set([...names, ...fromHotels])].sort((a, b) => a.localeCompare(b)));
+    }
     setLoading(false);
   }, [tab]);
 
@@ -148,16 +166,34 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    return items.filter(
-      (i) =>
+    return items.filter((i) => {
+      if (tab === "hotels") {
+        if (filterCategory && (i.category ?? "") !== filterCategory) return false;
+        if (filterLocation && (i.location ?? "") !== filterLocation) return false;
+      }
+      return (
         !q ||
         i.name.toLowerCase().includes(q) ||
         (i.subtitle?.toLowerCase().includes(q) ?? false) ||
+        (i.category?.toLowerCase().includes(q) ?? false) ||
+        (i.location?.toLowerCase().includes(q) ?? false) ||
+        (i.price_description?.toLowerCase().includes(q) ?? false) ||
         (i.vehicle_type?.toLowerCase().includes(q) ?? false) ||
         (i.capacity?.toLowerCase().includes(q) ?? false) ||
         (i.google_maps_url?.toLowerCase().includes(q) ?? false)
-    );
-  }, [items, search]);
+      );
+    });
+  }, [items, search, tab, filterCategory, filterLocation]);
+
+  function resetHotelFields() {
+    setHotelCategory("");
+    setHotelLocation("");
+    setPriceDescription("");
+    setRating("0");
+    setReviewsCount("0");
+    setHotelImage(null);
+    setGoogleMapsUrl("");
+  }
 
   function openAdd() {
     if (!canCreate) {
@@ -171,6 +207,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setGoogleMapsUrl("");
     setVehicleType("");
     setCapacity("");
+    resetHotelFields();
     setModalOpen(true);
   }
 
@@ -183,6 +220,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setGoogleMapsUrl(item.google_maps_url ?? "");
     setVehicleType(item.vehicle_type ?? "");
     setCapacity(item.capacity ?? "");
+    setHotelCategory(item.category ?? "");
+    setHotelLocation(item.location ?? "");
+    setPriceDescription(item.price_description ?? "");
+    setRating(String(item.rating ?? 0));
+    setReviewsCount(String(item.reviews_count ?? 0));
+    setHotelImage(item.image_url ?? null);
     setModalOpen(true);
   }
 
@@ -192,8 +235,24 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
       show(tab === "vehicles" ? "Model is required" : "Name is required");
       return;
     }
+    if (tab === "hotels" && !hotelCategory.trim()) {
+      show("Hotel category is required");
+      return;
+    }
+    if (tab === "hotels" && !hotelLocation.trim()) {
+      show("Hotel location is required");
+      return;
+    }
 
-    const gallery = galleryUrls.filter(Boolean).slice(0, 6);
+    const parsedRating = Math.min(5, Math.max(0, Number(rating) || 0));
+    const parsedReviews = Math.max(0, Math.floor(Number(reviewsCount) || 0));
+    const gallery =
+      tab === "hotels"
+        ? hotelImage
+          ? [hotelImage]
+          : []
+        : galleryUrls.filter(Boolean).slice(0, 6);
+
     const payload = {
       name,
       subtitle: null as string | null,
@@ -204,6 +263,11 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
       display_mode: "list" as DisplayMode,
       country: "India",
       google_maps_url: tab === "hotels" ? googleMapsUrl.trim() || null : null,
+      category: tab === "hotels" ? hotelCategory.trim() || null : null,
+      location: tab === "hotels" ? hotelLocation.trim() || null : null,
+      price_description: tab === "hotels" ? priceDescription.trim() || null : null,
+      rating: tab === "hotels" ? parsedRating : null,
+      reviews_count: tab === "hotels" ? parsedReviews : null,
       vehicle_type: tab === "vehicles" ? vehicleType.trim() || null : null,
       capacity: tab === "vehicles" ? capacity.trim() || null : null,
     };
@@ -300,80 +364,198 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         </div>
 
         <PageToolbar>
-          <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <Input
-              placeholder="Search here…"
-              className="h-10 pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
-              <button
-                type="button"
-                onClick={() => setViewMode("grid")}
-                className={cn(
-                  "rounded-md px-3 py-1.5",
-                  viewMode === "grid" ? "bg-amber-100 text-amber-900" : "text-stone-500"
+          {tab === "hotels" ? (
+            <div className="flex w-full flex-col gap-3">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <p className="text-sm font-semibold text-stone-700">Filter Hotels</p>
+                {canCreate && (
+                  <Button type="button" onClick={openAdd}>
+                    <Plus className="h-4 w-4" /> Add Hotel
+                  </Button>
                 )}
-              >
-                <Grid3X3 className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewMode("list")}
-                className={cn(
-                  "rounded-md px-3 py-1.5",
-                  viewMode === "list" ? "bg-amber-100 text-amber-900" : "text-stone-500"
-                )}
-              >
-                <List className="h-4 w-4" />
-              </button>
+              </div>
+              <div className="grid w-full gap-3 sm:grid-cols-3">
+                <div>
+                  <Label htmlFor="hotel-filter-name">Hotel Name</Label>
+                  <div className="relative mt-1.5">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                    <Input
+                      id="hotel-filter-name"
+                      placeholder="Search by name..."
+                      className="h-10 pl-9"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="hotel-filter-category">Category</Label>
+                  <Select
+                    id="hotel-filter-category"
+                    className="mt-1.5"
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                  >
+                    <option value="">All Categories</option>
+                    {categoryOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="hotel-filter-location">Location</Label>
+                  <Select
+                    id="hotel-filter-location"
+                    className="mt-1.5"
+                    value={filterLocation}
+                    onChange={(e) => setFilterLocation(e.target.value)}
+                  >
+                    <option value="">All Locations</option>
+                    {locations.map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
             </div>
-            {canCreate && (
-              <Button type="button" onClick={openAdd}>
-                <Plus className="h-4 w-4" /> Add New
-              </Button>
-            )}
-          </div>
+          ) : (
+            <>
+              <div className="relative w-full sm:max-w-xs">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+                <Input
+                  placeholder="Search here…"
+                  className="h-10 pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("grid")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5",
+                      viewMode === "grid" ? "bg-amber-100 text-amber-900" : "text-stone-500"
+                    )}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("list")}
+                    className={cn(
+                      "rounded-md px-3 py-1.5",
+                      viewMode === "list" ? "bg-amber-100 text-amber-900" : "text-stone-500"
+                    )}
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+                {canCreate && (
+                  <Button type="button" onClick={openAdd}>
+                    <Plus className="h-4 w-4" /> Add New
+                  </Button>
+                )}
+              </div>
+            </>
+          )}
         </PageToolbar>
 
         {loading ? (
           <p className="text-sm text-stone-500">Loading…</p>
-        ) : viewMode === "grid" ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((item) => (
-              <ContentCard
-                key={item.id}
-                item={item}
-                imageCategory={getImageCategory(tab)}
-                showTrending={tab === "destinations"}
-                canEdit={canEditMasterRecord(currentMember, item)}
-                canDelete={canDeleteMasterRecord(currentMember, item)}
-                onToggleStatus={toggleStatus}
-                onToggleTrending={toggleTrending}
-                onEdit={openEdit}
-                onDelete={remove}
-              />
-            ))}
-          </div>
-        ) : (
+        ) : tab === "hotels" || viewMode === "list" ? (
           <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
             <table className="w-full min-w-[640px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
-                <tr>
-                  <th className="px-3 py-2 w-12">S.No.</th>
-                  <th className="px-3 py-2">Images</th>
-                  <th className="px-3 py-2">{heading.singular} name</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
+                {tab === "hotels" ? (
+                  <tr>
+                    <th className="px-3 py-2 w-12">S.No.</th>
+                    <th className="px-3 py-2">Image</th>
+                    <th className="px-3 py-2">Hotel Name</th>
+                    <th className="px-3 py-2">Category</th>
+                    <th className="min-w-[220px] px-3 py-2">Price/Night</th>
+                    <th className="px-3 py-2">Location</th>
+                    <th className="px-3 py-2">Rating</th>
+                    <th className="px-3 py-2">Reviews</th>
+                    <th className="px-3 py-2">Google Reviews</th>
+                    <th className="px-3 py-2">Actions</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th className="px-3 py-2 w-12">S.No.</th>
+                    <th className="px-3 py-2">Images</th>
+                    <th className="px-3 py-2">{heading.singular} name</th>
+                    <th className="px-3 py-2">Actions</th>
+                  </tr>
+                )}
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item, index) => {
                   const editable = canEditMasterRecord(currentMember, item);
                   const images = collectDisplayImages(item.image_url, item.gallery_urls, 4);
+                  if (tab === "hotels") {
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
+                        <td className="px-3 py-3">
+                          <ImageThumbRow urls={images.slice(0, 1)} size={48} max={1} />
+                        </td>
+                        <td className="px-3 py-3 font-semibold text-stone-900">{item.name}</td>
+                        <td className="px-3 py-3 text-stone-700">{item.category || "—"}</td>
+                        <td className="max-w-xs px-3 py-3 whitespace-pre-wrap text-stone-600">
+                          {item.price_description?.trim() || "Not specified"}
+                        </td>
+                        <td className="px-3 py-3 text-stone-700">{item.location || "—"}</td>
+                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                          {item.rating != null ? Number(item.rating).toFixed(1) : "—"}
+                        </td>
+                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                          {item.reviews_count ?? "—"}
+                        </td>
+                        <td className="px-3 py-3">
+                          {item.google_maps_url ? (
+                            <a
+                              href={item.google_maps_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-medium text-blue-600 hover:underline"
+                            >
+                              View on Google
+                            </a>
+                          ) : (
+                            <span className="text-stone-400">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-blue-600 hover:bg-blue-700"
+                              onClick={() => openEdit(item)}
+                            >
+                              {editable ? "Edit" : "View"}
+                            </Button>
+                            {canDeleteMasterRecord(currentMember, item) && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="bg-red-600 hover:bg-red-700"
+                                onClick={() => void remove(item)}
+                              >
+                                Delete
+                              </Button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
                   return (
                     <tr key={item.id}>
                       <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
@@ -388,15 +570,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                               .filter(Boolean)
                               .join(" · ") || "—"}
                           </p>
-                        ) : tab === "hotels" && item.google_maps_url ? (
-                          <a
-                            href={item.google_maps_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-sm text-amber-700 hover:underline"
-                          >
-                            Google link
-                          </a>
                         ) : item.subtitle ? (
                           <p className="text-sm text-stone-500">{item.subtitle}</p>
                         ) : null}
@@ -447,13 +620,33 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={4} className="px-3 py-8 text-center text-stone-500">
+                    <td
+                      colSpan={tab === "hotels" ? 10 : 4}
+                      className="px-3 py-8 text-center text-stone-500"
+                    >
                       No {heading.title.toLowerCase()} yet.
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filtered.map((item) => (
+              <ContentCard
+                key={item.id}
+                item={item}
+                imageCategory={getImageCategory(tab)}
+                showTrending={tab === "destinations"}
+                canEdit={canEditMasterRecord(currentMember, item)}
+                canDelete={canDeleteMasterRecord(currentMember, item)}
+                onToggleStatus={toggleStatus}
+                onToggleTrending={toggleTrending}
+                onEdit={openEdit}
+                onDelete={remove}
+              />
+            ))}
           </div>
         )}
       </PageMain>
@@ -468,14 +661,16 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
               : `Edit ${heading.singular}`
             : tab === "vehicles"
               ? "Add New Vehicle"
-              : `Add ${heading.singular}`
+              : tab === "hotels"
+                ? "Add Hotel"
+                : `Add ${heading.singular}`
         }
         description={
           editing
             ? `Created by ${editing.created_by_name ?? "Unknown"}${locked ? " — fields locked" : ""}`
             : undefined
         }
-        className="sm:max-w-lg"
+        className={tab === "hotels" ? "sm:max-w-2xl" : "sm:max-w-lg"}
       >
         <div className="space-y-4">
           {locked && (
@@ -527,6 +722,130 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 disabled={locked}
               />
             </>
+          ) : tab === "hotels" ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="md-hotel-name">Hotel Name</Label>
+                  <Input
+                    id="md-hotel-name"
+                    className="mt-1.5"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    disabled={locked}
+                    placeholder="Enter hotel name"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="md-hotel-category">Hotel Category</Label>
+                  <Select
+                    id="md-hotel-category"
+                    className="mt-1.5"
+                    value={hotelCategory}
+                    onChange={(e) => setHotelCategory(e.target.value)}
+                    disabled={locked}
+                    required
+                  >
+                    <option value="">Select Category</option>
+                    {categoryOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="md-price-description">
+                  Price Description (You can write full details)
+                </Label>
+                <Textarea
+                  id="md-price-description"
+                  className="mt-1.5 min-h-[120px]"
+                  value={priceDescription}
+                  onChange={(e) => setPriceDescription(e.target.value)}
+                  disabled={locked}
+                  placeholder="e.g. Starting from ₹2,999 per night | Includes breakfast & WiFi | Seasonal rates apply | Deluxe Room: ₹4,500 | Suite: ₹8,000"
+                />
+                <p className="mt-1 text-xs text-stone-500">You can write full pricing details here</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="md-hotel-location">Hotel Location</Label>
+                  <Select
+                    id="md-hotel-location"
+                    className="mt-1.5"
+                    value={hotelLocation}
+                    onChange={(e) => setHotelLocation(e.target.value)}
+                    disabled={locked}
+                    required
+                  >
+                    <option value="">Select Location</option>
+                    {[
+                      ...locations,
+                      ...(hotelLocation && !locations.includes(hotelLocation)
+                        ? [hotelLocation]
+                        : []),
+                    ].map((loc) => (
+                      <option key={loc} value={loc}>
+                        {loc}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="md-rating">Rating (0-5)</Label>
+                  <Input
+                    id="md-rating"
+                    type="number"
+                    min={0}
+                    max={5}
+                    step={0.1}
+                    className="mt-1.5"
+                    value={rating}
+                    onChange={(e) => setRating(e.target.value)}
+                    disabled={locked}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="md-reviews">Number of Reviews</Label>
+                <Input
+                  id="md-reviews"
+                  type="number"
+                  min={0}
+                  step={1}
+                  className="mt-1.5"
+                  value={reviewsCount}
+                  onChange={(e) => setReviewsCount(e.target.value)}
+                  disabled={locked}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="md-google">Google Review Link</Label>
+                <Input
+                  id="md-google"
+                  type="url"
+                  className="mt-1.5"
+                  value={googleMapsUrl}
+                  onChange={(e) => setGoogleMapsUrl(e.target.value)}
+                  disabled={locked}
+                  placeholder="Enter Google review link (optional)"
+                />
+              </div>
+
+              <CoverImageUploadField
+                label="Hotel Image"
+                value={hotelImage}
+                onChange={setHotelImage}
+                disabled={locked}
+              />
+            </>
           ) : (
             <>
               <div>
@@ -540,22 +859,8 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   required
                 />
               </div>
-              {tab === "hotels" && (
-                <div>
-                  <Label htmlFor="md-google">Google link</Label>
-                  <Input
-                    id="md-google"
-                    type="url"
-                    className="mt-1.5"
-                    value={googleMapsUrl}
-                    onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                    disabled={locked}
-                    placeholder="https://maps.google.com/…"
-                  />
-                </div>
-              )}
               <GalleryImagesField
-                label={tab === "hotels" ? "Hotel images (up to 6)" : "Images (up to 6)"}
+                label="Images (up to 6)"
                 value={galleryUrls}
                 onChange={setGalleryUrls}
                 disabled={locked}
@@ -565,12 +870,29 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
           {!locked && (
             <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => void save()}>
-                {editing ? "Save" : tab === "vehicles" ? "Add Vehicle" : "Create"}
-              </Button>
+              {tab === "hotels" ? (
+                <>
+                  <Button type="button" onClick={() => void save()}>
+                    {editing ? "Save Hotel" : "Add Hotel"}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="bg-stone-700 text-white hover:bg-stone-800"
+                    onClick={() => setModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="button" onClick={() => void save()}>
+                    {editing ? "Save" : tab === "vehicles" ? "Add Vehicle" : "Create"}
+                  </Button>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -96,7 +96,6 @@ export function SystemSettingsPanel() {
   }
 
   if (!can("settings.system") && !can("activity_logs.view")) {
-    const superAdmins = teamMembers.filter((m) => m.role === "superadmin" && m.is_active);
     return (
       <Card>
         <CardContent className="space-y-4 p-6 text-sm text-stone-600">
@@ -104,7 +103,7 @@ export function SystemSettingsPanel() {
             You do not have permission to view system settings.
             <span className="mt-1 block text-xs text-stone-500">
               Current role: {ROLE_LABELS[currentMember.role]} ({currentMember.name}). Sales and
-              other non-admin roles cannot open System &amp; RBAC — switch back to a Super Admin.
+              other non-admin roles cannot open System &amp; RBAC.
             </span>
           </p>
           <div>
@@ -124,17 +123,6 @@ export function SystemSettingsPanel() {
               ))}
             </Select>
           </div>
-          {superAdmins[0] && (
-            <Button
-              type="button"
-              onClick={() => {
-                switchMember(superAdmins[0].id);
-                show(`Restored ${superAdmins[0].name} (Super Admin)`);
-              }}
-            >
-              Continue as Super Admin
-            </Button>
-          )}
         </CardContent>
       </Card>
     );
@@ -224,8 +212,7 @@ export function SystemSettingsPanel() {
             RBAC — Team & Permissions
           </CardTitle>
           <CardDescription>
-            Real DB team members load from Supabase. Use Acting as to preview another role (Sales
-            cannot open this tab — switch back to Super Admin).
+            Real DB team members load from Supabase. Use Acting as to preview another role.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

@@ -364,6 +364,12 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
   }
 
+  function handlePreview() {
+    const result = handleSave();
+    if (!result) return;
+    router.push(`/itinerary-builder/${itineraryId}/quotation`);
+  }
+
   const primaryTier = snapshot.category_pricing;
   const advanceRate = advanceRateFromPercent(snapshot.advance_percent);
 
@@ -398,7 +404,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
               type="button"
               size="sm"
               className="bg-teal-700 hover:bg-teal-800"
-              onClick={() => window.print()}
+              onClick={handlePreview}
             >
               <Eye className="h-4 w-4" />
               Preview
@@ -713,7 +719,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
-            <Button type="button" className="bg-teal-700 hover:bg-teal-800" onClick={() => window.print()}>
+            <Button type="button" className="bg-teal-700 hover:bg-teal-800" onClick={handlePreview}>
               <Eye className="h-4 w-4" />
               Preview
             </Button>
