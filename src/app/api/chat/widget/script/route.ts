@@ -23,6 +23,17 @@ export async function GET(request: Request) {
     });
   }
 
+  // Respect Widget Settings → Widget enabled / AI mode Disabled
+  if (!config.enabled || config.aiMode === "disabled") {
+    return new Response("/* Travel Days Chat: widget disabled */", {
+      status: 200,
+      headers: {
+        "content-type": "application/javascript; charset=utf-8",
+        "cache-control": "no-store",
+      },
+    });
+  }
+
   const iframeSrc = `${origin}/embed/chat?key=${encodeURIComponent(key)}`;
   const primary = config.appearance.primaryColor.replace(/[^#A-Fa-f0-9]/g, "") || "#7A1F1F";
   const label = JSON.stringify(config.appearance.launcherLabel);
