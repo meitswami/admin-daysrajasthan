@@ -126,6 +126,14 @@ export function NewItineraryWizard() {
 
   function persistDraft(after: "list" | "preview") {
     if (!draft) return;
+    if (!draft.client.client_name.trim()) {
+      show("Customer name is required");
+      return;
+    }
+    if (!draft.client.phone?.trim()) {
+      show("Phone number is required");
+      return;
+    }
     if (!draft.header.title.trim()) {
       show("Itinerary title is required");
       return;
@@ -326,6 +334,16 @@ export function NewItineraryWizard() {
 
       {step === 1 && (
         <div className="space-y-4">
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-stone-700">
+            <p className="font-semibold text-stone-900">
+              Customer: {[client.title, client.client_name].filter(Boolean).join(" ") || "—"}
+            </p>
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-stone-600">
+              <span>Phone: {client.phone?.trim() || "—"}</span>
+              {client.email?.trim() ? <span>Email: {client.email}</span> : null}
+              {client.email2?.trim() ? <span>Email 2: {client.email2}</span> : null}
+            </p>
+          </div>
           <div className="flex flex-wrap items-center gap-3">
             <Select
               value={String(durationFilter)}
@@ -437,7 +455,10 @@ export function NewItineraryWizard() {
           snapshot={draft}
           onChange={setDraft}
           showStepHeader
-          onBack={() => setStep(1)}
+          onBack={() => {
+            setClient(draft.client);
+            setStep(1);
+          }}
           onSave={() => persistDraft("list")}
           onPreview={() => persistDraft("preview")}
           onAddNote={() => {

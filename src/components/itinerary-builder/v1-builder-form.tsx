@@ -28,6 +28,8 @@ import {
   hotelsForLocation,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
+import { listMasterContent } from "@/lib/master-data/content-store";
+import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { cities, destinations, vehicles as masterVehicles } from "@/lib/data/website-content";
 import {
   HOTEL_CATEGORY_OPTIONS,
@@ -55,20 +57,57 @@ import {
   X,
 } from "lucide-react";
 
+const MAX_DAY_IMAGES = 4;
+
 const PLACEHOLDER_IMAGES = [
   "https://images.unsplash.com/photo-1477587458883-47145ed94245?w=200&q=80",
   "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=200&q=80",
   "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=200&q=80",
 ];
 
-function locationOptions(): string[] {
-  const names = new Set<string>(hotelLocations());
-  destinations.forEach((d) => names.add(d.name));
-  cities.forEach((c) => names.add(c.name.replace(/ City$/, "")));
-  ["Jaipur", "Jodhpur", "Udaipur", "Jaisalmer", "Pushkar", "Departure", "Delhi", "Agra"].forEach(
-    (n) => names.add(n)
-  );
-  return Array.from(names).sort();
+const FALLBACK_LOCATIONS = [
+  "Jaipur",
+  "Jodhpur",
+  "Udaipur",
+  "Jaisalmer",
+  "Pushkar",
+  "Departure",
+  "Delhi",
+  "Agra",
+];
+
+type LocationCatalogEntry = {
+  name: string;
+  photos: string[];
+};
+
+function buildFallbackCatalog(): LocationCatalogEntry[] {
+  const byName = new Map<string, string[]>();
+  for (const d of destinations) {
+    byName.set(d.name, collectDisplayImages(d.image_url, d.gallery_urls, MAX_DAY_IMAGES));
+  }
+  for (const c of cities) {
+    const name = c.name.replace(/ City$/, "");
+    if (!byName.has(name)) {
+      byName.set(name, collectDisplayImages(c.image_url, c.gallery_urls, MAX_DAY_IMAGES));
+    }
+  }
+  for (const name of [...hotelLocations(), ...FALLBACK_LOCATIONS]) {
+    if (!byName.has(name)) byName.set(name, []);
+  }
+  return Array.from(byName.entries())
+    .map(([name, photos]) => ({ name, photos }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function photosForLocation(
+  catalog: LocationCatalogEntry[],
+  location: string | null | undefined
+): string[] {
+  if (!location?.trim()) return [];
+  const q = location.trim().toLowerCase();
+  const hit = catalog.find((e) => e.name.toLowerCase() === q);
+  return (hit?.photos ?? []).slice(0, MAX_DAY_IMAGES);
 }
 
 function vehicleOptions(): string[] {
@@ -452,7 +491,13 @@ export function V1BuilderForm({
   saveLabel?: string;
 }) {
   const s = normalizeSnapshot(snapshot);
-  const locs = useMemo(() => locationOptions(), []);
+  const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
+    buildFallbackCatalog()
+  );
+  const locs = useMemo(
+    () => locationCatalog.map((e) => e.name),
+    [locationCatalog]
+  );
   const vehicles = useMemo(() => vehicleOptions(), []);
   const selectedKeys = s.category_pricing.map((c) => c.category_key) as HotelCategoryKey[];
   /** One hotels block on the right for every day on the left */
@@ -462,6 +507,30 @@ export function V1BuilderForm({
     : s.vehicle_type
       ? [s.vehicle_type]
       : [];
+
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterContent("destinations").then((items) => {
+      if (cancelled) return;
+      const byName = new Map<string, string[]>();
+      for (const entry of buildFallbackCatalog()) {
+        byName.set(entry.name, entry.photos);
+      }
+      for (const item of items) {
+        const name = item.name.trim();
+        if (!name) continue;
+        byName.set(name, collectDisplayImages(item.image_url, item.gallery_urls, MAX_DAY_IMAGES));
+      }
+      setLocationCatalog(
+        Array.from(byName.entries())
+          .map(([name, photos]) => ({ name, photos }))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   function patch(partial: Partial<ItinerarySnapshot>) {
     onChange(normalizeSnapshot({ ...s, ...partial }));
@@ -625,29 +694,71 @@ export function V1BuilderForm({
   }
 
   function addImage(dayIndex: number) {
+    updateDay(dayIndex, (d) => {
+      if (d.images.length >= MAX_DAY_IMAGES) return d;
+      return {
+        ...d,
+        images: [
+          ...d.images,
+          PLACEHOLDER_IMAGES[d.images.length % PLACEHOLDER_IMAGES.length],
+        ].slice(0, MAX_DAY_IMAGES),
+      };
+    });
+  }
+
+  function removeImage(dayIndex: number, imageIndex: number) {
     updateDay(dayIndex, (d) => ({
       ...d,
-      images: [...d.images, PLACEHOLDER_IMAGES[d.images.length % PLACEHOLDER_IMAGES.length]],
+      images: d.images.filter((_, i) => i !== imageIndex),
+    }));
+  }
+
+  function setDayLocation(dayIndex: number, location: string) {
+    const nextLocation = location || null;
+    const photos = photosForLocation(locationCatalog, nextLocation);
+    updateDay(dayIndex, (d) => ({
+      ...d,
+      location: nextLocation,
+      pickup_location: nextLocation || d.pickup_location,
+      images: photos,
+      // clear hotels when location changes
+      breakfast_hotels: [null, null],
+      lunch_hotels: [null, null],
+      dinner_hotels: [null, null],
+      hotel_name: null,
     }));
   }
 
   const titleList = [s.header.title, ...s.header.alternate_titles];
+  const clientLabel = [s.client.title, s.client.client_name].filter(Boolean).join(" ").trim();
 
   return (
     <div className="space-y-6">
       {showStepHeader && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-blue-600 px-4 py-3 text-white sm:px-6">
-          <p className="font-medium">Itinerary Builder · Step 3 of 3</p>
-          {onBack && (
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onBack}
-              className="border-white/40 bg-white/10 text-white hover:bg-white/20"
-            >
-              Back
-            </Button>
-          )}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-blue-600 px-4 py-3 text-white sm:px-6">
+            <p className="font-medium">Itinerary Builder · Step 3 of 3</p>
+            {onBack && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={onBack}
+                className="border-white/40 bg-white/10 text-white hover:bg-white/20"
+              >
+                Back
+              </Button>
+            )}
+          </div>
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-sm text-stone-700">
+            <p className="font-semibold text-stone-900">
+              Customer: {clientLabel || "—"}
+            </p>
+            <p className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-stone-600">
+              <span>Phone: {s.client.phone?.trim() || "—"}</span>
+              {s.client.email?.trim() ? <span>Email: {s.client.email}</span> : null}
+              {s.client.email2?.trim() ? <span>Email 2: {s.client.email2}</span> : null}
+            </p>
+          </div>
         </div>
       )}
 
@@ -695,6 +806,54 @@ export function V1BuilderForm({
               </Button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label>Customer Name *</Label>
+                <Input
+                  className="mt-1.5"
+                  value={s.client.client_name}
+                  onChange={(e) =>
+                    patch({ client: { ...s.client, client_name: e.target.value } })
+                  }
+                  placeholder="Customer name from step 1"
+                />
+              </div>
+              <div>
+                <Label>Phone Number *</Label>
+                <Input
+                  type="tel"
+                  className="mt-1.5"
+                  value={s.client.phone ?? ""}
+                  onChange={(e) =>
+                    patch({ client: { ...s.client, phone: e.target.value || null } })
+                  }
+                  placeholder="Phone number"
+                />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  className="mt-1.5"
+                  value={s.client.email ?? ""}
+                  onChange={(e) =>
+                    patch({ client: { ...s.client, email: e.target.value || null } })
+                  }
+                  placeholder={s.client.email ? undefined : "No email added in step 1"}
+                />
+              </div>
+              {s.client.email2 ? (
+                <div className="sm:col-span-2">
+                  <Label>Email 2</Label>
+                  <Input
+                    type="email"
+                    className="mt-1.5"
+                    value={s.client.email2}
+                    onChange={(e) =>
+                      patch({ client: { ...s.client, email2: e.target.value || null } })
+                    }
+                  />
+                </div>
+              ) : null}
               <div>
                 <Label>Travel Date *</Label>
                 <Input
@@ -820,18 +979,7 @@ export function V1BuilderForm({
                     </p>
                     <Select
                       value={day.location ?? ""}
-                      onChange={(e) =>
-                        updateDay(dayIndex, (d) => ({
-                          ...d,
-                          location: e.target.value || null,
-                          pickup_location: e.target.value || d.pickup_location,
-                          // clear hotels when location changes
-                          breakfast_hotels: [null, null],
-                          lunch_hotels: [null, null],
-                          dinner_hotels: [null, null],
-                          hotel_name: null,
-                        }))
-                      }
+                      onChange={(e) => setDayLocation(dayIndex, e.target.value)}
                     >
                       <option value="">Select location</option>
                       {locs.map((loc) => (
@@ -845,26 +993,44 @@ export function V1BuilderForm({
                   <div>
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
                       Day Images
+                      <span className="ml-1 font-normal normal-case text-stone-400">
+                        (up to {MAX_DAY_IMAGES} from Locations)
+                      </span>
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {day.images.map((src, ii) => (
+                      {day.images.slice(0, MAX_DAY_IMAGES).map((src, ii) => (
                         <div
                           key={`${src}-${ii}`}
-                          className="relative h-16 w-20 overflow-hidden rounded-lg border"
+                          className="group relative h-16 w-20 overflow-hidden rounded-lg border"
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={src} alt="" className="h-full w-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(dayIndex, ii)}
+                            className="absolute right-0.5 top-0.5 rounded bg-black/60 p-0.5 text-white opacity-0 transition group-hover:opacity-100"
+                            aria-label="Remove image"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
                         </div>
                       ))}
-                      <button
-                        type="button"
-                        onClick={() => addImage(dayIndex)}
-                        className="flex h-16 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-blue-400 hover:text-blue-600"
-                      >
-                        <Plus className="h-5 w-5" />
-                        <span className="text-[10px]">Add Image</span>
-                      </button>
+                      {day.images.length < MAX_DAY_IMAGES && (
+                        <button
+                          type="button"
+                          onClick={() => addImage(dayIndex)}
+                          className="flex h-16 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-blue-400 hover:text-blue-600"
+                        >
+                          <Plus className="h-5 w-5" />
+                          <span className="text-[10px]">Add Image</span>
+                        </button>
+                      )}
                     </div>
+                    {day.location && photosForLocation(locationCatalog, day.location).length === 0 && (
+                      <p className="mt-1.5 text-xs text-stone-400">
+                        No photos on this Location yet — add them under Master Data → Locations.
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

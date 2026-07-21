@@ -83,17 +83,7 @@ function StatusToggle({
   disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs font-medium text-stone-500">Status</span>
-      <Toggle
-        checked={active}
-        onChange={onChange}
-        label={active ? "Active" : "Inactive"}
-        disabled={disabled}
-      />
-    </div>
-  );
+  return <Toggle checked={active} onChange={onChange} disabled={disabled} />;
 }
 
 export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
@@ -135,10 +125,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     if (tab === "hotels") {
       const dests = await listMasterContent("destinations");
       const names = dests.map((d) => d.name).filter(Boolean);
-      const fromHotels = rows
-        .map((r) => r.location)
-        .filter((v): v is string => Boolean(v));
-      setLocations([...new Set([...names, ...fromHotels])].sort((a, b) => a.localeCompare(b)));
+      setLocations([...new Set(names)].sort((a, b) => a.localeCompare(b)));
     }
     setLoading(false);
   }, [tab]);
