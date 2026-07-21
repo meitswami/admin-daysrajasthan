@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
-import { FileUploadField } from "@/components/ui/file-upload-field";
 import {
   GalleryImagesField,
   ImageThumbRow,
@@ -15,7 +14,7 @@ import {
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import type { Itinerary, PackageType } from "@/types/database";
+import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
 import {
   canCreateMasterData,
   canDeleteMasterRecord,
@@ -28,7 +27,9 @@ import {
   listMasterItineraries,
   updateMasterItinerary,
 } from "@/lib/master-data/itinerary-store";
-import { Lock, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { listMasterContent } from "@/lib/master-data/content-store";
+import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
+import { Lock, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { Toggle } from "@/components/ui/toggle";
 
 const PACKAGE_TYPES: PackageType[] = [
@@ -41,32 +42,103 @@ const PACKAGE_TYPES: PackageType[] = [
   "Family Trip",
 ];
 
-const DURATIONS = [
-  "2 Days 1 Night",
-  "3 Days 2 Nights",
-  "4 Days 3 Nights",
-  "5 Days 4 Nights",
-  "6 Days 5 Nights",
-  "7 Days 6 Nights",
-  "8 Days 7 Nights",
-  "10 Days 9 Nights",
-];
-
-function linesToText(lines?: string[]) {
-  return (lines ?? []).join("\n");
+function emptyDay(dayNumber: number): ItineraryDayPlan {
+  return {
+    day_number: dayNumber,
+    title: "",
+    location: "",
+    description: "",
+    image_urls: [],
+  };
 }
 
-function textToLines(text: string) {
-  return text
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
+function daysFromDuration(duration: string, existing: ItineraryDayPlan[] = []): ItineraryDayPlan[] {
+  const match = duration.match(/^(\d+)/);
+  const count = match ? Math.min(24, Math.max(1, Number(match[1]))) : existing.length || 1;
+  const next = existing.slice(0, count);
+  while (next.length < count) {
+    next.push(emptyDay(next.length + 1));
+  }
+  return next.map((d, i) => ({ ...d, day_number: i + 1 }));
+}
+
+function destinationFromDays(days: ItineraryDayPlan[]): string | null {
+  const locations = [
+    ...new Set(days.map((d) => d.location.trim()).filter(Boolean)),
+  ];
+  return locations.length ? locations.join(" · ") : null;
+}
+
+function StringListField({
+  label,
+  value,
+  onChange,
+  disabled,
+  placeholder = "Enter item…",
+}: {
+  label: string;
+  value: string[];
+  onChange: (next: string[]) => void;
+  disabled?: boolean;
+  placeholder?: string;
+}) {
+  const rows = value.length ? value : [""];
+
+  function removeAt(index: number) {
+    const next = value.filter((_, i) => i !== index);
+    onChange(next.length ? next : []);
+  }
+
+  function addLine() {
+    onChange([...value.filter((v) => v.trim()), ""]);
+  }
+
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <Label>{label}</Label>
+        {!disabled && (
+          <Button type="button" size="sm" variant="outline" onClick={addLine}>
+            <Plus className="h-3.5 w-3.5" /> Add
+          </Button>
+        )}
+      </div>
+      <div className="space-y-2">
+        {rows.map((line, index) => (
+          <div key={index} className="flex gap-2">
+            <Input
+              value={line}
+              placeholder={placeholder}
+              disabled={disabled}
+              onChange={(e) => {
+                const list = value.length ? [...value] : [""];
+                list[index] = e.target.value;
+                onChange(list);
+              }}
+            />
+            {!disabled && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => removeAt(index)}
+                aria-label={`Remove ${label} item`}
+              >
+                <Minus className="h-4 w-4 text-red-500" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function MasterItinerariesView() {
   const { show } = useToast();
   const { currentMember } = useSystem();
   const [items, setItems] = useState<Itinerary[]>([]);
+  const [locations, setLocations] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -74,22 +146,28 @@ export function MasterItinerariesView() {
   const [locked, setLocked] = useState(false);
 
   const [packageName, setPackageName] = useState("");
-  const [destination, setDestination] = useState("");
   const [packageType, setPackageType] = useState<PackageType>("Domestic");
   const [duration, setDuration] = useState("3 Days 2 Nights");
-  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-  const [inclusions, setInclusions] = useState("");
-  const [exclusions, setExclusions] = useState("");
-  const [statusActive, setStatusActive] = useState(true);
-  const [isTrending, setIsTrending] = useState(false);
-  const [status, setStatus] = useState<"active" | "inactive">("active");
+  const [inclusions, setInclusions] = useState<string[]>([""]);
+  const [exclusions, setExclusions] = useState<string[]>([""]);
+  const [days, setDays] = useState<ItineraryDayPlan[]>(() => daysFromDuration("3 Days 2 Nights"));
 
   const canCreate = canCreateMasterData(currentMember);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    setItems(await listMasterItineraries());
+    const [packages, destinationRows] = await Promise.all([
+      listMasterItineraries(),
+      listMasterContent("destinations"),
+    ]);
+    setItems(packages);
+    setLocations(
+      destinationRows
+        .map((d) => d.name.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b))
+    );
     setLoading(false);
   }, []);
 
@@ -103,22 +181,20 @@ export function MasterItinerariesView() {
       (i) =>
         !q ||
         i.package_name.toLowerCase().includes(q) ||
-        (i.destination?.toLowerCase().includes(q) ?? false)
+        (i.destination?.toLowerCase().includes(q) ?? false) ||
+        (i.days ?? []).some((d) => d.location.toLowerCase().includes(q) || d.title.toLowerCase().includes(q))
     );
   }, [items, search]);
 
   function resetForm() {
+    const nextDuration = "3 Days 2 Nights";
     setPackageName("");
-    setDestination("");
     setPackageType("Domestic");
-    setDuration("3 Days 2 Nights");
-    setPdfUrl(null);
+    setDuration(nextDuration);
     setGalleryUrls([]);
-    setInclusions("");
-    setExclusions("");
-    setStatusActive(true);
-    setIsTrending(false);
-    setStatus("active");
+    setInclusions([""]);
+    setExclusions([""]);
+    setDays(daysFromDuration(nextDuration));
   }
 
   function openAdd() {
@@ -137,17 +213,41 @@ export function MasterItinerariesView() {
     setEditing(item);
     setLocked(isLocked);
     setPackageName(item.package_name);
-    setDestination(item.destination ?? "");
     setPackageType(item.package_type ?? "Domestic");
-    setDuration(item.package_duration ?? "3 Days 2 Nights");
-    setPdfUrl(item.pdf_url);
+    const nextDuration = item.package_duration ?? "3 Days 2 Nights";
+    setDuration(nextDuration);
     setGalleryUrls(collectDisplayImages(item.cover_image_url, item.gallery_urls));
-    setInclusions(linesToText(item.inclusions));
-    setExclusions(linesToText(item.exclusions));
-    setStatusActive(item.show_on_website);
-    setIsTrending(item.is_trending);
-    setStatus(item.status);
+    setInclusions(item.inclusions?.length ? [...item.inclusions] : [""]);
+    setExclusions(item.exclusions?.length ? [...item.exclusions] : [""]);
+    setDays(
+      item.days?.length
+        ? item.days.map((d, i) => ({ ...d, day_number: i + 1 }))
+        : daysFromDuration(nextDuration)
+    );
     setModalOpen(true);
+  }
+
+  function setDurationAndDays(next: string) {
+    setDuration(next);
+    setDays((prev) => daysFromDuration(next, prev));
+  }
+
+  function updateDay(index: number, patch: Partial<ItineraryDayPlan>) {
+    setDays((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  }
+
+  function addDay() {
+    if (days.length >= 24) {
+      show("Maximum 24 days");
+      return;
+    }
+    setDays((prev) => [...prev, emptyDay(prev.length + 1)]);
+  }
+
+  function removeDay(index: number) {
+    setDays((prev) =>
+      prev.filter((_, i) => i !== index).map((d, i) => ({ ...d, day_number: i + 1 }))
+    );
   }
 
   async function save() {
@@ -156,21 +256,38 @@ export function MasterItinerariesView() {
       show("Package name is required");
       return;
     }
-    const gallery = galleryUrls.filter(Boolean).slice(0, 4);
+    const gallery = galleryUrls.filter(Boolean).slice(0, 6);
+    const cleanLines = (lines: string[]) =>
+      lines.map((l) => l.trim()).filter(Boolean);
+    const cleanDays = days.map((d, i) => ({
+      day_number: i + 1,
+      title: d.title.trim(),
+      location: d.location.trim(),
+      description: d.description.trim(),
+      image_urls: d.image_urls.filter(Boolean),
+    }));
+
     const payload = {
       package_name: packageName,
-      destination,
+      destination: destinationFromDays(cleanDays),
       package_type: packageType,
       package_duration: duration,
-      pdf_url: pdfUrl,
+      pdf_url: editing?.pdf_url ?? null,
       cover_image_url: gallery[0] ?? null,
       gallery_urls: gallery,
-      inclusions: textToLines(inclusions),
-      exclusions: textToLines(exclusions),
-      show_on_website: statusActive,
-      is_trending: isTrending,
-      status,
+      inclusions: cleanLines(inclusions),
+      exclusions: cleanLines(exclusions),
+      days: cleanDays,
+      show_on_website: editing?.show_on_website ?? true,
+      is_trending: editing?.is_trending ?? false,
+      status: (editing?.status ?? "active") as "active" | "inactive",
     };
+
+    if (!editing) {
+      payload.status = "active";
+      payload.show_on_website = true;
+      payload.is_trending = false;
+    }
 
     if (editing) {
       if (!canEditMasterRecord(currentMember, editing)) {
@@ -202,7 +319,7 @@ export function MasterItinerariesView() {
     <>
       <Header
         title="Itineraries"
-        description="Package master with inclusions, exclusions, PDF & images. Sales Admins see all; edit only own."
+        description="Package master with day-wise plan, inclusions, exclusions & images. Sales Admins see all; edit only own."
       />
       <PageMain>
         <PageToolbar>
@@ -240,6 +357,9 @@ export function MasterItinerariesView() {
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item) => {
                   const editable = canEditMasterRecord(currentMember, item);
+                  const dayLocations = [
+                    ...new Set((item.days ?? []).map((d) => d.location).filter(Boolean)),
+                  ];
                   return (
                     <tr key={item.id}>
                       <td className="px-3 py-3">
@@ -251,7 +371,9 @@ export function MasterItinerariesView() {
                       <td className="px-3 py-3">
                         <p className="font-medium text-stone-900">{item.package_name}</p>
                         <p className="text-xs text-stone-500">
-                          {item.destination} · {item.package_type}
+                          {(dayLocations.length ? dayLocations.join(" · ") : item.destination) ||
+                            "—"}{" "}
+                          · {item.package_type}
                         </p>
                       </td>
                       <td className="px-3 py-3 text-stone-600">{item.package_duration}</td>
@@ -267,11 +389,11 @@ export function MasterItinerariesView() {
                             {item.status === "active" ? "Active" : "Inactive"}
                           </Badge>
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-stone-500">Status</span>
+                            <span className="text-xs font-medium text-stone-500">Website</span>
                             <Toggle
                               checked={item.show_on_website}
                               disabled={!editable}
-                              label={item.show_on_website ? "Active" : "Inactive"}
+                              label={item.show_on_website ? "On" : "Off"}
                               onChange={(v) => {
                                 void updateMasterItinerary(item.id, { show_on_website: v }, currentMember).then(
                                   () => void refresh()
@@ -316,9 +438,9 @@ export function MasterItinerariesView() {
         description={
           editing
             ? `Created by ${editing.created_by_name ?? "Unknown"}${locked ? " — fields locked" : ""}`
-            : "Include package details, inclusions, exclusions & media"
+            : "Package details, day-wise plan, inclusions, exclusions & media"
         }
-        className="sm:max-w-2xl"
+        className="sm:max-w-3xl"
       >
         <div className="space-y-4">
           {locked && (
@@ -333,16 +455,6 @@ export function MasterItinerariesView() {
               value={packageName}
               onChange={(e) => setPackageName(e.target.value)}
               disabled={locked}
-            />
-          </div>
-          <div>
-            <Label>Destination *</Label>
-            <Input
-              className="mt-1.5"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-              disabled={locked}
-              placeholder="Jaipur · Udaipur"
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -366,10 +478,10 @@ export function MasterItinerariesView() {
               <Select
                 className="mt-1.5"
                 value={duration}
-                onChange={(e) => setDuration(e.target.value)}
+                onChange={(e) => setDurationAndDays(e.target.value)}
                 disabled={locked}
               >
-                {DURATIONS.map((d) => (
+                {PACKAGE_DURATIONS.map((d) => (
                   <option key={d} value={d}>
                     {d}
                   </option>
@@ -377,71 +489,119 @@ export function MasterItinerariesView() {
               </Select>
             </div>
           </div>
-          <FileUploadField
-            label="PDF itinerary"
-            accept="application/pdf"
-            value={pdfUrl}
-            onChange={setPdfUrl}
+
+          <GalleryImagesField
+            label="Package images (up to 6)"
+            value={galleryUrls}
+            onChange={setGalleryUrls}
             disabled={locked}
           />
-          <GalleryImagesField value={galleryUrls} onChange={setGalleryUrls} disabled={locked} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Inclusions (one per line)</Label>
-              <Textarea
-                className="mt-1.5"
-                rows={5}
-                value={inclusions}
-                onChange={(e) => setInclusions(e.target.value)}
-                disabled={locked}
-              />
+
+          <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-stone-900">Day-wise Itinerary</p>
+                <p className="text-xs text-stone-500">
+                  Title, location, description & images for each day
+                </p>
+              </div>
+              {!locked && (
+                <Button type="button" size="sm" onClick={addDay}>
+                  <Plus className="h-3.5 w-3.5" /> Add Day
+                </Button>
+              )}
             </div>
-            <div>
-              <Label>Exclusions (one per line)</Label>
-              <Textarea
-                className="mt-1.5"
-                rows={5}
-                value={exclusions}
-                onChange={(e) => setExclusions(e.target.value)}
-                disabled={locked}
-              />
+            <div className="space-y-4">
+              {days.map((day, index) => (
+                <div
+                  key={day.day_number}
+                  className="space-y-3 rounded-lg border border-stone-200 bg-white p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-stone-800">Day {index + 1}</p>
+                    {!locked && days.length > 1 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeDay(index)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                      </Button>
+                    )}
+                  </div>
+                  <div>
+                    <Label>Day title</Label>
+                    <Input
+                      className="mt-1.5"
+                      value={day.title}
+                      placeholder={`Day ${index + 1} title`}
+                      disabled={locked}
+                      onChange={(e) => updateDay(index, { title: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label>Location</Label>
+                    <Select
+                      className="mt-1.5"
+                      value={day.location}
+                      disabled={locked}
+                      onChange={(e) => updateDay(index, { location: e.target.value })}
+                    >
+                      <option value="">Select location</option>
+                      {day.location && !locations.includes(day.location) && (
+                        <option value={day.location}>{day.location}</option>
+                      )}
+                      {locations.map((name) => (
+                        <option key={name} value={name}>
+                          {name}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Description</Label>
+                    <Textarea
+                      className="mt-1.5"
+                      rows={3}
+                      value={day.description}
+                      placeholder="Enter description…"
+                      disabled={locked}
+                      onChange={(e) => updateDay(index, { description: e.target.value })}
+                    />
+                  </div>
+                  <GalleryImagesField
+                    label="Day images"
+                    value={day.image_urls}
+                    onChange={(urls) => updateDay(index, { image_urls: urls })}
+                    disabled={locked}
+                    max={4}
+                  />
+                </div>
+              ))}
+              {!days.length && (
+                <p className="text-sm text-stone-500">No days yet. Click Add Day to start.</p>
+              )}
             </div>
           </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Status</Label>
-              <Select
-                className="mt-1.5"
-                value={statusActive ? "active" : "inactive"}
-                onChange={(e) => setStatusActive(e.target.value === "active")}
-                disabled={locked}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </Select>
-            </div>
-            <div>
-              <Label>Package status</Label>
-              <Select
-                className="mt-1.5"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as "active" | "inactive")}
-                disabled={locked}
-              >
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </Select>
-            </div>
-          </div>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isTrending}
-              onChange={(e) => setIsTrending(e.target.checked)}
+            <StringListField
+              label="Inclusions"
+              value={inclusions}
+              onChange={setInclusions}
               disabled={locked}
+              placeholder="e.g. Breakfast"
             />
-            Trending
-          </label>
+            <StringListField
+              label="Exclusions"
+              value={exclusions}
+              onChange={setExclusions}
+              disabled={locked}
+              placeholder="e.g. Airfare"
+            />
+          </div>
+
           {!locked && (
             <div className="flex justify-end gap-2 pt-2">
               <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>

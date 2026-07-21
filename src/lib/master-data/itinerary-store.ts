@@ -1,4 +1,4 @@
-import type { Itinerary, PackageType } from "@/types/database";
+import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
@@ -8,6 +8,23 @@ function useSupabaseMaster(): boolean {
 }
 
 const STORAGE_KEY = "td-master-itineraries-v1";
+
+function parseDays(raw: unknown): ItineraryDayPlan[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((entry, index) => {
+    const row = (entry ?? {}) as Record<string, unknown>;
+    const images = Array.isArray(row.image_urls)
+      ? row.image_urls.filter((u): u is string => typeof u === "string" && Boolean(u))
+      : [];
+    return {
+      day_number: Number(row.day_number ?? index + 1),
+      title: String(row.title ?? ""),
+      location: String(row.location ?? ""),
+      description: String(row.description ?? ""),
+      image_urls: images,
+    };
+  });
+}
 
 function seed(): Itinerary[] {
   const now = new Date().toISOString();
@@ -31,6 +48,15 @@ function seed(): Itinerary[] {
       inclusions: ["Hotel stay with breakfast", "Private AC cab for sightseeing"],
       exclusions: ["Airfare / train fare", "Personal expenses"],
       gallery_urls: [],
+      days: [
+        {
+          day_number: 1,
+          title: "Arrival in Jaipur",
+          location: "Jaipur",
+          description: "Airport pickup and check-in.",
+          image_urls: [],
+        },
+      ],
       created_by_id: "tm-info",
       created_by_name: "Travel Days Admin",
     },
@@ -77,6 +103,7 @@ function mapRow(row: Record<string, unknown>): Itinerary {
     inclusions: Array.isArray(row.inclusions) ? (row.inclusions as string[]) : [],
     exclusions: Array.isArray(row.exclusions) ? (row.exclusions as string[]) : [],
     gallery_urls: Array.isArray(row.gallery_urls) ? (row.gallery_urls as string[]) : [],
+    days: parseDays(row.days),
     created_by_id: (row.created_by as string | null) ?? null,
     created_by_name: (row.created_by_name as string | null) ?? null,
   };
@@ -96,6 +123,7 @@ export type MasterItineraryInput = {
   inclusions?: string[];
   exclusions?: string[];
   gallery_urls?: string[];
+  days?: ItineraryDayPlan[];
 };
 
 export async function listMasterItineraries(): Promise<Itinerary[]> {
@@ -143,6 +171,7 @@ export async function createMasterItinerary(
     inclusions: input.inclusions ?? [],
     exclusions: input.exclusions ?? [],
     gallery_urls: input.gallery_urls ?? [],
+    days: input.days ?? [],
     created_by_id: actor.id,
     created_by_name: actor.name,
   };
@@ -168,6 +197,7 @@ export async function createMasterItinerary(
         inclusions: item.inclusions,
         exclusions: item.exclusions,
         gallery_urls: item.gallery_urls,
+        days: item.days,
         created_by: actor.id,
         created_by_name: actor.name,
       });

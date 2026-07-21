@@ -13,6 +13,15 @@ export type PackageType =
   | "Tirth Yatra"
   | "Family Trip";
 
+/** One day in a master package itinerary */
+export interface ItineraryDayPlan {
+  day_number: number;
+  title: string;
+  location: string;
+  description: string;
+  image_urls: string[];
+}
+
 export interface Itinerary {
   id: string;
   package_name: string;
@@ -40,6 +49,8 @@ export interface Itinerary {
   inclusions?: string[];
   exclusions?: string[];
   gallery_urls?: string[];
+  /** Day-wise plan: title, location, description, images */
+  days?: ItineraryDayPlan[];
   created_by_id?: string | null;
   created_by_name?: string | null;
 }

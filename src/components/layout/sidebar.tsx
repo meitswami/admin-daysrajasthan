@@ -214,15 +214,10 @@ export function Sidebar() {
 }
 
 function SidebarFooter() {
-  const { dataMode, currentMember } = useSystem();
+  const { currentMember } = useSystem();
   return (
     <div className="shrink-0 border-t border-stone-800 px-4 py-4">
-      <p className="text-xs text-stone-500">
-        {dataMode === "real" ? "Real mode · Supabase" : "Dummy mode · Mock data"}
-      </p>
-      <p className="mt-1 truncate text-[10px] text-stone-600">
-        {currentMember.name} ({currentMember.role})
-      </p>
+      <p className="truncate text-xs text-stone-500">{currentMember.name}</p>
     </div>
   );
 }

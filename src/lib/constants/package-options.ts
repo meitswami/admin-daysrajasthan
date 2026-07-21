@@ -10,31 +10,19 @@ export const PACKAGE_TYPES = [
 
 export type PackageType = (typeof PACKAGE_TYPES)[number];
 
-export const PACKAGE_DURATIONS = [
-  "1 Day 1 Night",
-  "2 Days 1 Nights",
-  "3 Days 2 Nights",
-  "4 Days 3 Nights",
-  "5 Days 4 Nights",
-  "6 Days 5 Nights",
-  "7 Days 6 Nights",
-  "8 Days 7 Nights",
-  "9 Days 8 Nights",
-  "10 Days 9 Nights",
-  "11 Day 10 Night",
-  "12 Days 11 Nights",
-  "13 Days 12 Nights",
-  "14 Days 13 Nights",
-  "15 Days 14 Nights",
-  "16 Days 15 Nights",
-  "17 Days 16 Nights",
-  "18 Day 17 Night",
-  "19 Days 18 Nights",
-  "20 Days 19 Nights",
-  "21 Days 20 Nights",
-] as const;
+function formatPackageDuration(days: number): string {
+  const nights = Math.max(0, days - 1);
+  const dayLabel = days === 1 ? "Day" : "Days";
+  const nightLabel = nights === 1 ? "Night" : "Nights";
+  return `${days} ${dayLabel} ${nights} ${nightLabel}`;
+}
 
-export type PackageDuration = (typeof PACKAGE_DURATIONS)[number];
+/** 1 Day 0 Nights … 24 Days 23 Nights */
+export const PACKAGE_DURATIONS: readonly string[] = Array.from({ length: 24 }, (_, i) =>
+  formatPackageDuration(i + 1)
+);
+
+export type PackageDuration = string;
 
 export type DisplayMode = "grid" | "list";
 
