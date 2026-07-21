@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Input, Label } from "@/components/ui/input";
+import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Toggle } from "@/components/ui/toggle";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -14,11 +14,13 @@ import {
   ImageThumbRow,
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
+import { CoverImageUploadField } from "@/components/ui/file-upload-field";
 import { useToast } from "@/components/ui/toast";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import type { DisplayMode, WebsiteContentItem } from "@/types/database";
+import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 import { Grid3X3, List, Plus, Search, Star, Pencil, Trash2, Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystem } from "@/components/providers/system-provider";
@@ -35,6 +37,7 @@ import {
   updateMasterContent,
   type MasterContentEntity,
 } from "@/lib/master-data/content-store";
+import { listMasterCategories } from "@/lib/master-data/categories-store";
 
 const TABS: { id: MasterContentEntity; label: string }[] = [
   { id: "destinations", label: "Locations" },
@@ -358,19 +361,18 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   <th className="px-3 py-2 w-12">S.No.</th>
                   <th className="px-3 py-2">Images</th>
                   <th className="px-3 py-2">{heading.singular} name</th>
-                  <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item, index) => {
                   const editable = canEditMasterRecord(currentMember, item);
-                  const images = collectDisplayImages(item.image_url, item.gallery_urls);
+                  const images = collectDisplayImages(item.image_url, item.gallery_urls, 4);
                   return (
                     <tr key={item.id}>
                       <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                       <td className="px-3 py-3">
-                        <ImageThumbRow urls={images} size={48} />
+                        <ImageThumbRow urls={images} size={48} max={4} />
                       </td>
                       <td className="px-3 py-3">
                         <p className="font-semibold text-stone-900">{item.name}</p>
@@ -398,14 +400,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                         </p>
                       </td>
                       <td className="px-3 py-3">
-                        <StatusToggle
-                          active={item.show_on_website}
-                          disabled={!editable}
-                          onChange={(v) => void toggleStatus(item, v)}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusToggle
+                            active={item.show_on_website}
+                            disabled={!editable}
+                            onChange={(v) => void toggleStatus(item, v)}
+                          />
                           {tab === "destinations" && (
                             <button
                               type="button"
@@ -441,7 +441,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 })}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={5} className="px-3 py-8 text-center text-stone-500">
+                    <td colSpan={4} className="px-3 py-8 text-center text-stone-500">
                       No {heading.title.toLowerCase()} yet.
                     </td>
                   </tr>
@@ -594,7 +594,7 @@ function ContentCard({
   onEdit: (item: WebsiteContentItem) => void;
   onDelete: (item: WebsiteContentItem) => void;
 }) {
-  const images = collectDisplayImages(item.image_url, item.gallery_urls);
+  const images = collectDisplayImages(item.image_url, item.gallery_urls, 4);
   return (
     <MediaOverlayCard
       imageUrl={images[0] ?? item.image_url}
@@ -610,7 +610,7 @@ function ContentCard({
       </div>
       {images.length > 1 && (
         <div className="mt-2">
-          <ImageThumbRow urls={images} size={36} />
+          <ImageThumbRow urls={images} size={36} max={4} />
         </div>
       )}
       <div className="mt-auto space-y-3 pt-6">

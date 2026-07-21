@@ -69,8 +69,18 @@ export interface WebsiteContentItem {
   display_mode: DisplayMode;
   country?: string | null;
   region?: CountryRegion | null;
-  /** Hotels: Google Maps / listing URL */
+  /** Hotels: Google Maps / review listing URL */
   google_maps_url?: string | null;
+  /** Hotels: category label e.g. Deluxe Hotels */
+  category?: string | null;
+  /** Hotels: city / location name */
+  location?: string | null;
+  /** Hotels: free-text price / night details */
+  price_description?: string | null;
+  /** Hotels: rating 0–5 */
+  rating?: number | null;
+  /** Hotels: number of reviews */
+  reviews_count?: number | null;
   /** Vehicles: type e.g. Sedan, SUV */
   vehicle_type?: string | null;
   /** Vehicles: seating capacity */

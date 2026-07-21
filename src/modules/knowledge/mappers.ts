@@ -106,15 +106,17 @@ export function mapWebsiteItemToDestination(row: WebsiteContentItem): Destinatio
  * Map a website hotel content item to HotelRecord.
  */
 export function mapWebsiteItemToHotel(row: WebsiteContentItem): HotelRecord {
-  const regionName = inferRegionName(row.subtitle) ?? inferRegionName(row.country);
+  const location = row.location ?? row.subtitle?.split("·")[0]?.trim() ?? null;
+  const regionName =
+    inferRegionName(location) ?? inferRegionName(row.subtitle) ?? inferRegionName(row.country);
   return {
     id: row.id,
     name: row.name,
     slug: slugify(row.name),
     destinationId: null,
-    destinationName: row.subtitle?.split("·")[0]?.trim() ?? null,
+    destinationName: location,
     regionCode: regionCodeFromName(regionName),
-    category: row.subtitle ?? null,
+    category: row.category ?? row.subtitle ?? null,
     imageUrl: row.image_url ?? null,
     showOnWebsite: row.show_on_website,
     isTrending: row.is_trending ?? false,

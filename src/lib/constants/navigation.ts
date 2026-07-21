@@ -73,7 +73,6 @@ export const crmNav: NavGroup = {
   label: "CRM",
   items: [
     { label: "Customer", href: "/customers", icon: MessageSquare, description: "Customer database" },
-    { label: "Unified Leads", href: "/leads", icon: MessageCircle, description: "WhatsApp, inquiry & email leads" },
     { label: "Email Details", href: "/itinerary-builder/emails", icon: MessageCircle, description: "Booking email log" },
   ],
 };

@@ -91,6 +91,22 @@ function mapRow(entity: MasterContentEntity, row: Record<string, unknown>): Webs
     country: (row.country as string | null) ?? "India",
     google_maps_url:
       entity === "hotels" ? ((row.google_maps_url as string | null) ?? null) : undefined,
+    category: entity === "hotels" ? ((row.category as string | null) ?? null) : undefined,
+    location: entity === "hotels" ? ((row.location as string | null) ?? null) : undefined,
+    price_description:
+      entity === "hotels" ? ((row.price_description as string | null) ?? null) : undefined,
+    rating:
+      entity === "hotels"
+        ? row.rating != null && row.rating !== ""
+          ? Number(row.rating)
+          : null
+        : undefined,
+    reviews_count:
+      entity === "hotels"
+        ? row.reviews_count != null && row.reviews_count !== ""
+          ? Number(row.reviews_count)
+          : null
+        : undefined,
     vehicle_type:
       entity === "vehicles" ? ((row.vehicle_type as string | null) ?? null) : undefined,
     capacity: entity === "vehicles" ? ((row.capacity as string | null) ?? null) : undefined,
@@ -134,6 +150,11 @@ export type MasterContentInput = {
   display_mode?: DisplayMode;
   country?: string | null;
   google_maps_url?: string | null;
+  category?: string | null;
+  location?: string | null;
+  price_description?: string | null;
+  rating?: number | null;
+  reviews_count?: number | null;
   vehicle_type?: string | null;
   capacity?: string | null;
 };
@@ -157,6 +178,12 @@ export async function createMasterContent(
     display_mode: input.display_mode ?? "list",
     country: input.country ?? "India",
     google_maps_url: entity === "hotels" ? input.google_maps_url?.trim() || null : undefined,
+    category: entity === "hotels" ? input.category?.trim() || null : undefined,
+    location: entity === "hotels" ? input.location?.trim() || null : undefined,
+    price_description:
+      entity === "hotels" ? input.price_description?.trim() || null : undefined,
+    rating: entity === "hotels" ? (input.rating ?? 0) : undefined,
+    reviews_count: entity === "hotels" ? (input.reviews_count ?? 0) : undefined,
     vehicle_type: entity === "vehicles" ? input.vehicle_type?.trim() || null : undefined,
     capacity: entity === "vehicles" ? input.capacity?.trim() || null : undefined,
     created_at: now,
@@ -183,7 +210,14 @@ export async function createMasterContent(
       };
       if (entity !== "vehicles") payload.country = item.country ?? "India";
       if (entity === "destinations") payload.is_trending = item.is_trending ?? false;
-      if (entity === "hotels") payload.google_maps_url = item.google_maps_url ?? null;
+      if (entity === "hotels") {
+        payload.google_maps_url = item.google_maps_url ?? null;
+        payload.category = item.category ?? null;
+        payload.location = item.location ?? null;
+        payload.price_description = item.price_description ?? null;
+        payload.rating = item.rating ?? 0;
+        payload.reviews_count = item.reviews_count ?? 0;
+      }
       if (entity === "vehicles") {
         payload.vehicle_type = item.vehicle_type ?? null;
         payload.capacity = item.capacity ?? null;
@@ -243,6 +277,11 @@ export async function updateMasterContent(
       if (patch.country !== undefined) payload.country = patch.country;
       if (patch.is_trending !== undefined) payload.is_trending = patch.is_trending;
       if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
+      if (patch.category !== undefined) payload.category = patch.category;
+      if (patch.location !== undefined) payload.location = patch.location;
+      if (patch.price_description !== undefined) payload.price_description = patch.price_description;
+      if (patch.rating !== undefined) payload.rating = patch.rating;
+      if (patch.reviews_count !== undefined) payload.reviews_count = patch.reviews_count;
       if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
       if (patch.capacity !== undefined) payload.capacity = patch.capacity;
 
