@@ -30,7 +30,6 @@ import {
 import { listMasterContent } from "@/lib/master-data/content-store";
 import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
 import { Lock, Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { Toggle } from "@/components/ui/toggle";
 
 const PACKAGE_TYPES: PackageType[] = [
   "Local Sight Seeing",
@@ -384,24 +383,9 @@ export function MasterItinerariesView() {
                         )}
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex flex-col gap-2">
-                          <Badge variant={item.status === "active" ? "success" : "default"}>
-                            {item.status === "active" ? "Active" : "Inactive"}
-                          </Badge>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-medium text-stone-500">Website</span>
-                            <Toggle
-                              checked={item.show_on_website}
-                              disabled={!editable}
-                              label={item.show_on_website ? "On" : "Off"}
-                              onChange={(v) => {
-                                void updateMasterItinerary(item.id, { show_on_website: v }, currentMember).then(
-                                  () => void refresh()
-                                );
-                              }}
-                            />
-                          </div>
-                        </div>
+                        <Badge variant={item.status === "active" ? "success" : "default"}>
+                          {item.status === "active" ? "Active" : "Inactive"}
+                        </Badge>
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex gap-1">
