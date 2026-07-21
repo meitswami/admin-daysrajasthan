@@ -53,9 +53,15 @@ const TAB_TITLES: Record<MasterContentEntity, { title: string; description: stri
     description: "Location master for India — packages & website",
     singular: "Location",
   },
-  hotels: { title: "Hotels", description: "Hotel inventory for costing & website", singular: "Hotel" },
+  hotels: { title: "Manage Hotels", description: "Hotel inventory for costing & website", singular: "Hotel" },
   vehicles: { title: "Vehicles", description: "Transport fleet master", singular: "Vehicle" },
 };
+
+function hotelCategoryOptions(): { value: string; label: string }[] {
+  const fromMaster = listMasterCategories().map((c) => ({ value: c.label, label: c.label }));
+  if (fromMaster.length) return fromMaster;
+  return HOTEL_CATEGORY_OPTIONS.map((c) => ({ value: c.label, label: c.label }));
+}
 
 function getImageCategory(tab: MasterContentEntity): PlaceholderCategory {
   if (tab === "destinations") return "destination";
