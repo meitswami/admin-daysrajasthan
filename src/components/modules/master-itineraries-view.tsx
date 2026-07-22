@@ -10,13 +10,12 @@ import {
   ImageThumbRow,
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
+import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
-import {
-  canCreateMasterData,
-} from "@/lib/rbac/ownership";
+import type { Itinerary, ItineraryDayPlan } from "@/types/database";
+import { canCreateMasterData } from "@/lib/rbac/ownership";
 import {
   createMasterItinerary,
   deleteMasterItinerary,
@@ -24,48 +23,32 @@ import {
   updateMasterItinerary,
 } from "@/lib/master-data/itinerary-store";
 import { listMasterContent } from "@/lib/master-data/content-store";
-import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
-
-const PACKAGE_TYPES: PackageType[] = [
-  "Local Sight Seeing",
-  "Domestic",
-  "International",
-  "Honeymoon",
-  "Friends Trip",
-  "Tirth Yatra",
-  "Family Trip",
-];
 
 function emptyDay(dayNumber: number): ItineraryDayPlan {
   return {
     day_number: dayNumber,
     title: "",
+    alternate_titles: [],
     location: "",
+    locations: [],
     description: "",
     image_urls: [],
   };
 }
 
-function daysFromDuration(duration: string, existing: ItineraryDayPlan[] = []): ItineraryDayPlan[] {
-  const match = duration.match(/^(\d+)/);
-  const count = match ? Math.min(24, Math.max(1, Number(match[1]))) : existing.length || 1;
-  const next = existing.slice(0, count);
-  while (next.length < count) {
-    next.push(emptyDay(next.length + 1));
-  }
-  return next.map((d, i) => ({ ...d, day_number: i + 1 }));
-}
-
 function destinationFromDays(days: ItineraryDayPlan[]): string | null {
   const locations = [
-    ...new Set(days.map((d) => d.location.trim()).filter(Boolean)),
+    ...new Set(
+      days.flatMap((d) => [d.location, ...(d.locations ?? [])].map((l) => l.trim()).filter(Boolean))
+    ),
   ];
   return locations.length ? locations.join(" · ") : null;
 }
 
-/** Tour code from slug prefix (e.g. dr004-02-days-… → DR004) */
+/** Prefer stored tour_code; fall back to slug prefix (e.g. dr004-… → DR004) */
 function tourCodeOf(item: Itinerary): string {
+  if (item.tour_code?.trim()) return item.tour_code.trim().toUpperCase();
   const slug = item.slug?.trim();
   if (!slug) return "—";
   const match = slug.match(/^([a-zA-Z]+\d+)/);
@@ -77,11 +60,14 @@ function locationsCountOf(item: Itinerary): string {
   const days = item.days ?? [];
   const segments: { name: string; nights: number }[] = [];
   for (const day of days) {
-    const name = day.location.trim();
-    if (!name) continue;
-    const last = segments[segments.length - 1];
-    if (last && last.name === name) last.nights += 1;
-    else segments.push({ name, nights: 1 });
+    const names = [day.location, ...(day.locations ?? [])]
+      .map((n) => n.trim())
+      .filter(Boolean);
+    for (const name of names.length ? [names[0]] : []) {
+      const last = segments[segments.length - 1];
+      if (last && last.name === name) last.nights += 1;
+      else segments.push({ name, nights: 1 });
+    }
   }
   if (segments.length) {
     return segments.map((s) => `${s.name} ${s.nights}-N`).join(", ");
@@ -89,69 +75,13 @@ function locationsCountOf(item: Itinerary): string {
   return item.destination?.trim() || "—";
 }
 
-function StringListField({
-  label,
-  value,
-  onChange,
-  disabled,
-  placeholder = "Enter item…",
-}: {
-  label: string;
-  value: string[];
-  onChange: (next: string[]) => void;
-  disabled?: boolean;
-  placeholder?: string;
-}) {
-  const rows = value.length ? value : [""];
+function dayTitleList(day: ItineraryDayPlan): string[] {
+  return [day.title, ...(day.alternate_titles ?? [])];
+}
 
-  function removeAt(index: number) {
-    const next = value.filter((_, i) => i !== index);
-    onChange(next.length ? next : []);
-  }
-
-  function addLine() {
-    onChange([...value.filter((v) => v.trim()), ""]);
-  }
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <Label>{label}</Label>
-        {!disabled && (
-          <Button type="button" size="sm" variant="outline" onClick={addLine}>
-            <Plus className="h-3.5 w-3.5" /> Add
-          </Button>
-        )}
-      </div>
-      <div className="space-y-2">
-        {rows.map((line, index) => (
-          <div key={index} className="flex gap-2">
-            <Input
-              value={line}
-              placeholder={placeholder}
-              disabled={disabled}
-              onChange={(e) => {
-                const list = value.length ? [...value] : [""];
-                list[index] = e.target.value;
-                onChange(list);
-              }}
-            />
-            {!disabled && (
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                onClick={() => removeAt(index)}
-                aria-label={`Remove ${label} item`}
-              >
-                <Minus className="h-4 w-4 text-red-500" />
-              </Button>
-            )}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+function dayLocationList(day: ItineraryDayPlan): string[] {
+  const list = [day.location, ...(day.locations ?? [])];
+  return list.length ? list : [""];
 }
 
 export function MasterItinerariesView() {
@@ -161,16 +91,14 @@ export function MasterItinerariesView() {
   const [locations, setLocations] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Itinerary | null>(null);
 
-  const [packageName, setPackageName] = useState("");
-  const [packageType, setPackageType] = useState<PackageType>("Domestic");
-  const [duration, setDuration] = useState("3 Days 2 Nights");
-  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
-  const [inclusions, setInclusions] = useState<string[]>([""]);
-  const [exclusions, setExclusions] = useState<string[]>([""]);
-  const [days, setDays] = useState<ItineraryDayPlan[]>(() => daysFromDuration("3 Days 2 Nights"));
+  const [titles, setTitles] = useState<string[]>([""]);
+  const [duration, setDuration] = useState("");
+  const [tourCode, setTourCode] = useState("");
+  const [days, setDays] = useState<ItineraryDayPlan[]>(() => [emptyDay(1)]);
 
   const canCreate = canCreateMasterData(currentMember);
 
@@ -200,25 +128,25 @@ export function MasterItinerariesView() {
       if (!q) return true;
       return (
         i.package_name.toLowerCase().includes(q) ||
+        (i.alternate_titles ?? []).some((t) => t.toLowerCase().includes(q)) ||
         (i.destination?.toLowerCase().includes(q) ?? false) ||
         (i.package_duration?.toLowerCase().includes(q) ?? false) ||
         tourCodeOf(i).toLowerCase().includes(q) ||
         (i.days ?? []).some(
-          (d) => d.location.toLowerCase().includes(q) || d.title.toLowerCase().includes(q)
+          (d) =>
+            d.location.toLowerCase().includes(q) ||
+            d.title.toLowerCase().includes(q) ||
+            (d.locations ?? []).some((l) => l.toLowerCase().includes(q))
         )
       );
     });
   }, [items, search]);
 
   function resetForm() {
-    const nextDuration = "3 Days 2 Nights";
-    setPackageName("");
-    setPackageType("Domestic");
-    setDuration(nextDuration);
-    setGalleryUrls([]);
-    setInclusions([""]);
-    setExclusions([""]);
-    setDays(daysFromDuration(nextDuration));
+    setTitles([""]);
+    setDuration("");
+    setTourCode("");
+    setDays([emptyDay(1)]);
   }
 
   function openAdd() {
@@ -233,28 +161,39 @@ export function MasterItinerariesView() {
 
   function openEdit(item: Itinerary) {
     setEditing(item);
-    setPackageName(item.package_name);
-    setPackageType(item.package_type ?? "Domestic");
-    const nextDuration = item.package_duration ?? "3 Days 2 Nights";
-    setDuration(nextDuration);
-    setGalleryUrls(collectDisplayImages(item.cover_image_url, item.gallery_urls));
-    setInclusions(item.inclusions?.length ? [...item.inclusions] : [""]);
-    setExclusions(item.exclusions?.length ? [...item.exclusions] : [""]);
+    setTitles(
+      [item.package_name, ...(item.alternate_titles ?? [])].filter((t, i) => i === 0 || t.trim())
+    );
+    setDuration(item.package_duration ?? "");
+    setTourCode(item.tour_code ?? tourCodeOf(item).replace(/^—$/, ""));
     setDays(
       item.days?.length
-        ? item.days.map((d, i) => ({ ...d, day_number: i + 1 }))
-        : daysFromDuration(nextDuration)
+        ? item.days.map((d, i) => ({
+            ...emptyDay(i + 1),
+            ...d,
+            day_number: i + 1,
+            alternate_titles: d.alternate_titles ?? [],
+            locations: d.locations ?? [],
+            image_urls: d.image_urls ?? [],
+          }))
+        : [emptyDay(1)]
     );
     setModalOpen(true);
   }
 
-  function setDurationAndDays(next: string) {
-    setDuration(next);
-    setDays((prev) => daysFromDuration(next, prev));
-  }
-
   function updateDay(index: number, patch: Partial<ItineraryDayPlan>) {
     setDays((prev) => prev.map((d, i) => (i === index ? { ...d, ...patch } : d)));
+  }
+
+  function setDayTitles(index: number, nextTitles: string[]) {
+    const [primary, ...rest] = nextTitles.length ? nextTitles : [""];
+    updateDay(index, { title: primary ?? "", alternate_titles: rest });
+  }
+
+  function setDayLocations(index: number, nextLocations: string[]) {
+    const list = nextLocations.length ? nextLocations : [""];
+    const [primary, ...rest] = list;
+    updateDay(index, { location: primary ?? "", locations: rest });
   }
 
   function addDay() {
@@ -272,52 +211,62 @@ export function MasterItinerariesView() {
   }
 
   async function save() {
-    if (!packageName.trim()) {
-      show("Package name is required");
+    const cleanTitles = titles.map((t) => t.trim()).filter(Boolean);
+    if (!cleanTitles.length) {
+      show("At least one title is required");
       return;
     }
-    const gallery = galleryUrls.filter(Boolean).slice(0, 6);
-    const cleanLines = (lines: string[]) =>
-      lines.map((l) => l.trim()).filter(Boolean);
-    const cleanDays = days.map((d, i) => ({
-      day_number: i + 1,
-      title: d.title.trim(),
-      location: d.location.trim(),
-      description: d.description.trim(),
-      image_urls: d.image_urls.filter(Boolean),
-    }));
+
+    const cleanDays = days.map((d, i) => {
+      const dayTitles = dayTitleList(d).map((t) => t.trim()).filter(Boolean);
+      const dayLocs = dayLocationList(d).map((l) => l.trim()).filter(Boolean);
+      return {
+        day_number: i + 1,
+        title: dayTitles[0] ?? "",
+        alternate_titles: dayTitles.slice(1),
+        location: dayLocs[0] ?? "",
+        locations: dayLocs.slice(1),
+        description: d.description.trim(),
+        image_urls: d.image_urls.filter(Boolean),
+      };
+    });
+
+    const firstDayImage = cleanDays.find((d) => d.image_urls[0])?.image_urls[0] ?? null;
 
     const payload = {
-      package_name: packageName,
+      package_name: cleanTitles[0],
+      alternate_titles: cleanTitles.slice(1),
+      tour_code: tourCode.trim() || null,
       destination: destinationFromDays(cleanDays),
-      package_type: packageType,
-      package_duration: duration,
+      package_type: (editing?.package_type ?? "Domestic") as Itinerary["package_type"],
+      package_duration: duration.trim() || null,
       pdf_url: editing?.pdf_url ?? null,
-      cover_image_url: gallery[0] ?? null,
-      gallery_urls: gallery,
-      inclusions: cleanLines(inclusions),
-      exclusions: cleanLines(exclusions),
+      cover_image_url: editing?.cover_image_url ?? firstDayImage,
+      gallery_urls: firstDayImage ? [firstDayImage] : editing?.gallery_urls ?? [],
+      inclusions: editing?.inclusions ?? [],
+      exclusions: editing?.exclusions ?? [],
       days: cleanDays,
-      show_on_website: editing?.show_on_website ?? true,
+      show_on_website: editing?.show_on_website ?? false,
       is_trending: editing?.is_trending ?? false,
-      status: (editing?.status ?? "active") as "active" | "inactive",
+      status: (editing?.status ?? "inactive") as "active" | "inactive",
     };
 
-    if (!editing) {
-      payload.status = "active";
-      payload.show_on_website = true;
-      payload.is_trending = false;
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateMasterItinerary(editing.id, payload, currentMember);
+        show("Itinerary updated");
+      } else {
+        await createMasterItinerary(payload, currentMember);
+        show("Itinerary created");
+      }
+      setModalOpen(false);
+      void refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save itinerary");
+    } finally {
+      setSaving(false);
     }
-
-    if (editing) {
-      await updateMasterItinerary(editing.id, payload);
-      show("Itinerary updated");
-    } else {
-      await createMasterItinerary(payload, currentMember);
-      show("Itinerary created");
-    }
-    setModalOpen(false);
-    void refresh();
   }
 
   async function remove(item: Itinerary) {
@@ -366,45 +315,45 @@ export function MasterItinerariesView() {
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
-                      <td className="px-3 py-3">
-                        <ImageThumbRow
-                          urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
-                          size={44}
-                        />
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="font-medium text-stone-900">{item.package_name}</p>
-                      </td>
-                      <td className="px-3 py-3 text-stone-600">
-                        {item.package_duration ?? "—"}
-                      </td>
-                      <td className="px-3 py-3 text-stone-600">{locationsCountOf(item)}</td>
-                      <td className="px-3 py-3 font-mono font-medium text-stone-800">
-                        {tourCodeOf(item)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="bg-blue-600 text-white hover:bg-blue-700"
-                            onClick={() => openEdit(item)}
-                          >
-                            Edit
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => void remove(item)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
+                  <tr key={item.id}>
+                    <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
+                    <td className="px-3 py-3">
+                      <ImageThumbRow
+                        urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
+                        size={44}
+                      />
+                    </td>
+                    <td className="px-3 py-3">
+                      <p className="font-medium text-stone-900">{item.package_name}</p>
+                    </td>
+                    <td className="px-3 py-3 text-stone-600">
+                      {item.package_duration ?? "—"}
+                    </td>
+                    <td className="px-3 py-3 text-stone-600">{locationsCountOf(item)}</td>
+                    <td className="px-3 py-3 font-mono font-medium text-stone-800">
+                      {tourCodeOf(item)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          onClick={() => openEdit(item)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void remove(item)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
                 ))}
                 {!filtered.length && (
                   <tr>
@@ -422,165 +371,251 @@ export function MasterItinerariesView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? "Edit itinerary" : "Add itinerary"}
+        title={editing ? "Manage Itinerary" : "Manage Itinerary"}
         description={
           editing
             ? `Created by ${editing.created_by_name ?? "Unknown"}`
-            : "Package details, day-wise plan, inclusions, exclusions & media"
+            : "Titles, duration, tour code & day-wise plan"
         }
         className="sm:max-w-3xl"
       >
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <Label>Package name *</Label>
-            <Input
-              className="mt-1.5"
-              value={packageName}
-              onChange={(e) => setPackageName(e.target.value)}
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <Label>Package type</Label>
-              <Select
-                className="mt-1.5"
-                value={packageType}
-                onChange={(e) => setPackageType(e.target.value as PackageType)}
+            <Label>Titles</Label>
+            <div className="mt-1.5 space-y-2">
+              {titles.map((title, index) => (
+                <div key={index} className="flex gap-2">
+                  <Input
+                    value={title}
+                    placeholder={`Title ${index + 1}`}
+                    onChange={(e) => {
+                      const next = [...titles];
+                      next[index] = e.target.value;
+                      setTitles(next);
+                    }}
+                  />
+                  {titles.length > 1 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setTitles(titles.filter((_, i) => i !== index))}
+                      aria-label="Remove title"
+                    >
+                      <Minus className="h-4 w-4 text-red-500" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+              <Button
+                type="button"
+                size="sm"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={() => setTitles([...titles, ""])}
               >
-                {PACKAGE_TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Duration</Label>
-              <Select
-                className="mt-1.5"
-                value={duration}
-                onChange={(e) => setDurationAndDays(e.target.value)}
-              >
-                {PACKAGE_DURATIONS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </Select>
+                <Plus className="h-3.5 w-3.5" /> Add Title
+              </Button>
             </div>
           </div>
 
-          <GalleryImagesField
-            label="Package images (up to 6)"
-            value={galleryUrls}
-            onChange={setGalleryUrls}
-          />
+          <div>
+            <Label>Duration</Label>
+            <Input
+              className="mt-1.5"
+              value={duration}
+              placeholder="e.g., 5 Nights/6 Days"
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
+
+          <div>
+            <Label>Tour Code</Label>
+            <Input
+              className="mt-1.5"
+              value={tourCode}
+              placeholder="e.g., DR064"
+              onChange={(e) => setTourCode(e.target.value)}
+            />
+          </div>
 
           <div className="rounded-xl border border-stone-200 bg-stone-50/60 p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold text-stone-900">Day-wise Itinerary</p>
-                <p className="text-xs text-stone-500">
-                  Title, location, description & images for each day
-                </p>
-              </div>
-              <Button type="button" size="sm" onClick={addDay}>
-                  <Plus className="h-3.5 w-3.5" /> Add Day
-                </Button>
+              <p className="text-sm font-semibold text-stone-900">Day-wise Itinerary</p>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-blue-600 text-white hover:bg-blue-700"
+                onClick={addDay}
+              >
+                <Plus className="h-3.5 w-3.5" /> Add Day
+              </Button>
             </div>
             <div className="space-y-4">
-              {days.map((day, index) => (
-                <div
-                  key={day.day_number}
-                  className="space-y-3 rounded-lg border border-stone-200 bg-white p-3"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-sm font-medium text-stone-800">Day {index + 1}</p>
-                    {days.length > 1 && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeDay(index)}
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
-                      </Button>
-                    )}
-                  </div>
-                  <div>
-                    <Label>Day title</Label>
-                    <Input
-                      className="mt-1.5"
-                      value={day.title}
-                      placeholder={`Day ${index + 1} title`}
-                      onChange={(e) => updateDay(index, { title: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <Label>Location</Label>
-                    <Select
-                      className="mt-1.5"
-                      value={day.location}
-                      onChange={(e) => updateDay(index, { location: e.target.value })}
-                    >
-                      <option value="">Select location</option>
-                      {day.location && !locations.includes(day.location) && (
-                        <option value={day.location}>{day.location}</option>
+              {days.map((day, index) => {
+                const titleRows = dayTitleList(day);
+                const locationRows = dayLocationList(day);
+                return (
+                  <div
+                    key={day.day_number}
+                    className="space-y-3 rounded-lg border border-stone-200 bg-white p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-medium text-stone-800">Day {index + 1}</p>
+                      {days.length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => removeDay(index)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        </Button>
                       )}
-                      {locations.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Description</Label>
-                    <Textarea
-                      className="mt-1.5"
-                      rows={3}
-                      value={day.description}
-                      placeholder="Enter description…"
-                      onChange={(e) => updateDay(index, { description: e.target.value })}
+                    </div>
+
+                    <div>
+                      <Label>Day Title</Label>
+                      <div className="mt-1.5 space-y-2">
+                        {titleRows.map((title, tIndex) => (
+                          <div key={tIndex} className="flex gap-2">
+                            <Input
+                              value={title}
+                              placeholder={`Day ${index + 1} Title ${tIndex + 1}`}
+                              onChange={(e) => {
+                                const next = [...titleRows];
+                                next[tIndex] = e.target.value;
+                                setDayTitles(index, next);
+                              }}
+                            />
+                            {titleRows.length > 1 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setDayTitles(
+                                    index,
+                                    titleRows.filter((_, i) => i !== tIndex)
+                                  )
+                                }
+                              >
+                                <Minus className="h-4 w-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          onClick={() => setDayTitles(index, [...titleRows, ""])}
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add Title
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label>Day Description</Label>
+                      <div className="mt-1.5">
+                        <RichTextToolbar
+                          value={day.description}
+                          onChange={(html) => updateDay(index, { description: html })}
+                        />
+                        <Textarea
+                          className="rounded-t-none"
+                          rows={4}
+                          value={day.description}
+                          placeholder="Enter description..."
+                          onChange={(e) => updateDay(index, { description: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label>Locations</Label>
+                      <div className="mt-1.5 space-y-2">
+                        {locationRows.map((loc, lIndex) => (
+                          <div key={lIndex} className="flex gap-2">
+                            <Select
+                              value={loc}
+                              onChange={(e) => {
+                                const next = [...locationRows];
+                                next[lIndex] = e.target.value;
+                                setDayLocations(index, next);
+                              }}
+                            >
+                              <option value="">Select location</option>
+                              {loc && !locations.includes(loc) && (
+                                <option value={loc}>{loc}</option>
+                              )}
+                              {locations.map((name) => (
+                                <option key={name} value={name}>
+                                  {name}
+                                </option>
+                              ))}
+                            </Select>
+                            {locationRows.length > 1 && (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                  setDayLocations(
+                                    index,
+                                    locationRows.filter((_, i) => i !== lIndex)
+                                  )
+                                }
+                              >
+                                <Minus className="h-4 w-4 text-red-500" />
+                              </Button>
+                            )}
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          onClick={() => setDayLocations(index, [...locationRows, ""])}
+                        >
+                          <Plus className="h-3.5 w-3.5" /> Add Location
+                        </Button>
+                      </div>
+                    </div>
+
+                    <GalleryImagesField
+                      label="Images"
+                      value={day.image_urls}
+                      onChange={(urls) => updateDay(index, { image_urls: urls })}
+                      max={6}
+                      folder="itineraries"
                     />
                   </div>
-                  <GalleryImagesField
-                    label="Day images"
-                    value={day.image_urls}
-                    onChange={(urls) => updateDay(index, { image_urls: urls })}
-                    max={4}
-                  />
-                </div>
-              ))}
+                );
+              })}
               {!days.length && (
                 <p className="text-sm text-stone-500">No days yet. Click Add Day to start.</p>
               )}
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <StringListField
-              label="Inclusions"
-              value={inclusions}
-              onChange={setInclusions}
-              placeholder="e.g. Breakfast"
-            />
-            <StringListField
-              label="Exclusions"
-              value={exclusions}
-              onChange={setExclusions}
-              placeholder="e.g. Airfare"
-            />
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              className="flex-1 bg-blue-600 hover:bg-blue-700"
+              disabled={saving}
+              onClick={() => void save()}
+            >
+              {saving ? "Saving…" : editing ? "Save Itinerary" : "Add Itinerary"}
+            </Button>
+            <Button
+              type="button"
+              className="flex-1 bg-stone-700 text-white hover:bg-stone-800"
+              onClick={() => setModalOpen(false)}
+            >
+              Cancel
+            </Button>
           </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="button" onClick={() => void save()}>
-                {editing ? "Save" : "Create"}
-              </Button>
-            </div>
         </div>
       </Modal>
     </>

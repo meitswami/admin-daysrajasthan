@@ -37,7 +37,11 @@ export function MediaOverlayCard({
           src={src}
           alt=""
           fill
-          unoptimized={src.startsWith("https://images.unsplash.com")}
+          unoptimized={
+            src.startsWith("data:") ||
+            src.startsWith("blob:") ||
+            !src.startsWith("https://images.unsplash.com")
+          }
           className="object-cover transition duration-300 group-hover:scale-[1.03]"
           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
           onError={() => setSrc(fallback)}
@@ -78,7 +82,11 @@ export function MediaThumb({
       alt=""
       width={width}
       height={height}
-      unoptimized={src.startsWith("https://images.unsplash.com")}
+      unoptimized={
+        src.startsWith("data:") ||
+        src.startsWith("blob:") ||
+        !src.startsWith("https://images.unsplash.com")
+      }
       className={cn("shrink-0 rounded-xl object-cover", className)}
       onError={() => setSrc(fallback)}
     />

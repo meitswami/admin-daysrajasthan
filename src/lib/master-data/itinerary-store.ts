@@ -2,12 +2,18 @@ import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database"
 import type { TeamMember } from "@/types/rbac";
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
   return isSupabaseConfigured() && isRealDataMode();
 }
 
 const STORAGE_KEY = "td-master-itineraries-v1";
+
+function parseStringList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((u): u is string => typeof u === "string" && Boolean(u.trim()));
+}
 
 function parseDays(raw: unknown): ItineraryDayPlan[] {
   if (!Array.isArray(raw)) return [];
@@ -16,10 +22,14 @@ function parseDays(raw: unknown): ItineraryDayPlan[] {
     const images = Array.isArray(row.image_urls)
       ? row.image_urls.filter((u): u is string => typeof u === "string" && Boolean(u))
       : [];
+    const alternateTitles = parseStringList(row.alternate_titles);
+    const locations = parseStringList(row.locations);
     return {
       day_number: Number(row.day_number ?? index + 1),
       title: String(row.title ?? ""),
+      alternate_titles: alternateTitles,
       location: String(row.location ?? ""),
+      locations,
       description: String(row.description ?? ""),
       image_urls: images,
     };
@@ -32,8 +42,10 @@ function seed(): Itinerary[] {
     {
       id: crypto.randomUUID(),
       package_name: "Jaipur Heritage 3N/4D",
+      alternate_titles: [],
+      tour_code: "DR001",
       destination: "Jaipur",
-      slug: "jaipur-heritage-3n4d",
+      slug: "dr001-jaipur-heritage-3n4d",
       pdf_url: null,
       cover_image_url: null,
       package_type: "Domestic",
@@ -52,7 +64,9 @@ function seed(): Itinerary[] {
         {
           day_number: 1,
           title: "Arrival in Jaipur",
+          alternate_titles: [],
           location: "Jaipur",
+          locations: [],
           description: "Airport pickup and check-in.",
           image_urls: [],
         },
@@ -87,6 +101,8 @@ function mapRow(row: Record<string, unknown>): Itinerary {
   return {
     id: String(row.id),
     package_name: String(row.package_name ?? ""),
+    alternate_titles: parseStringList(row.alternate_titles),
+    tour_code: (row.tour_code as string | null) ?? null,
     destination: (row.destination as string | null) ?? null,
     slug: (row.slug as string | null) ?? null,
     pdf_url: (row.pdf_url as string | null) ?? null,
@@ -109,8 +125,36 @@ function mapRow(row: Record<string, unknown>): Itinerary {
   };
 }
 
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function buildSlug(tourCode: string | null | undefined, packageName: string): string {
+  const code = (tourCode ?? "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const name = slugify(packageName);
+  if (code && name) return `${code}-${name}`.slice(0, 120);
+  if (code) return code;
+  return name || crypto.randomUUID();
+}
+
+async function persistDayImages(days: ItineraryDayPlan[]): Promise<ItineraryDayPlan[]> {
+  const next: ItineraryDayPlan[] = [];
+  for (const day of days) {
+    next.push({
+      ...day,
+      image_urls: await ensureStoredImageUrls(day.image_urls ?? [], "itineraries"),
+    });
+  }
+  return next;
+}
+
 export type MasterItineraryInput = {
   package_name: string;
+  alternate_titles?: string[];
+  tour_code?: string | null;
   destination?: string | null;
   package_type?: PackageType | null;
   package_duration?: string | null;
@@ -148,17 +192,19 @@ export async function createMasterItinerary(
   actor: TeamMember
 ): Promise<Itinerary> {
   const now = new Date().toISOString();
-  const slug = input.package_name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
+  const gallery = await ensureStoredImageUrls(input.gallery_urls ?? [], "itineraries");
+  const days = await persistDayImages(input.days ?? []);
+  const cover = input.cover_image_url || gallery[0] || days.find((d) => d.image_urls[0])?.image_urls[0] || null;
+  const tourCode = input.tour_code?.trim().toUpperCase() || null;
   const item: Itinerary = {
     id: crypto.randomUUID(),
     package_name: input.package_name.trim(),
+    alternate_titles: (input.alternate_titles ?? []).map((t) => t.trim()).filter(Boolean),
+    tour_code: tourCode,
     destination: input.destination?.trim() || null,
-    slug,
+    slug: buildSlug(tourCode, input.package_name),
     pdf_url: input.pdf_url || null,
-    cover_image_url: input.cover_image_url || null,
+    cover_image_url: cover,
     package_type: input.package_type ?? "Domestic",
     package_duration: input.package_duration ?? "3 Days 2 Nights",
     show_on_website: input.show_on_website ?? true,
@@ -170,13 +216,14 @@ export async function createMasterItinerary(
     updated_at: now,
     inclusions: input.inclusions ?? [],
     exclusions: input.exclusions ?? [],
-    gallery_urls: input.gallery_urls ?? [],
-    days: input.days ?? [],
+    gallery_urls: gallery,
+    days,
     created_by_id: actor.id,
     created_by_name: actor.name,
   };
 
   let persisted = false;
+  let lastError: string | null = null;
   if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
@@ -184,6 +231,8 @@ export async function createMasterItinerary(
       const { error } = await supabase.from("itineraries").insert({
         id: item.id,
         package_name: item.package_name,
+        alternate_titles: item.alternate_titles ?? [],
+        tour_code: item.tour_code,
         destination: item.destination,
         slug: item.slug,
         pdf_url: item.pdf_url,
@@ -202,12 +251,16 @@ export async function createMasterItinerary(
         created_by_name: actor.name,
       });
       if (!error) persisted = true;
-    } catch {
-      // fall through
+      else lastError = error.message;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Failed to save itinerary";
     }
   }
 
   if (!persisted) {
+    if (useSupabaseMaster() && lastError) {
+      throw new Error(lastError);
+    }
     const list = readLocal();
     list.unshift(item);
     writeLocal(list);
@@ -234,23 +287,45 @@ export async function updateMasterItinerary(
   const all = await listMasterItineraries();
   const before = all.find((i) => i.id === id) ?? null;
 
+  const nextPatch: Record<string, unknown> = { ...patch, updated_at: now };
+  if (patch.gallery_urls) {
+    nextPatch.gallery_urls = await ensureStoredImageUrls(patch.gallery_urls, "itineraries");
+  }
+  if (patch.days) {
+    nextPatch.days = await persistDayImages(patch.days);
+  }
+  if (patch.tour_code !== undefined) {
+    nextPatch.tour_code = patch.tour_code?.trim().toUpperCase() || null;
+  }
+  if (typeof patch.package_name === "string" || patch.tour_code !== undefined) {
+    const name = typeof patch.package_name === "string" ? patch.package_name : before?.package_name ?? "";
+    const code =
+      patch.tour_code !== undefined
+        ? (patch.tour_code?.trim().toUpperCase() || null)
+        : before?.tour_code ?? null;
+    nextPatch.slug = buildSlug(code, name);
+  }
+  if (patch.cover_image_url === undefined && Array.isArray(nextPatch.gallery_urls)) {
+    const gallery = nextPatch.gallery_urls as string[];
+    nextPatch.cover_image_url = gallery[0] ?? null;
+  }
+  if (
+    !nextPatch.cover_image_url &&
+    Array.isArray(nextPatch.days) &&
+    (nextPatch.days as ItineraryDayPlan[]).length
+  ) {
+    const firstDayImage = (nextPatch.days as ItineraryDayPlan[]).find((d) => d.image_urls?.[0])
+      ?.image_urls?.[0];
+    if (firstDayImage) nextPatch.cover_image_url = firstDayImage;
+  }
+
   if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const payload: Record<string, unknown> = { updated_at: now };
-      for (const [k, v] of Object.entries(patch)) {
-        if (v !== undefined) payload[k] = v;
-      }
-      if (typeof patch.package_name === "string") {
-        payload.slug = patch.package_name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/(^-|-$)/g, "");
-      }
       const { data, error } = await supabase
         .from("itineraries")
-        .update(payload)
+        .update(nextPatch)
         .eq("id", id)
         .select("*")
         .maybeSingle();
@@ -267,15 +342,18 @@ export async function updateMasterItinerary(
         });
         return after;
       }
-    } catch {
-      // fall through
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      if (useSupabaseMaster()) {
+        throw err instanceof Error ? err : new Error("Failed to update itinerary");
+      }
     }
   }
 
   const list = readLocal();
   const idx = list.findIndex((i) => i.id === id);
   if (idx < 0) return null;
-  list[idx] = { ...list[idx], ...patch, updated_at: now };
+  list[idx] = { ...list[idx], ...nextPatch, updated_at: now } as Itinerary;
   writeLocal(list);
   logMasterDataChange({
     entityType: "itinerary",

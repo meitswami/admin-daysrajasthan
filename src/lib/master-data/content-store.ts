@@ -7,6 +7,7 @@ import {
 } from "@/lib/data/website-content";
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 /** Real mode + configured env → Supabase. Dummy → local mock/seed. */
 function useSupabaseMaster(): boolean {
@@ -165,8 +166,20 @@ export async function createMasterContent(
   actor: TeamMember
 ): Promise<WebsiteContentItem> {
   const now = new Date().toISOString();
-  const gallery = (input.gallery_urls ?? []).filter(Boolean).slice(0, 6);
-  const cover = input.image_url || gallery[0] || null;
+  const folder =
+    entity === "vehicles"
+      ? "vehicles"
+      : entity === "hotels"
+        ? "hotels"
+        : "destinations";
+  const gallery = await ensureStoredImageUrls(
+    (input.gallery_urls ?? []).filter(Boolean).slice(0, 6),
+    folder
+  );
+  const cover = (await ensureStoredImageUrls(
+    input.image_url ? [input.image_url] : [],
+    folder
+  ))[0] || gallery[0] || null;
   const item: WebsiteContentItem = {
     id: crypto.randomUUID(),
     name: input.name.trim(),
@@ -193,6 +206,7 @@ export async function createMasterContent(
   };
 
   let persisted = false;
+  let lastError: string | null = null;
   if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
@@ -225,12 +239,16 @@ export async function createMasterContent(
 
       const { error } = await supabase.from(TABLE_MAP[entity]).insert(payload);
       if (!error) persisted = true;
-    } catch {
-      // fall through to local
+      else lastError = error.message;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Failed to save";
     }
   }
 
   if (!persisted) {
+    if (useSupabaseMaster() && lastError) {
+      throw new Error(lastError);
+    }
     const list = readLocal(entity);
     list.unshift(item);
     writeLocal(entity, list);
@@ -257,6 +275,12 @@ export async function updateMasterContent(
   const now = new Date().toISOString();
   const beforeList = await listMasterContent(entity);
   const before = beforeList.find((i) => i.id === id) ?? null;
+  const folder =
+    entity === "vehicles"
+      ? "vehicles"
+      : entity === "hotels"
+        ? "hotels"
+        : "destinations";
 
   if (useSupabaseMaster()) {
     try {
@@ -266,11 +290,19 @@ export async function updateMasterContent(
       if (patch.name !== undefined) payload.name = patch.name.trim();
       if (patch.subtitle !== undefined) payload.subtitle = patch.subtitle;
       if (patch.gallery_urls !== undefined) {
-        const gallery = patch.gallery_urls.slice(0, 6);
+        const gallery = await ensureStoredImageUrls(patch.gallery_urls.slice(0, 6), folder);
         payload.gallery_urls = gallery;
-        payload.image_url = patch.image_url !== undefined ? patch.image_url : gallery[0] ?? null;
+        payload.image_url =
+          patch.image_url !== undefined
+            ? (await ensureStoredImageUrls(
+                patch.image_url ? [patch.image_url] : [],
+                folder
+              ))[0] ?? gallery[0] ?? null
+            : gallery[0] ?? null;
       } else if (patch.image_url !== undefined) {
-        payload.image_url = patch.image_url;
+        payload.image_url = patch.image_url
+          ? (await ensureStoredImageUrls([patch.image_url], folder))[0]
+          : null;
       }
       if (patch.show_on_website !== undefined) payload.show_on_website = patch.show_on_website;
       if (patch.display_mode !== undefined) payload.display_mode = patch.display_mode;
@@ -304,8 +336,11 @@ export async function updateMasterContent(
         });
         return after;
       }
-    } catch {
-      // fall through
+      if (error) throw new Error(error.message);
+    } catch (err) {
+      if (useSupabaseMaster()) {
+        throw err instanceof Error ? err : new Error("Failed to update");
+      }
     }
   }
 

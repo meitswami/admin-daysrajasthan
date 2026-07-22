@@ -17,7 +17,11 @@ export type PackageType =
 export interface ItineraryDayPlan {
   day_number: number;
   title: string;
+  /** Extra day titles (Add Title) */
+  alternate_titles?: string[];
   location: string;
+  /** Extra locations beyond the primary (Add Location) */
+  locations?: string[];
   description: string;
   image_urls: string[];
 }
@@ -25,6 +29,10 @@ export interface ItineraryDayPlan {
 export interface Itinerary {
   id: string;
   package_name: string;
+  /** Extra package titles */
+  alternate_titles?: string[];
+  /** e.g. DR064 */
+  tour_code?: string | null;
   destination: string | null;
   slug: string | null;
   pdf_url: string | null;

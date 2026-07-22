@@ -3,8 +3,10 @@
 import Image from "next/image";
 import { Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { Plus, X } from "lucide-react";
+import { Loader2, Plus, X } from "lucide-react";
+import { useState } from "react";
 import { useToast } from "@/components/ui/toast";
+import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 
 export const MAX_GALLERY_IMAGES = 6;
 
@@ -95,28 +97,36 @@ export function GalleryImagesField({
   onChange,
   disabled,
   max = MAX_GALLERY_IMAGES,
+  folder = "gallery",
 }: {
   label?: string;
   value: string[];
   onChange: (urls: string[]) => void;
   disabled?: boolean;
   max?: number;
+  /** Storage folder: vehicles | itineraries | destinations | hotels */
+  folder?: string;
 }) {
   const { show } = useToast();
+  const [uploading, setUploading] = useState(false);
   const urls = value.slice(0, max);
 
-  function addFile(file: File) {
+  async function addFile(file: File) {
     if (urls.length >= max) return;
     if (!isAllowedImage(file)) {
       show("Only .webp, .jpg, .jpeg, .png images are allowed");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
-      onChange([...urls, dataUrl].slice(0, max));
-    };
-    reader.readAsDataURL(file);
+    setUploading(true);
+    try {
+      const publicUrl = await uploadMasterImage(file, folder);
+      onChange([...urls, publicUrl].slice(0, max));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Image upload failed";
+      show(message);
+    } finally {
+      setUploading(false);
+    }
   }
 
   function removeAt(index: number) {
@@ -131,7 +141,7 @@ export function GalleryImagesField({
       </p>
       <div className="mt-2 flex flex-wrap gap-2">
         {urls.map((src, i) => (
-          <div key={`${src.slice(0, 32)}-${i}`} className="relative">
+          <div key={`${src.slice(0, 48)}-${i}`} className="relative">
             <Image
               src={src}
               alt=""
@@ -158,16 +168,28 @@ export function GalleryImagesField({
           </div>
         ))}
         {urls.length < max && !disabled && (
-          <label className="flex h-[72px] w-[72px] cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50 text-stone-500 hover:bg-stone-100">
-            <Plus className="h-4 w-4" />
-            <span className="text-[10px]">Add</span>
+          <label
+            className={cn(
+              "flex h-[72px] w-[72px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-stone-300 bg-stone-50 text-stone-500",
+              uploading ? "cursor-wait opacity-60" : "cursor-pointer hover:bg-stone-100"
+            )}
+          >
+            {uploading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                <span className="text-[10px]">Add</span>
+              </>
+            )}
             <input
               type="file"
               accept={ACCEPT}
               className="sr-only"
+              disabled={uploading}
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) addFile(file);
+                if (file) void addFile(file);
                 e.target.value = "";
               }}
             />

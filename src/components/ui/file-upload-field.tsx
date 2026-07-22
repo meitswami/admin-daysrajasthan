@@ -1,9 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { FileText } from "lucide-react";
+import { useState } from "react";
+import { FileText, Loader2 } from "lucide-react";
 import { Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/components/ui/toast";
+import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 
 export function FileUploadField({
   label,
@@ -14,6 +17,7 @@ export function FileUploadField({
   previewWide,
   required,
   disabled,
+  folder = "covers",
 }: {
   label: string;
   hint?: string;
@@ -23,7 +27,12 @@ export function FileUploadField({
   previewWide?: boolean;
   required?: boolean;
   disabled?: boolean;
+  folder?: string;
 }) {
+  const { show } = useToast();
+  const [uploading, setUploading] = useState(false);
+  const isImageAccept = accept.includes("image/");
+
   return (
     <div>
       <Label>
@@ -35,23 +44,43 @@ export function FileUploadField({
         <label
           className={cn(
             "inline-flex items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700",
-            disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-stone-50"
+            disabled || uploading
+              ? "cursor-not-allowed opacity-60"
+              : "cursor-pointer hover:bg-stone-50"
           )}
         >
-          Choose File
+          {uploading ? (
+            <span className="inline-flex items-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" /> Uploading…
+            </span>
+          ) : (
+            "Choose File"
+          )}
           <input
             type="file"
             accept={accept}
             className="sr-only"
-            disabled={disabled}
+            disabled={disabled || uploading}
             onChange={(e) => {
-              if (disabled) return;
+              if (disabled || uploading) return;
               const file = e.target.files?.[0];
               if (!file) return;
-              const reader = new FileReader();
-              reader.onload = () => onChange(reader.result as string);
-              reader.readAsDataURL(file);
               e.target.value = "";
+              if (!isImageAccept) {
+                const reader = new FileReader();
+                reader.onload = () => onChange(reader.result as string);
+                reader.readAsDataURL(file);
+                return;
+              }
+              setUploading(true);
+              void uploadMasterImage(file, folder)
+                .then((url) => onChange(url))
+                .catch((err) => {
+                  const message =
+                    err instanceof Error ? err.message : "Image upload failed";
+                  show(message);
+                })
+                .finally(() => setUploading(false));
             }}
           />
         </label>
@@ -155,6 +184,7 @@ export function CoverImageUploadField({
   onChange,
   required,
   disabled,
+  folder = "hotels",
 }: {
   label: string;
   hint?: string;
@@ -162,6 +192,7 @@ export function CoverImageUploadField({
   onChange: (dataUrl: string | null) => void;
   required?: boolean;
   disabled?: boolean;
+  folder?: string;
 }) {
   return (
     <FileUploadField
@@ -171,6 +202,7 @@ export function CoverImageUploadField({
       onChange={onChange}
       required={required}
       disabled={disabled}
+      folder={folder}
       accept="image/png,image/jpeg,image/jpg,image/gif,image/webp"
     />
   );

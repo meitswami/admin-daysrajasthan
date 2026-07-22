@@ -241,15 +241,25 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     };
 
     if (editing) {
-      await updateMasterContent(tab, editing.id, {
-        ...payload,
-        show_on_website: editing.show_on_website,
-        is_trending: editing.is_trending ?? false,
-      });
-      show("Updated");
+      try {
+        await updateMasterContent(tab, editing.id, {
+          ...payload,
+          show_on_website: editing.show_on_website,
+          is_trending: editing.is_trending ?? false,
+        });
+        show("Updated");
+      } catch (err) {
+        show(err instanceof Error ? err.message : "Failed to update");
+        return;
+      }
     } else {
-      await createMasterContent(tab, payload, currentMember);
-      show("Created");
+      try {
+        await createMasterContent(tab, payload, currentMember);
+        show("Created");
+      } catch (err) {
+        show(err instanceof Error ? err.message : "Failed to create");
+        return;
+      }
     }
     setModalOpen(false);
     void refresh();
@@ -622,6 +632,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Vehicle images (up to 6)"
                 value={galleryUrls}
                 onChange={setGalleryUrls}
+                folder="vehicles"
               />
             </>
           ) : tab === "hotels" ? (
@@ -738,6 +749,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Hotel Image"
                 value={hotelImage}
                 onChange={setHotelImage}
+                folder="hotels"
               />
             </>
           ) : (
@@ -756,6 +768,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 label="Images (up to 6)"
                 value={galleryUrls}
                 onChange={setGalleryUrls}
+                folder="destinations"
               />
             </>
           )}
