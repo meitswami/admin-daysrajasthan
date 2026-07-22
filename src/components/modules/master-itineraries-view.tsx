@@ -347,10 +347,7 @@ export function MasterItinerariesView() {
 
   return (
     <>
-      <Header
-        title="Itineraries"
-        description="Package master with day-wise plan, inclusions, exclusions & images."
-      />
+      <Header />
       <PageMain>
         <PageToolbar>
           <div className="relative w-full sm:max-w-xs">

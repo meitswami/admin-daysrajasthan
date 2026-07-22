@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
@@ -33,7 +32,7 @@ import {
 } from "@/lib/master-data/content-store";
 import { listMasterCategories } from "@/lib/master-data/categories-store";
 
-const TABS: { id: MasterContentEntity; label: string }[] = [
+const CMS_TABS: { id: MasterContentEntity; label: string }[] = [
   { id: "destinations", label: "Locations" },
   { id: "hotels", label: "Hotels" },
   { id: "vehicles", label: "Vehicles" },
@@ -41,14 +40,10 @@ const TABS: { id: MasterContentEntity; label: string }[] = [
 
 export type MasterDataEntity = MasterContentEntity | "countries" | "cities";
 
-const TAB_TITLES: Record<MasterContentEntity, { title: string; description: string; singular: string }> = {
-  destinations: {
-    title: "Locations",
-    description: "Location master for India — packages & website",
-    singular: "Location",
-  },
-  hotels: { title: "Manage Hotels", description: "Hotel inventory for costing & website", singular: "Hotel" },
-  vehicles: { title: "Vehicles", description: "Transport fleet master", singular: "Vehicle" },
+const TAB_TITLES: Record<MasterContentEntity, { title: string; singular: string }> = {
+  destinations: { title: "Locations", singular: "Location" },
+  hotels: { title: "Hotels", singular: "Hotel" },
+  vehicles: { title: "Vehicles", singular: "Vehicle" },
 };
 
 function hotelCategoryOptions(): { value: string; label: string }[] {
@@ -135,15 +130,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     void refresh();
   }, [refresh, dataMode]);
 
-  function selectTab(next: MasterContentEntity) {
+  function selectCmsTab(next: MasterContentEntity) {
     setTab(next);
-    if (entity) {
-      router.push(`/master-data/${next}`);
-      return;
-    }
     router.replace(`/website?tab=${next}`);
   }
 
+  const isMasterDataPage = Boolean(entity);
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter((i) => {
@@ -280,42 +272,32 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
   return (
     <>
-      <Header
-        title={entity ? heading.title : "Website CMS"}
-        description={
-          entity
-            ? heading.description
-            : "Locations, hotels & vehicles for the public site"
-        }
-      />
+      {isMasterDataPage ? (
+        <Header />
+      ) : (
+        <Header
+          title="Website CMS"
+          description="Locations, hotels & vehicles for the public site"
+        />
+      )}
       <PageMain>
-        <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-3">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => selectTab(t.id)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
-                tab === t.id ? "bg-amber-100 text-amber-900" : "text-stone-600 hover:bg-stone-100"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-          <Link
-            href="/master-data/itineraries"
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100"
-          >
-            Itineraries →
-          </Link>
-          <Link
-            href="/master-data/categories"
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-stone-600 hover:bg-stone-100"
-          >
-            Categories →
-          </Link>
-        </div>
+        {!isMasterDataPage && (
+          <div className="flex flex-wrap gap-2 border-b border-stone-200 pb-3">
+            {CMS_TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => selectCmsTab(t.id)}
+                className={cn(
+                  "rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+                  tab === t.id ? "bg-amber-100 text-amber-900" : "text-stone-600 hover:bg-stone-100"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <PageToolbar>
           {tab === "hotels" ? (

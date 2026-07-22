@@ -92,10 +92,7 @@ export function AiSuggestionsView() {
 
   return (
     <>
-      <Header
-        title="AI Suggestions Manager"
-        description="Day title & description templates for itinerary building."
-      />
+      <Header />
       <PageMain>
         <PageToolbar>
           {canCreate && (

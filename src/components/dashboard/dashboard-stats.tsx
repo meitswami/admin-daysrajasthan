@@ -19,6 +19,8 @@ const EMPTY: DashboardStats = {
   totalWhatsappLeads: 0,
 };
 
+const TREND = "↗ +0% from last month";
+
 export function DashboardStats() {
   const { show } = useToast();
   const { dataMode } = useSystem();
@@ -39,7 +41,7 @@ export function DashboardStats() {
   }, [period, custom, dataMode]);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       <DashboardPeriodToolbar
         period={period}
         onPeriodChange={setPeriod}
@@ -56,14 +58,40 @@ export function DashboardStats() {
       />
 
       <div className="grid grid-cols-2 items-stretch gap-3 sm:gap-4 lg:grid-cols-5">
-        <StatCard label="Contact Queries" value={stats.totalContactQueries} icon={MessageSquare} />
-        <StatCard label="Inquiries" value={stats.totalInquiries} icon={FileQuestion} />
-        <StatCard label="Itinerary Downloads" value={stats.totalItineraryDownloads} icon={Download} />
-        <StatCard label="Published Blogs" value={stats.totalBlogs} icon={BookOpen} />
+        <StatCard
+          label="Contact Queries"
+          value={stats.totalContactQueries}
+          icon={MessageSquare}
+          tone="blue"
+          trend={TREND}
+        />
+        <StatCard
+          label="Inquiries"
+          value={stats.totalInquiries}
+          icon={FileQuestion}
+          tone="purple"
+          trend={TREND}
+        />
+        <StatCard
+          label="Itinerary Downloads"
+          value={stats.totalItineraryDownloads}
+          icon={Download}
+          tone="amber"
+          trend={TREND}
+        />
+        <StatCard
+          label="Published Blogs"
+          value={stats.totalBlogs}
+          icon={BookOpen}
+          tone="orange"
+          trend={TREND}
+        />
         <StatCard
           label="WhatsApp Leads"
           value={stats.totalWhatsappLeads}
           icon={MessageCircle}
+          tone="green"
+          trend={TREND}
           className="col-span-2 lg:col-span-1"
         />
       </div>

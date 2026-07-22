@@ -122,10 +122,7 @@ export function InclusionsExclusionsView() {
 
   return (
     <>
-      <Header
-        title="Inclusions & Exclusions"
-        description="Reusable lines for packages used when building itineraries."
-      />
+      <Header />
       <PageMain>
         <PageToolbar>
           <p className="text-sm text-stone-500">

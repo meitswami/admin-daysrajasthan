@@ -84,7 +84,7 @@ export function MasterDataCategoriesView() {
 
   return (
     <>
-      <Header title="Categories" description="Hotel category tiers used in itinerary pricing" />
+      <Header />
       <PageMain>
         <PageToolbar>
           <Badge className="h-10 px-3">{items.length} categories</Badge>

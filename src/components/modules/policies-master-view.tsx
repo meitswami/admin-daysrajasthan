@@ -87,10 +87,7 @@ export function PoliciesMasterView() {
 
   return (
     <>
-      <Header
-        title="Policies"
-        description="Terms, Cancellation & Payment policies for packages"
-      />
+      <Header />
       <PageMain>
         <div className="space-y-6">
           {SECTIONS.map((sec) => {

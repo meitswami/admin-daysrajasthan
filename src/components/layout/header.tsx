@@ -1,10 +1,9 @@
 "use client";
 
-import { useRef, useState, useCallback, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Menu, Bell, Search, LogOut, User, ChevronDown } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Menu, Bell, LogOut, User, ChevronDown } from "lucide-react";
 import { useMobileNav } from "./mobile-nav-context";
 import { getRecentActivity } from "@/lib/data";
 import { activityToRoute } from "@/lib/data/search";
@@ -20,7 +19,7 @@ type LeadAlertDetail = {
   adminEscalations: ChatConversationStub[];
 };
 
-export function Header({ title, description }: { title: string; description?: string }) {
+export function Header({ title, description }: { title?: string; description?: string } = {}) {
   const { toggle } = useMobileNav();
   const router = useRouter();
   const [notifOpen, setNotifOpen] = useState(false);
@@ -28,7 +27,6 @@ export function Header({ title, description }: { title: string; description?: st
   const notifRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
   const activity = getRecentActivity().slice(0, 5);
-  const [searchQuery, setSearchQuery] = useState("");
   const [leadAlerts, setLeadAlerts] = useState<LeadAlertDetail>({
     offered: [],
     floating: [],
@@ -45,11 +43,6 @@ export function Header({ title, description }: { title: string; description?: st
     window.addEventListener("td-chat-lead-alerts", onLeads);
     return () => window.removeEventListener("td-chat-lead-alerts", onLeads);
   }, []);
-
-  const goSearch = useCallback(() => {
-    const q = searchQuery.trim();
-    if (q.length >= 2) router.push(`/search?q=${encodeURIComponent(q)}`);
-  }, [searchQuery, router]);
 
   const chatNotifs = [
     ...leadAlerts.offered.map((c) => ({
@@ -90,25 +83,18 @@ export function Header({ title, description }: { title: string; description?: st
           >
             <Menu className="h-5 w-5" />
           </button>
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-stone-900 sm:text-xl">{title}</h1>
-            {description && (
-              <p className="mt-0.5 line-clamp-2 text-sm text-stone-500">{description}</p>
-            )}
-          </div>
+          {(title || description) && (
+            <div className="min-w-0">
+              {title && (
+                <h1 className="truncate text-lg font-semibold text-stone-900 sm:text-xl">{title}</h1>
+              )}
+              {description && (
+                <p className="mt-0.5 line-clamp-2 text-sm text-stone-500">{description}</p>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="relative flex-1 sm:max-w-xs md:max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-            <Input
-              placeholder="Search…"
-              className="h-9 pl-9 text-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && goSearch()}
-            />
-          </div>
-
           <div className="relative" ref={notifRef}>
             <button
               type="button"

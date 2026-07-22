@@ -45,7 +45,7 @@ export function ItineraryBuilderStats() {
   }, [period, custom]);
 
   return (
-    <Card className="border-amber-200/60 bg-gradient-to-br from-amber-50/40 to-white shadow-sm">
+    <Card className="border-stone-200/80 bg-[#faf8f5] shadow-sm">
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
@@ -85,31 +85,37 @@ export function ItineraryBuilderStats() {
             label="Total Quotes"
             value={metrics.totalQuotes}
             icon={Route}
-            className="border-amber-100/80 bg-white/80"
+            tone="orange"
+            glow
           />
           <StatCard
             label="Pending"
             value={metrics.pendingQuotes}
             icon={Clock}
-            className="border-amber-100/80 bg-white/80"
+            tone="amber"
+            glow
           />
           <StatCard
             label="Booking Value"
             value={formatInrCompact(metrics.totalBookingValue)}
             icon={IndianRupee}
-            className="border-amber-100/80 bg-white/80"
+            tone="orange"
+            glow
           />
           <StatCard
             label="Confirmed Revenue"
             value={formatInrCompact(metrics.totalRevenue)}
             icon={CheckCircle2}
-            className="border-amber-100/80 bg-white/80"
+            tone="green"
+            glow
           />
           <StatCard
             label="Tour Codes Used"
             value={metrics.activePackages}
             icon={Package}
-            className="col-span-2 border-amber-100/80 bg-white/80 sm:col-span-1"
+            tone="amber"
+            glow
+            className="col-span-2 sm:col-span-1"
           />
         </div>
         <p className="text-xs text-stone-500">
