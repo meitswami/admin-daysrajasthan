@@ -4,6 +4,7 @@ import { ToastProvider } from "@/components/ui/toast";
 import { SiteSettingsProvider } from "@/components/providers/site-settings-provider";
 import { SystemProvider } from "@/components/providers/system-provider";
 import { DynamicSiteMeta } from "@/components/providers/dynamic-site-meta";
+import { ChunkLoadRecovery } from "@/components/providers/chunk-load-recovery";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${dmSans.variable} h-full`}>
       <body className="min-h-full font-sans antialiased">
+        <ChunkLoadRecovery />
         <SiteSettingsProvider>
           <SystemProvider>
             <DynamicSiteMeta />

@@ -32,6 +32,8 @@ if [[ -f /opt/daysrajasthan/env/admin.env ]]; then
 fi
 
 npm ci || npm install
+# Drop previous build so clients never mix old/new chunk hashes mid-deploy.
+rm -rf .next
 npm run build
 chown -R deploy:deploy "$ADMIN_DIR"
 
