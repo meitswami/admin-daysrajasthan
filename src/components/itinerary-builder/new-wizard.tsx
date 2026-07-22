@@ -147,35 +147,43 @@ export function NewItineraryWizard() {
       return;
     }
 
-    const record = createClientItineraryFromWizard({
-      client: draft.client,
-      packageId: draft.source_package_id,
-      categoryKeys: draft.category_pricing.map((c) => c.category_key),
-      categoryDiscounts: Object.fromEntries(
-        draft.category_pricing.map((c) => [c.category_key, c.discount_price])
-      ),
-      packagePriceOverrides: Object.fromEntries(
-        draft.category_pricing.map((c) => [c.category_key, c.manual_override])
-      ),
-      title: draft.header.title,
-      tourCode: draft.header.tour_code,
-      alternateTitles: draft.header.alternate_titles,
-      days: draft.days,
-      vehicle_type: draft.vehicle_type,
-      price_basis: draft.price_basis,
-      final_price: draft.final_price,
-      optional_inclusion_keys: draft.optional_inclusion_keys,
-      inclusions: draft.inclusions,
-      internal_notes: draft.internal_notes,
-      public_notes: draft.public_notes,
-      category_pricing: draft.category_pricing,
-    });
+    try {
+      const record = createClientItineraryFromWizard({
+        client: draft.client,
+        packageId: draft.source_package_id,
+        categoryKeys: draft.category_pricing.map((c) => c.category_key),
+        categoryDiscounts: Object.fromEntries(
+          draft.category_pricing.map((c) => [c.category_key, c.discount_price])
+        ),
+        packagePriceOverrides: Object.fromEntries(
+          draft.category_pricing.map((c) => [c.category_key, c.manual_override])
+        ),
+        title: draft.header.title,
+        tourCode: draft.header.tour_code,
+        alternateTitles: draft.header.alternate_titles,
+        days: draft.days,
+        vehicle_type: draft.vehicle_type,
+        price_basis: draft.price_basis,
+        final_price: draft.final_price,
+        optional_inclusion_keys: draft.optional_inclusion_keys,
+        inclusions: draft.inclusions,
+        internal_notes: draft.internal_notes,
+        public_notes: draft.public_notes,
+        category_pricing: draft.category_pricing,
+      });
 
-    show(`Saved ${record.quote_id}`);
-    if (after === "preview") {
-      router.push(`/itinerary-builder/${record.id}/preview-confirm`);
-    } else {
-      router.push("/itinerary-builder");
+      show(`Saved ${record.quote_id}`);
+      if (after === "preview") {
+        router.push(`/itinerary-builder/${record.id}/preview-confirm`);
+      } else {
+        router.push("/itinerary-builder");
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Could not save itinerary — browser storage may be full.";
+      show(message);
     }
   }
 

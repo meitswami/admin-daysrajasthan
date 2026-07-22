@@ -84,20 +84,29 @@ export function ItineraryBuilderWorkspace({
   }
 
   function handleSave(milestone?: string): ClientItineraryRecord | null {
-    const result = saveSnapshotRevision(itineraryId, snapshot, {
-      save_type: "manual",
-      milestone_label: milestone ?? null,
-    });
-    if (!result) {
-      show("Failed to save");
+    try {
+      const result = saveSnapshotRevision(itineraryId, snapshot, {
+        save_type: "manual",
+        milestone_label: milestone ?? null,
+      });
+      if (!result) {
+        show("Failed to save");
+        return null;
+      }
+      setRecord(result.record);
+      setRevisions(getRevisions(itineraryId));
+      setSnapshot(result.revision.snapshot);
+      setDirty(false);
+      show(`Saved version ${result.revision.version_number}`);
+      return result.record;
+    } catch (err) {
+      show(
+        err instanceof Error
+          ? err.message
+          : "Could not save — browser storage may be full."
+      );
       return null;
     }
-    setRecord(result.record);
-    setRevisions(getRevisions(itineraryId));
-    setSnapshot(result.revision.snapshot);
-    setDirty(false);
-    show(`Saved version ${result.revision.version_number}`);
-    return result.record;
   }
 
   function handleRollback(revisionId: string) {

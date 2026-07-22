@@ -29,9 +29,15 @@ import { logPricingChange } from "@/lib/itinerary-builder/pricing-log";
 import { cloneSnapshot, createRevision } from "@/lib/itinerary-builder/revisions";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
 import {
+  ItineraryStorageQuotaError,
   readItineraryBuilderState,
   writeItineraryBuilderState,
 } from "@/lib/itinerary-builder/state-store";
+
+export { ItineraryStorageQuotaError };
+
+/** Cap local revision history so localStorage stays under browser quota. */
+const MAX_REVISIONS_PER_ITINERARY = 8;
 import {
   normalizeRecord,
   normalizeRevision,
@@ -379,7 +385,11 @@ export function saveSnapshotRevision(
     previous_snapshot: prevRev?.snapshot ?? null,
   });
 
-  state.revisions[itineraryId] = [...prevRevs, revision];
+  const nextRevs = [...prevRevs, revision];
+  state.revisions[itineraryId] =
+    nextRevs.length > MAX_REVISIONS_PER_ITINERARY
+      ? nextRevs.slice(-MAX_REVISIONS_PER_ITINERARY)
+      : nextRevs;
   state.records[idx] = syncRecordFromSnapshot(record, normalized, revision);
   saveState(state);
 

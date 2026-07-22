@@ -22,8 +22,11 @@ import {
   listMasterItineraries,
   updateMasterItinerary,
 } from "@/lib/master-data/itinerary-store";
-import { listMasterContent } from "@/lib/master-data/content-store";
+import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
+import type { WebsiteContentItem } from "@/types/database";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
+
+const MAX_DAY_LOCATION_IMAGES = 4;
 
 function emptyDay(dayNumber: number): ItineraryDayPlan {
   return {
@@ -35,6 +38,20 @@ function emptyDay(dayNumber: number): ItineraryDayPlan {
     description: "",
     image_urls: [],
   };
+}
+
+function photosForDestination(dest: WebsiteContentItem | undefined): string[] {
+  if (!dest) return [];
+  return collectDisplayImages(dest.image_url, dest.gallery_urls, MAX_DAY_LOCATION_IMAGES);
+}
+
+function findDestination(
+  catalog: WebsiteContentItem[],
+  name: string
+): WebsiteContentItem | undefined {
+  const q = name.trim().toLowerCase();
+  if (!q) return undefined;
+  return catalog.find((d) => d.name.trim().toLowerCase() === q);
 }
 
 function destinationFromDays(days: ItineraryDayPlan[]): string | null {
@@ -88,7 +105,7 @@ export function MasterItinerariesView() {
   const { show } = useToast();
   const { currentMember } = useSystem();
   const [items, setItems] = useState<Itinerary[]>([]);
-  const [locations, setLocations] = useState<string[]>([]);
+  const [destinations, setDestinations] = useState<WebsiteContentItem[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -102,6 +119,15 @@ export function MasterItinerariesView() {
 
   const canCreate = canCreateMasterData(currentMember);
 
+  const locations = useMemo(
+    () =>
+      destinations
+        .map((d) => d.name.trim())
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b)),
+    [destinations]
+  );
+
   const refresh = useCallback(async () => {
     setLoading(true);
     const [packages, destinationRows] = await Promise.all([
@@ -109,12 +135,7 @@ export function MasterItinerariesView() {
       listMasterContent("destinations"),
     ]);
     setItems(packages);
-    setLocations(
-      destinationRows
-        .map((d) => d.name.trim())
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b))
-    );
+    setDestinations(destinationRows);
     setLoading(false);
   }, []);
 
@@ -190,10 +211,60 @@ export function MasterItinerariesView() {
     updateDay(index, { title: primary ?? "", alternate_titles: rest });
   }
 
+  /** Persist day images onto the selected master Location (merge, up to 6). */
+  async function syncImagesToLocation(locationName: string, urls: string[]) {
+    const dest = findDestination(destinations, locationName);
+    if (!dest) return;
+    const existing = collectDisplayImages(dest.image_url, dest.gallery_urls, 6);
+    const merged = [...existing];
+    for (const url of urls.filter(Boolean)) {
+      if (!merged.includes(url)) merged.push(url);
+      if (merged.length >= 6) break;
+    }
+    const unchanged =
+      merged.length === existing.length && merged.every((u, i) => u === existing[i]);
+    if (unchanged) return;
+
+    try {
+      const updated = await updateMasterContent(
+        "destinations",
+        dest.id,
+        {
+          gallery_urls: merged,
+          image_url: merged[0] ?? null,
+        },
+        currentMember
+      );
+      if (updated) {
+        setDestinations((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      }
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save location images");
+    }
+  }
+
   function setDayLocations(index: number, nextLocations: string[]) {
     const list = nextLocations.length ? nextLocations : [""];
     const [primary, ...rest] = list;
-    updateDay(index, { location: primary ?? "", locations: rest });
+    const primaryName = primary ?? "";
+    const prevPrimary = days[index]?.location ?? "";
+    const primaryChanged = primaryName.trim().toLowerCase() !== prevPrimary.trim().toLowerCase();
+    const photos = primaryChanged
+      ? photosForDestination(findDestination(destinations, primaryName))
+      : undefined;
+
+    updateDay(index, {
+      location: primaryName,
+      locations: rest,
+      ...(photos !== undefined ? { image_urls: photos } : {}),
+    });
+  }
+
+  function setDayImages(index: number, urls: string[]) {
+    const capped = urls.filter(Boolean).slice(0, MAX_DAY_LOCATION_IMAGES);
+    updateDay(index, { image_urls: capped });
+    const locationName = days[index]?.location?.trim();
+    if (locationName) void syncImagesToLocation(locationName, capped);
   }
 
   function addDay() {
@@ -586,10 +657,19 @@ export function MasterItinerariesView() {
                     <GalleryImagesField
                       label="Images"
                       value={day.image_urls}
-                      onChange={(urls) => updateDay(index, { image_urls: urls })}
-                      max={6}
+                      onChange={(urls) => setDayImages(index, urls)}
+                      max={MAX_DAY_LOCATION_IMAGES}
                       folder="itineraries"
                     />
+                    {day.location.trim() &&
+                      photosForDestination(findDestination(destinations, day.location))
+                        .length === 0 &&
+                      day.image_urls.length === 0 && (
+                        <p className="text-xs text-stone-400">
+                          No photos on this Location yet — add them here to save back to Master
+                          Data → Locations.
+                        </p>
+                      )}
                   </div>
                 );
               })}

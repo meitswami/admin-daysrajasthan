@@ -229,15 +229,23 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
       show_on_website: true,
       is_trending: false,
       display_mode: "list" as DisplayMode,
-      country: "India",
-      google_maps_url: tab === "hotels" ? googleMapsUrl.trim() || null : null,
-      category: tab === "hotels" ? hotelCategory.trim() || null : null,
-      location: tab === "hotels" ? hotelLocation.trim() || null : null,
-      price_description: tab === "hotels" ? priceDescription.trim() || null : null,
-      rating: tab === "hotels" ? parsedRating : null,
-      reviews_count: tab === "hotels" ? parsedReviews : null,
-      vehicle_type: tab === "vehicles" ? vehicleType.trim() || null : null,
-      capacity: tab === "vehicles" ? capacity.trim() || null : null,
+      ...(tab !== "vehicles" ? { country: "India" } : {}),
+      ...(tab === "hotels"
+        ? {
+            google_maps_url: googleMapsUrl.trim() || null,
+            category: hotelCategory.trim() || null,
+            location: hotelLocation.trim() || null,
+            price_description: priceDescription.trim() || null,
+            rating: parsedRating,
+            reviews_count: parsedReviews,
+          }
+        : {}),
+      ...(tab === "vehicles"
+        ? {
+            vehicle_type: vehicleType.trim() || null,
+            capacity: capacity.trim() || null,
+          }
+        : {}),
     };
 
     if (editing) {

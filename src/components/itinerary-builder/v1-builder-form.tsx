@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
+import { useToast } from "@/components/ui/toast";
 import {
   emptyDay,
   OPTIONAL_INCLUSIONS,
@@ -28,8 +29,9 @@ import {
   hotelsForLocation,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
-import { listMasterContent } from "@/lib/master-data/content-store";
+import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
+import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 import { cities, destinations, vehicles as masterVehicles } from "@/lib/data/website-content";
 import {
   HOTEL_CATEGORY_OPTIONS,
@@ -55,15 +57,10 @@ import {
   Eye,
   Car,
   X,
+  Loader2,
 } from "lucide-react";
 
 const MAX_DAY_IMAGES = 4;
-
-const PLACEHOLDER_IMAGES = [
-  "https://images.unsplash.com/photo-1477587458883-47145ed94245?w=200&q=80",
-  "https://images.unsplash.com/photo-1599661046289-e31897846e41?w=200&q=80",
-  "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=200&q=80",
-];
 
 const FALLBACK_LOCATIONS = [
   "Jaipur",
@@ -77,6 +74,7 @@ const FALLBACK_LOCATIONS = [
 ];
 
 type LocationCatalogEntry = {
+  id?: string;
   name: string;
   photos: string[];
 };
@@ -490,10 +488,12 @@ export function V1BuilderForm({
   onAddNote?: () => void;
   saveLabel?: string;
 }) {
+  const { show } = useToast();
   const s = normalizeSnapshot(snapshot);
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
     buildFallbackCatalog()
   );
+  const [uploadingDayImage, setUploadingDayImage] = useState<number | null>(null);
   const locs = useMemo(
     () => locationCatalog.map((e) => e.name),
     [locationCatalog]
@@ -525,19 +525,21 @@ export function V1BuilderForm({
     let cancelled = false;
     void listMasterContent("destinations").then((items) => {
       if (cancelled) return;
-      const byName = new Map<string, string[]>();
+      const byName = new Map<string, LocationCatalogEntry>();
       for (const entry of buildFallbackCatalog()) {
-        byName.set(entry.name, entry.photos);
+        byName.set(entry.name, entry);
       }
       for (const item of items) {
         const name = item.name.trim();
         if (!name) continue;
-        byName.set(name, collectDisplayImages(item.image_url, item.gallery_urls, MAX_DAY_IMAGES));
+        byName.set(name, {
+          id: item.id,
+          name,
+          photos: collectDisplayImages(item.image_url, item.gallery_urls, MAX_DAY_IMAGES),
+        });
       }
       setLocationCatalog(
-        Array.from(byName.entries())
-          .map(([name, photos]) => ({ name, photos }))
-          .sort((a, b) => a.name.localeCompare(b.name))
+        Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
       );
     });
     return () => {
@@ -706,17 +708,64 @@ export function V1BuilderForm({
     });
   }
 
-  function addImage(dayIndex: number) {
-    updateDay(dayIndex, (d) => {
-      if (d.images.length >= MAX_DAY_IMAGES) return d;
-      return {
-        ...d,
-        images: [
-          ...d.images,
-          PLACEHOLDER_IMAGES[d.images.length % PLACEHOLDER_IMAGES.length],
-        ].slice(0, MAX_DAY_IMAGES),
-      };
-    });
+  async function syncImagesToLocation(location: string | null | undefined, urls: string[]) {
+    if (!location?.trim()) return;
+    const q = location.trim().toLowerCase();
+    const entry = locationCatalog.find((e) => e.name.toLowerCase() === q);
+    if (!entry?.id) return;
+
+    const existing = entry.photos.slice(0, 6);
+    const merged = [...existing];
+    for (const url of urls.filter(Boolean)) {
+      if (!merged.includes(url)) merged.push(url);
+      if (merged.length >= 6) break;
+    }
+    if (merged.length === existing.length && merged.every((u, i) => u === existing[i])) return;
+
+    try {
+      const updated = await updateMasterContent("destinations", entry.id, {
+        gallery_urls: merged,
+        image_url: merged[0] ?? null,
+      });
+      if (updated) {
+        setLocationCatalog((prev) =>
+          prev.map((e) =>
+            e.id === updated.id
+              ? {
+                  id: updated.id,
+                  name: updated.name,
+                  photos: collectDisplayImages(
+                    updated.image_url,
+                    updated.gallery_urls,
+                    MAX_DAY_IMAGES
+                  ),
+                }
+              : e
+          )
+        );
+      }
+    } catch {
+      // non-blocking — day images still stay on the itinerary
+    }
+  }
+
+  async function addImageFromFile(dayIndex: number, file: File) {
+    setUploadingDayImage(dayIndex);
+    try {
+      const url = await uploadMasterImage(file, "itineraries");
+      let nextImages: string[] = [];
+      let location: string | null = null;
+      updateDay(dayIndex, (d) => {
+        nextImages = [...d.images, url].slice(0, MAX_DAY_IMAGES);
+        location = d.location;
+        return { ...d, images: nextImages };
+      });
+      void syncImagesToLocation(location, nextImages);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Image upload failed");
+    } finally {
+      setUploadingDayImage(null);
+    }
   }
 
   function removeImage(dayIndex: number, imageIndex: number) {
@@ -728,7 +777,10 @@ export function V1BuilderForm({
 
   function setDayLocation(dayIndex: number, location: string) {
     const nextLocation = location || null;
-    const photos = photosForLocation(locationCatalog, nextLocation);
+    // Prefer remote/relative URLs only — data: URLs blow localStorage when snapshots are saved.
+    const photos = photosForLocation(locationCatalog, nextLocation).filter(
+      (url) => !url.startsWith("data:")
+    );
     updateDay(dayIndex, (d) => ({
       ...d,
       location: nextLocation,
@@ -819,54 +871,6 @@ export function V1BuilderForm({
               </Button>
             </div>
             <div className="mt-5 grid gap-4 sm:grid-cols-2">
-              <div className="sm:col-span-2">
-                <Label>Customer Name *</Label>
-                <Input
-                  className="mt-1.5"
-                  value={s.client.client_name}
-                  onChange={(e) =>
-                    patch({ client: { ...s.client, client_name: e.target.value } })
-                  }
-                  placeholder="Customer name from step 1"
-                />
-              </div>
-              <div>
-                <Label>Phone Number *</Label>
-                <Input
-                  type="tel"
-                  className="mt-1.5"
-                  value={s.client.phone ?? ""}
-                  onChange={(e) =>
-                    patch({ client: { ...s.client, phone: e.target.value || null } })
-                  }
-                  placeholder="Phone number"
-                />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  className="mt-1.5"
-                  value={s.client.email ?? ""}
-                  onChange={(e) =>
-                    patch({ client: { ...s.client, email: e.target.value || null } })
-                  }
-                  placeholder={s.client.email ? undefined : "No email added in step 1"}
-                />
-              </div>
-              {s.client.email2 ? (
-                <div className="sm:col-span-2">
-                  <Label>Email 2</Label>
-                  <Input
-                    type="email"
-                    className="mt-1.5"
-                    value={s.client.email2}
-                    onChange={(e) =>
-                      patch({ client: { ...s.client, email2: e.target.value || null } })
-                    }
-                  />
-                </div>
-              ) : null}
               <div>
                 <Label>Travel Date *</Label>
                 <Input
@@ -1029,19 +1033,40 @@ export function V1BuilderForm({
                         </div>
                       ))}
                       {day.images.length < MAX_DAY_IMAGES && (
-                        <button
-                          type="button"
-                          onClick={() => addImage(dayIndex)}
-                          className="flex h-16 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-stone-500 hover:border-blue-400 hover:text-blue-600"
+                        <label
+                          className={cn(
+                            "flex h-16 w-20 flex-col items-center justify-center rounded-lg border border-dashed border-stone-300 text-stone-500",
+                            uploadingDayImage === dayIndex
+                              ? "cursor-wait opacity-60"
+                              : "cursor-pointer hover:border-blue-400 hover:text-blue-600"
+                          )}
                         >
-                          <Plus className="h-5 w-5" />
-                          <span className="text-[10px]">Add Image</span>
-                        </button>
+                          {uploadingDayImage === dayIndex ? (
+                            <Loader2 className="h-5 w-5 animate-spin" />
+                          ) : (
+                            <>
+                              <Plus className="h-5 w-5" />
+                              <span className="text-[10px]">Add Image</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/webp,image/jpeg,image/jpg,image/png,.webp,.jpg,.jpeg,.png"
+                            className="sr-only"
+                            disabled={uploadingDayImage === dayIndex}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) void addImageFromFile(dayIndex, file);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                       )}
                     </div>
                     {day.location && photosForLocation(locationCatalog, day.location).length === 0 && (
                       <p className="mt-1.5 text-xs text-stone-400">
-                        No photos on this Location yet — add them under Master Data → Locations.
+                        No photos on this Location yet — add them here to save back under Master
+                        Data → Locations.
                       </p>
                     )}
                   </div>
@@ -1247,6 +1272,13 @@ export function V1BuilderForm({
         </div>
       </div>
 
+      <div className="flex justify-start pb-2">
+        <Button type="button" onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700">
+          <Save className="h-4 w-4" />
+          {saveLabel}
+        </Button>
+      </div>
+
       <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex items-center gap-2">
           <Check className="h-5 w-5 text-emerald-600" />
@@ -1283,16 +1315,10 @@ export function V1BuilderForm({
           <StickyNote className="h-4 w-4" />
           Add Note
         </Button>
-        <div className="flex flex-wrap gap-2">
-          <Button type="button" onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700">
-            <Save className="h-4 w-4" />
-            {saveLabel}
-          </Button>
-          <Button type="button" onClick={onPreview} className="bg-slate-800 hover:bg-slate-900">
-            <Eye className="h-4 w-4" />
-            Preview & Confirm
-          </Button>
-        </div>
+        <Button type="button" onClick={onPreview} className="bg-slate-800 hover:bg-slate-900">
+          <Eye className="h-4 w-4" />
+          Preview & Confirm
+        </Button>
       </div>
 
       {s.category_pricing[0] && (

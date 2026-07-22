@@ -306,16 +306,22 @@ export async function updateMasterContent(
       }
       if (patch.show_on_website !== undefined) payload.show_on_website = patch.show_on_website;
       if (patch.display_mode !== undefined) payload.display_mode = patch.display_mode;
-      if (patch.country !== undefined) payload.country = patch.country;
-      if (patch.is_trending !== undefined) payload.is_trending = patch.is_trending;
-      if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
-      if (patch.category !== undefined) payload.category = patch.category;
-      if (patch.location !== undefined) payload.location = patch.location;
-      if (patch.price_description !== undefined) payload.price_description = patch.price_description;
-      if (patch.rating !== undefined) payload.rating = patch.rating;
-      if (patch.reviews_count !== undefined) payload.reviews_count = patch.reviews_count;
-      if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
-      if (patch.capacity !== undefined) payload.capacity = patch.capacity;
+      if (entity !== "vehicles" && patch.country !== undefined) payload.country = patch.country;
+      if (entity === "destinations" && patch.is_trending !== undefined) {
+        payload.is_trending = patch.is_trending;
+      }
+      if (entity === "hotels") {
+        if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
+        if (patch.category !== undefined) payload.category = patch.category;
+        if (patch.location !== undefined) payload.location = patch.location;
+        if (patch.price_description !== undefined) payload.price_description = patch.price_description;
+        if (patch.rating !== undefined) payload.rating = patch.rating;
+        if (patch.reviews_count !== undefined) payload.reviews_count = patch.reviews_count;
+      }
+      if (entity === "vehicles") {
+        if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
+        if (patch.capacity !== undefined) payload.capacity = patch.capacity;
+      }
 
       const { data, error } = await supabase
         .from(TABLE_MAP[entity])
