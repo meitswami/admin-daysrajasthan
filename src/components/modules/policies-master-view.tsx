@@ -17,7 +17,7 @@ import {
   type MasterPolicyLine,
   type PolicySectionKey,
 } from "@/lib/master-data/policies-store";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 const SECTIONS: { key: PolicySectionKey; title: string; tone: string }[] = [
   { key: "terms", title: "Terms & Conditions", tone: "bg-slate-50" },
@@ -120,12 +120,22 @@ export function PoliciesMasterView() {
                           Created by {item.created_by_name ?? "Unknown"}
                         </p>
                       </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                          <Pencil className="h-4 w-4" />
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          onClick={() => openEdit(item)}
+                        >
+                          Edit
                         </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
-                          <Trash2 className="h-4 w-4 text-red-500" />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => remove(item)}
+                        >
+                          Delete
                         </Button>
                       </div>
                     </li>

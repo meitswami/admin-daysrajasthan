@@ -17,7 +17,7 @@ import {
   updateMasterCategory,
   type MasterCategory,
 } from "@/lib/master-data/categories-store";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 export function MasterDataCategoriesView() {
   const { show } = useToast();
@@ -113,12 +113,22 @@ export function MasterDataCategoriesView() {
                     {item.created_by_name ?? "Unknown"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                        <Pencil className="h-4 w-4" />
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                        onClick={() => openEdit(item)}
+                      >
+                        Edit
                       </Button>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => remove(item)}
+                      >
+                        Delete
                       </Button>
                     </div>
                   </td>

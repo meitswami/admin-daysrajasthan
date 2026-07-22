@@ -17,7 +17,7 @@ import {
   type InclusionExclusionItem,
   type InclusionExclusionKind,
 } from "@/lib/master-data/inclusions-store";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 export function InclusionsExclusionsView() {
   const { show } = useToast();
@@ -102,12 +102,22 @@ export function InclusionsExclusionsView() {
                   Created by {item.created_by_name ?? "Unknown"}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                  <Pencil className="h-4 w-4" />
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  onClick={() => openEdit(item)}
+                >
+                  Edit
                 </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
-                  <Trash2 className="h-4 w-4 text-red-500" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => void remove(item)}
+                >
+                  Delete
                 </Button>
               </div>
             </li>

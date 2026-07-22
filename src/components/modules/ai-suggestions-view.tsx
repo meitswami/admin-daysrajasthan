@@ -15,7 +15,7 @@ import {
   type AiSuggestion,
 } from "@/lib/itinerary-builder/ai-suggestions";
 import { canCreateMasterData } from "@/lib/rbac/ownership";
-import { Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 export function AiSuggestionsView() {
   const { show } = useToast();
@@ -155,12 +155,22 @@ export function AiSuggestionsView() {
                   Created by {item.created_by_name ?? "System"}
                 </p>
               </div>
-              <div className="flex shrink-0 gap-1">
-                <Button type="button" size="sm" variant="ghost" onClick={() => startEdit(item)}>
-                  <Pencil className="h-4 w-4" />
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="bg-blue-600 text-white hover:bg-blue-700"
+                  onClick={() => startEdit(item)}
+                >
+                  Edit
                 </Button>
-                <Button type="button" size="sm" variant="ghost" onClick={() => remove(item)}>
-                  <Trash2 className="h-4 w-4 text-red-500" />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => remove(item)}
+                >
+                  Delete
                 </Button>
               </div>
             </div>

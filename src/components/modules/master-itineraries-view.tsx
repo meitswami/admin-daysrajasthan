@@ -25,8 +25,7 @@ import {
 } from "@/lib/master-data/itinerary-store";
 import { listMasterContent } from "@/lib/master-data/content-store";
 import { PACKAGE_DURATIONS } from "@/lib/constants/package-options";
-import { Minus, Pencil, Plus, Search, Trash2 } from "lucide-react";
-import { Toggle } from "@/components/ui/toggle";
+import { Minus, Plus, Search, Trash2 } from "lucide-react";
 
 const PACKAGE_TYPES: PackageType[] = [
   "Local Sight Seeing",
@@ -88,16 +87,6 @@ function locationsCountOf(item: Itinerary): string {
     return segments.map((s) => `${s.name} ${s.nights}-N`).join(", ");
   }
   return item.destination?.trim() || "—";
-}
-
-function StatusToggle({
-  active,
-  onChange,
-}: {
-  active: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return <Toggle checked={active} onChange={onChange} />;
 }
 
 function StringListField({
@@ -338,13 +327,6 @@ export function MasterItinerariesView() {
     void refresh();
   }
 
-  async function toggleStatus(item: Itinerary, active: boolean) {
-    const status = active ? "active" : "inactive";
-    setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, status } : row)));
-    await updateMasterItinerary(item.id, { status }, currentMember);
-    show(active ? "Marked active" : "Marked inactive");
-  }
-
   return (
     <>
       <Header />
@@ -404,15 +386,21 @@ export function MasterItinerariesView() {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          <StatusToggle
-                            active={item.status === "active"}
-                            onChange={(v) => void toggleStatus(item, v)}
-                          />
-                          <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(item)}>
-                            <Pencil className="h-4 w-4" />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            onClick={() => openEdit(item)}
+                          >
+                            Edit
                           </Button>
-                          <Button type="button" size="sm" variant="ghost" onClick={() => void remove(item)}>
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => void remove(item)}
+                          >
+                            Delete
                           </Button>
                         </div>
                       </td>

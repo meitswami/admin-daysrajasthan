@@ -19,7 +19,7 @@ import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import type { DisplayMode, WebsiteContentItem } from "@/types/database";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
-import { Grid3X3, List, Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Grid3X3, List, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystem } from "@/components/providers/system-provider";
 import { canCreateMasterData } from "@/lib/rbac/ownership";
@@ -472,16 +472,21 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                               active={item.show_on_website}
                               onChange={(v) => void toggleStatus(item, v)}
                             />
-                            <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                              <Pencil className="h-4 w-4" />
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-blue-600 text-white hover:bg-blue-700"
+                              onClick={() => openEdit(item)}
+                            >
+                              Edit
                             </Button>
                             <Button
                               type="button"
-                              variant="ghost"
                               size="sm"
+                              variant="destructive"
                               onClick={() => void remove(item)}
                             >
-                              <Trash2 className="h-4 w-4 text-red-500" />
+                              Delete
                             </Button>
                           </div>
                         </td>
@@ -511,22 +516,21 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex flex-wrap items-center gap-2">
-                          {tab !== "destinations" && (
-                            <StatusToggle
-                              active={item.show_on_website}
-                              onChange={(v) => void toggleStatus(item, v)}
-                            />
-                          )}
-                          <Button type="button" variant="ghost" size="sm" onClick={() => openEdit(item)}>
-                            <Pencil className="h-4 w-4" />
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            onClick={() => openEdit(item)}
+                          >
+                            Edit
                           </Button>
                           <Button
                             type="button"
-                            variant="ghost"
                             size="sm"
+                            variant="destructive"
                             onClick={() => void remove(item)}
                           >
-                            <Trash2 className="h-4 w-4 text-red-500" />
+                            Delete
                           </Button>
                         </div>
                       </td>
@@ -553,7 +557,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 key={item.id}
                 item={item}
                 imageCategory={getImageCategory(tab)}
-                showStatus={tab !== "destinations"}
+                showStatus={tab === "hotels"}
                 onToggleStatus={toggleStatus}
                 onEdit={openEdit}
                 onDelete={remove}
@@ -836,24 +840,23 @@ function ContentCard({
           ) : null}
           <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            className="h-9 w-9 rounded-full p-0 shadow-md"
+            className="bg-blue-600 text-white shadow-md hover:bg-blue-700"
             onClick={() => onEdit(item)}
           >
-            <Pencil className="h-3.5 w-3.5" />
+            Edit
           </Button>
           <Button
             type="button"
             size="sm"
-            variant="secondary"
-            className="h-9 w-9 rounded-full p-0 shadow-md"
+            variant="destructive"
+            className="shadow-md"
             onClick={() => onDelete(item)}
           >
-            <Trash2 className="h-3.5 w-3.5 text-red-600" />
+            Delete
           </Button>
         </div>
       </div>
