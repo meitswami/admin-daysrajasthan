@@ -19,6 +19,7 @@ import {
   Tags,
   Lightbulb,
   ScrollText,
+  Landmark,
   Bot,
   Truck,
   ClipboardList,
@@ -145,6 +146,12 @@ export const masterDataNav: NavGroup = {
       href: "/master-data/policies",
       icon: ScrollText,
       description: "Terms, cancellation & payment",
+    },
+    {
+      label: "Structure",
+      href: "/master-data/structure",
+      icon: Landmark,
+      description: "Company contacts, bank & payment details",
     },
   ],
 };

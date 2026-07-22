@@ -16,8 +16,11 @@ import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   clampAdvancePercent,
   DUMMY_PAYMENT_DETAILS,
+  paymentDetailsFromStructure,
   type AdvancePercent,
+  type PaymentDetails,
 } from "@/lib/itinerary-builder/payment-details";
+import { getCompanyStructure } from "@/lib/master-data/structure-store";
 import { themeShellClass } from "@/lib/itinerary-builder/preview-themes";
 import {
   getClientItinerary,
@@ -57,6 +60,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editAmount, setEditAmount] = useState(0);
+  const [payDetails, setPayDetails] = useState<PaymentDetails>(DUMMY_PAYMENT_DETAILS);
 
   useEffect(() => {
     const r = getClientItinerary(itineraryId);
@@ -66,6 +70,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
       setRecord(r);
       setSnapshot(normalizeSnapshot(current.snapshot));
     }
+    void getCompanyStructure().then((s) => setPayDetails(paymentDetailsFromStructure(s)));
   }, [itineraryId]);
 
   const themeShell = useMemo(
@@ -191,7 +196,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
     }
   }
 
-  const bank = DUMMY_PAYMENT_DETAILS.bank;
+  const bank = payDetails.bank;
 
   return (
     <div className={cn("min-h-screen", themeShell)}>
@@ -328,7 +333,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
               UPI IDs
             </h2>
             <ul className="mt-4 space-y-2">
-              {DUMMY_PAYMENT_DETAILS.upi_ids.map((upi) => (
+              {payDetails.upi_ids.map((upi) => (
                 <li
                   key={upi}
                   className="flex items-center justify-between gap-2 rounded-xl border border-stone-100 bg-[#FBF7F0] px-4 py-3"
@@ -359,12 +364,12 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
             <div className="mt-4 flex flex-col items-center">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={DUMMY_PAYMENT_DETAILS.qr_image_src}
-                alt="Payment QR code placeholder"
+                src={payDetails.qr_image_src}
+                alt="Payment QR code"
                 className="h-48 w-48 rounded-xl border border-stone-200 shadow-sm"
               />
               <p className="mt-3 text-center text-xs text-stone-500">
-                Dummy QR — replace with live UPI QR later
+                Scan to pay via UPI
               </p>
               <p className="mt-1 text-sm font-semibold text-[#7B1E2E]">
                 Pay {formatInr(primaryAdvance)}
