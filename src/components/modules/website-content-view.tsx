@@ -12,7 +12,6 @@ import {
   ImageThumbRow,
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
-import { CoverImageUploadField } from "@/components/ui/file-upload-field";
 import { useToast } from "@/components/ui/toast";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
@@ -98,7 +97,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [priceDescription, setPriceDescription] = useState("");
   const [rating, setRating] = useState("0");
   const [reviewsCount, setReviewsCount] = useState("0");
-  const [hotelImage, setHotelImage] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState("");
   const [filterLocation, setFilterLocation] = useState("");
   const [locations, setLocations] = useState<string[]>([]);
@@ -163,7 +161,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setPriceDescription("");
     setRating("0");
     setReviewsCount("0");
-    setHotelImage(null);
     setGoogleMapsUrl("");
   }
 
@@ -194,7 +191,6 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setPriceDescription(item.price_description ?? "");
     setRating(String(item.rating ?? 0));
     setReviewsCount(String(item.reviews_count ?? 0));
-    setHotelImage(item.image_url ?? null);
     setModalOpen(true);
   }
 
@@ -214,12 +210,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
     const parsedRating = Math.min(5, Math.max(0, Number(rating) || 0));
     const parsedReviews = Math.max(0, Math.floor(Number(reviewsCount) || 0));
-    const gallery =
-      tab === "hotels"
-        ? hotelImage
-          ? [hotelImage]
-          : []
-        : galleryUrls.filter(Boolean).slice(0, 6);
+    const gallery = galleryUrls.filter(Boolean).slice(0, 6);
 
     const payload = {
       name,
@@ -456,7 +447,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                       <tr key={item.id}>
                         <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                         <td className="px-3 py-3">
-                          <ImageThumbRow urls={images.slice(0, 1)} size={48} max={1} />
+                          <ImageThumbRow urls={images} size={48} max={4} />
                         </td>
                         <td className="px-3 py-3 font-semibold text-stone-900">{item.name}</td>
                         <td className="px-3 py-3 text-stone-700">{item.category || "—"}</td>
@@ -753,10 +744,10 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 />
               </div>
 
-              <CoverImageUploadField
-                label="Hotel Image"
-                value={hotelImage}
-                onChange={setHotelImage}
+              <GalleryImagesField
+                label="Hotel images (up to 6)"
+                value={galleryUrls}
+                onChange={setGalleryUrls}
                 folder="hotels"
               />
             </>
