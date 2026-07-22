@@ -311,7 +311,7 @@ function NightHotelCard({
     <div className="rounded-xl border border-stone-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
         <span className="rounded-full bg-blue-600 px-3 py-1 text-sm font-semibold text-white">
-          Night - {nightNo} · Day {day.day_number}
+          Night {nightNo}
         </span>
         <label className="inline-flex items-center gap-2 text-sm font-medium text-blue-700">
           <input
@@ -500,13 +500,26 @@ export function V1BuilderForm({
   );
   const vehicles = useMemo(() => vehicleOptions(), []);
   const selectedKeys = s.category_pricing.map((c) => c.category_key) as HotelCategoryKey[];
-  /** One hotels block on the right for every day on the left */
-  const hotelBlockDays = s.days;
+  /** One hotels block per overnight stay (last day has no night) */
+  const hotelBlockDays = s.days.slice(0, Math.max(0, s.days.length - 1));
+  const isThreeDayTwoNight = s.days.length === 3;
+  const priceBasisOptions: [PriceBasis, string][] = isThreeDayTwoNight
+    ? [["whole_group", "Whole Group/Family"]]
+    : [
+        ["per_person", "Per Person"],
+        ["whole_group", "Whole Group/Family"],
+      ];
   const vehicleList = s.vehicle_types?.length
     ? s.vehicle_types
     : s.vehicle_type
       ? [s.vehicle_type]
       : [];
+
+  useEffect(() => {
+    if (!isThreeDayTwoNight || s.price_basis === "whole_group") return;
+    onChange(normalizeSnapshot({ ...s, price_basis: "whole_group" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-force when package length or basis changes
+  }, [isThreeDayTwoNight, s.price_basis, onChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1203,12 +1216,7 @@ export function V1BuilderForm({
                 <Input type="number" className="mt-1.5" value={0} readOnly tabIndex={-1} />
               )}
               <div className="flex flex-wrap gap-4 text-sm">
-                {(
-                  [
-                    ["per_person", "Per Person"],
-                    ["whole_group", "Whole Group/Family"],
-                  ] as [PriceBasis, string][]
-                ).map(([value, label]) => (
+                {priceBasisOptions.map(([value, label]) => (
                   <label key={value} className="inline-flex items-center gap-2 text-stone-700">
                     <input
                       type="radio"
@@ -1223,9 +1231,9 @@ export function V1BuilderForm({
             </div>
           </section>
 
-          {hotelBlockDays.map((day) => {
+          {hotelBlockDays.map((day, nightIndex) => {
             const dayIndex = s.days.findIndex((d) => d.day_uuid === day.day_uuid);
-            const nightNo = String(day.day_number).padStart(2, "0");
+            const nightNo = String(nightIndex + 1).padStart(2, "0");
             return (
               <NightHotelCard
                 key={day.day_uuid}

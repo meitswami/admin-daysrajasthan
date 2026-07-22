@@ -557,7 +557,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 key={item.id}
                 item={item}
                 imageCategory={getImageCategory(tab)}
-                showStatus={tab === "hotels"}
+                showStatus={false}
                 onToggleStatus={toggleStatus}
                 onEdit={openEdit}
                 onDelete={remove}
