@@ -1,6 +1,7 @@
 import type { TeamMember } from "@/types/rbac";
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
   return isSupabaseConfigured() && isRealDataMode();
@@ -12,12 +13,26 @@ export type InclusionExclusionItem = {
   id: string;
   kind: InclusionExclusionKind;
   text: string;
+  /** Optional image — used for inclusions; exclusions usually leave this null. */
+  image_url: string | null;
   created_at: string;
   created_by_id?: string | null;
   created_by_name?: string | null;
 };
 
 const STORAGE_KEY = "td-master-inclusions-exclusions-v1";
+
+function mapRow(row: Record<string, unknown>): InclusionExclusionItem {
+  return {
+    id: String(row.id),
+    kind: row.kind as InclusionExclusionKind,
+    text: String(row.text ?? ""),
+    image_url: (row.image_url as string | null) ?? null,
+    created_at: String(row.created_at ?? new Date().toISOString()),
+    created_by_id: (row.created_by as string | null) ?? null,
+    created_by_name: (row.created_by_name as string | null) ?? null,
+  };
+}
 
 function seed(): InclusionExclusionItem[] {
   const now = new Date().toISOString();
@@ -26,6 +41,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "inclusion",
       text: "Accommodation as per plan",
+      image_url: null,
       created_at: now,
       created_by_id: "tm-info",
       created_by_name: "Travel Days Admin",
@@ -34,6 +50,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "inclusion",
       text: "Private AC vehicle for sightseeing",
+      image_url: null,
       created_at: now,
       created_by_id: "tm-info",
       created_by_name: "Travel Days Admin",
@@ -42,6 +59,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "exclusion",
       text: "Air fare / train fare",
+      image_url: null,
       created_at: now,
       created_by_id: "tm-info",
       created_by_name: "Travel Days Admin",
@@ -50,6 +68,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "exclusion",
       text: "Personal expenses",
+      image_url: null,
       created_at: now,
       created_by_id: "tm-info",
       created_by_name: "Travel Days Admin",
@@ -66,7 +85,11 @@ function readLocal(): InclusionExclusionItem[] {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
       return s;
     }
-    return JSON.parse(raw) as InclusionExclusionItem[];
+    const parsed = JSON.parse(raw) as InclusionExclusionItem[];
+    return parsed.map((item) => ({
+      ...item,
+      image_url: item.image_url ?? null,
+    }));
   } catch {
     return seed();
   }
@@ -87,14 +110,7 @@ export async function listInclusionExclusions(): Promise<InclusionExclusionItem[
         .select("*")
         .order("created_at", { ascending: false });
       if (!error && data) {
-        return data.map((row) => ({
-          id: String(row.id),
-          kind: row.kind as InclusionExclusionKind,
-          text: String(row.text ?? ""),
-          created_at: String(row.created_at),
-          created_by_id: (row.created_by as string | null) ?? null,
-          created_by_name: (row.created_by_name as string | null) ?? null,
-        }));
+        return data.map((row) => mapRow(row as Record<string, unknown>));
       }
     } catch {
       // fall through
@@ -106,12 +122,18 @@ export async function listInclusionExclusions(): Promise<InclusionExclusionItem[
 export async function createInclusionExclusion(
   kind: InclusionExclusionKind,
   text: string,
-  actor: TeamMember
+  actor: TeamMember,
+  imageUrl?: string | null
 ): Promise<InclusionExclusionItem> {
+  const resolvedImages =
+    kind === "inclusion" && imageUrl
+      ? await ensureStoredImageUrls([imageUrl], "inclusions")
+      : [];
   const item: InclusionExclusionItem = {
     id: crypto.randomUUID(),
     kind,
     text: text.trim(),
+    image_url: kind === "inclusion" ? resolvedImages[0] ?? null : null,
     created_at: new Date().toISOString(),
     created_by_id: actor.id,
     created_by_name: actor.name,
@@ -126,6 +148,7 @@ export async function createInclusionExclusion(
         id: item.id,
         kind: item.kind,
         text: item.text,
+        image_url: item.image_url,
         created_by: actor.id,
         created_by_name: actor.name,
       });
@@ -155,11 +178,26 @@ export async function createInclusionExclusion(
 
 export async function updateInclusionExclusion(
   id: string,
-  text: string,
+  patch: { text: string; image_url?: string | null; kind?: InclusionExclusionKind },
   actor?: TeamMember
 ): Promise<InclusionExclusionItem | null> {
   const beforeList = await listInclusionExclusions();
   const before = beforeList.find((i) => i.id === id) ?? null;
+  if (!before) return null;
+
+  const kind = patch.kind ?? before.kind;
+  const nextImageRaw =
+    kind === "inclusion"
+      ? patch.image_url !== undefined
+        ? patch.image_url
+        : before.image_url
+      : null;
+  const resolvedImages =
+    kind === "inclusion" && nextImageRaw
+      ? await ensureStoredImageUrls([nextImageRaw], "inclusions")
+      : [];
+  const nextImage = kind === "inclusion" ? resolvedImages[0] ?? null : null;
+  const nextText = patch.text.trim();
 
   if (useSupabaseMaster()) {
     try {
@@ -167,19 +205,12 @@ export async function updateInclusionExclusion(
       const supabase = createClient();
       const { data, error } = await supabase
         .from("td_master_inclusions_exclusions")
-        .update({ text: text.trim() })
+        .update({ text: nextText, image_url: nextImage })
         .eq("id", id)
         .select("*")
         .maybeSingle();
       if (!error && data) {
-        const after = {
-          id: String(data.id),
-          kind: data.kind as InclusionExclusionKind,
-          text: String(data.text),
-          created_at: String(data.created_at),
-          created_by_id: (data.created_by as string | null) ?? null,
-          created_by_name: (data.created_by_name as string | null) ?? null,
-        };
+        const after = mapRow(data as Record<string, unknown>);
         logMasterDataChange({
           entityType: "inclusion_exclusion",
           entityId: id,
@@ -199,7 +230,11 @@ export async function updateInclusionExclusion(
   const list = readLocal();
   const idx = list.findIndex((i) => i.id === id);
   if (idx < 0) return null;
-  list[idx] = { ...list[idx], text: text.trim() };
+  list[idx] = {
+    ...list[idx],
+    text: nextText,
+    image_url: nextImage,
+  };
   writeLocal(list);
   logMasterDataChange({
     entityType: "inclusion_exclusion",

@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
+import { FileUploadField } from "@/components/ui/file-upload-field";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
@@ -27,6 +28,7 @@ export function InclusionsExclusionsView() {
   const [editing, setEditing] = useState<InclusionExclusionItem | null>(null);
   const [kind, setKind] = useState<InclusionExclusionKind>("inclusion");
   const [text, setText] = useState("");
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   const canCreate = canCreateMasterData(currentMember);
 
@@ -46,6 +48,7 @@ export function InclusionsExclusionsView() {
     setEditing(null);
     setKind(defaultKind);
     setText("");
+    setImageUrl(null);
     setModalOpen(true);
   }
 
@@ -53,6 +56,7 @@ export function InclusionsExclusionsView() {
     setEditing(item);
     setKind(item.kind);
     setText(item.text);
+    setImageUrl(item.kind === "inclusion" ? item.image_url : null);
     setModalOpen(true);
   }
 
@@ -61,11 +65,16 @@ export function InclusionsExclusionsView() {
       show("Text is required");
       return;
     }
+    const image = kind === "inclusion" ? imageUrl : null;
     if (editing) {
-      await updateInclusionExclusion(editing.id, text);
+      await updateInclusionExclusion(
+        editing.id,
+        { text, image_url: image, kind },
+        currentMember
+      );
       show("Updated");
     } else {
-      await createInclusionExclusion(kind, text, currentMember);
+      await createInclusionExclusion(kind, text, currentMember, image);
       show("Created");
     }
     setModalOpen(false);
@@ -74,7 +83,7 @@ export function InclusionsExclusionsView() {
 
   async function remove(item: InclusionExclusionItem) {
     if (!confirm("Delete this line?")) return;
-    await deleteInclusionExclusion(item.id);
+    await deleteInclusionExclusion(item.id, currentMember);
     show("Deleted");
     void refresh();
   }
@@ -83,6 +92,7 @@ export function InclusionsExclusionsView() {
   const exclusions = items.filter((i) => i.kind === "exclusion");
 
   function renderList(list: InclusionExclusionItem[], title: string, addKind: InclusionExclusionKind) {
+    const showImages = addKind === "inclusion";
     return (
       <div className="rounded-xl border border-stone-200 bg-white">
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
@@ -96,11 +106,21 @@ export function InclusionsExclusionsView() {
         <ul className="divide-y divide-stone-100">
           {list.map((item) => (
             <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
-              <div>
-                <p className="text-sm text-stone-800">{item.text}</p>
-                <p className="mt-1 text-xs text-stone-400">
-                  Created by {item.created_by_name ?? "Unknown"}
-                </p>
+              <div className="flex min-w-0 flex-1 items-start gap-3">
+                {showImages && item.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={item.image_url}
+                    alt=""
+                    className="h-14 w-20 shrink-0 rounded-md border border-stone-200 object-cover"
+                  />
+                ) : null}
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-stone-800">{item.text}</p>
+                  <p className="mt-1 text-xs text-stone-400">
+                    Created by {item.created_by_name ?? "Unknown"}
+                  </p>
+                </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
                 <Button
@@ -136,7 +156,8 @@ export function InclusionsExclusionsView() {
       <PageMain>
         <PageToolbar>
           <p className="text-sm text-stone-500">
-            Shared library used when building itinerary packages.
+            Shared library used when building itinerary packages. Inclusions may include an optional
+            image.
           </p>
         </PageToolbar>
         <div className="grid gap-6 lg:grid-cols-2">
@@ -160,7 +181,11 @@ export function InclusionsExclusionsView() {
               <Select
                 className="mt-1.5"
                 value={kind}
-                onChange={(e) => setKind(e.target.value as InclusionExclusionKind)}
+                onChange={(e) => {
+                  const next = e.target.value as InclusionExclusionKind;
+                  setKind(next);
+                  if (next === "exclusion") setImageUrl(null);
+                }}
               >
                 <option value="inclusion">Inclusion</option>
                 <option value="exclusion">Exclusion</option>
@@ -175,6 +200,15 @@ export function InclusionsExclusionsView() {
               onChange={(e) => setText(e.target.value)}
             />
           </div>
+          {kind === "inclusion" && (
+            <FileUploadField
+              label="Image (optional)"
+              value={imageUrl}
+              onChange={setImageUrl}
+              folder="inclusions"
+              previewWide
+            />
+          )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
