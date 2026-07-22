@@ -32,6 +32,7 @@ import {
 import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
+import { PLACEHOLDER_IMAGES } from "@/lib/constants/placeholder-images";
 import { cities, destinations, vehicles as masterVehicles } from "@/lib/data/website-content";
 import {
   HOTEL_CATEGORY_OPTIONS,
@@ -378,7 +379,7 @@ function NightHotelCard({
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src={hotel?.image_url ?? PLACEHOLDER_IMAGES[0]}
+                      src={hotel?.image_url ?? PLACEHOLDER_IMAGES.hotel}
                       alt=""
                       className="h-10 w-10 rounded object-cover"
                     />

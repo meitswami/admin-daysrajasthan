@@ -32,9 +32,23 @@ if [[ -f /opt/daysrajasthan/env/admin.env ]]; then
 fi
 
 npm ci || npm install
-# Drop previous build so clients never mix old/new chunk hashes mid-deploy.
-rm -rf .next
-npm run build
+
+# Keep previous build until the new one succeeds (failed builds must not wipe production).
+rm -rf .next.prev
+if [[ -d .next ]]; then
+  mv .next .next.prev
+fi
+
+if ! npm run build; then
+  echo "ADMIN_BUILD_FAILED — restoring previous .next" >&2
+  rm -rf .next
+  if [[ -d .next.prev ]]; then
+    mv .next.prev .next
+  fi
+  exit 1
+fi
+
+rm -rf .next.prev
 chown -R deploy:deploy "$ADMIN_DIR"
 
 pm2 delete daysrajasthan-admin >/dev/null 2>&1 || true
