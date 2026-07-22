@@ -24,7 +24,11 @@ import {
 } from "@/lib/master-data/itinerary-store";
 import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
 import type { WebsiteContentItem } from "@/types/database";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Toggle } from "@/components/ui/toggle";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
+
+type StatusFilter = "active" | "inactive" | "all";
 
 const MAX_DAY_LOCATION_IMAGES = 4;
 
@@ -107,6 +111,7 @@ export function MasterItinerariesView() {
   const [items, setItems] = useState<Itinerary[]>([]);
   const [destinations, setDestinations] = useState<WebsiteContentItem[]>([]);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -143,9 +148,16 @@ export function MasterItinerariesView() {
     void refresh();
   }, [refresh]);
 
+  const inactiveCount = useMemo(
+    () => items.filter((i) => i.status !== "active").length,
+    [items]
+  );
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
     return items.filter((i) => {
+      if (statusFilter === "active" && i.status !== "active") return false;
+      if (statusFilter === "inactive" && i.status === "active") return false;
       if (!q) return true;
       return (
         i.package_name.toLowerCase().includes(q) ||
@@ -161,7 +173,7 @@ export function MasterItinerariesView() {
         )
       );
     });
-  }, [items, search]);
+  }, [items, search, statusFilter]);
 
   function resetForm() {
     setTitles([""]);
@@ -317,9 +329,9 @@ export function MasterItinerariesView() {
       inclusions: editing?.inclusions ?? [],
       exclusions: editing?.exclusions ?? [],
       days: cleanDays,
-      show_on_website: editing?.show_on_website ?? false,
+      show_on_website: editing?.show_on_website ?? true,
       is_trending: editing?.is_trending ?? false,
-      status: (editing?.status ?? "inactive") as "active" | "inactive",
+      status: (editing?.status ?? "active") as "active" | "inactive",
     };
 
     setSaving(true);
@@ -347,6 +359,21 @@ export function MasterItinerariesView() {
     void refresh();
   }
 
+  async function toggleActive(item: Itinerary, nextActive: boolean) {
+    const patch = {
+      status: (nextActive ? "active" : "inactive") as "active" | "inactive",
+      show_on_website: nextActive,
+    };
+    setItems((prev) => prev.map((row) => (row.id === item.id ? { ...row, ...patch } : row)));
+    try {
+      await updateMasterItinerary(item.id, patch, currentMember);
+      show(nextActive ? "Marked active" : "Marked inactive (hidden)");
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to update status");
+      void refresh();
+    }
+  }
+
   return (
     <>
       <Header />
@@ -361,6 +388,15 @@ export function MasterItinerariesView() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
+          <Select
+            className="h-10 w-full sm:w-40"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+          >
+            <option value="active">Active only</option>
+            <option value="inactive">Inactive only</option>
+            <option value="all">All packages</option>
+          </Select>
           {canCreate && (
             <Button type="button" onClick={openAdd}>
               <Plus className="h-4 w-4" /> Add Itinerary
@@ -368,11 +404,24 @@ export function MasterItinerariesView() {
           )}
         </PageToolbar>
 
+        {statusFilter === "active" && inactiveCount > 0 && (
+          <p className="mb-3 text-sm text-stone-500">
+            {inactiveCount} inactive package{inactiveCount === 1 ? "" : "s"} hidden.{" "}
+            <button
+              type="button"
+              className="font-medium text-blue-700 underline-offset-2 hover:underline"
+              onClick={() => setStatusFilter("inactive")}
+            >
+              View inactive
+            </button>
+          </p>
+        )}
+
         {loading ? (
           <p className="text-sm text-stone-500">Loading…</p>
         ) : (
           <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[880px] text-sm">
+            <table className="w-full min-w-[980px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 <tr>
                   <th className="w-12 px-3 py-2">S.No.</th>
@@ -381,12 +430,16 @@ export function MasterItinerariesView() {
                   <th className="px-3 py-2">Duration</th>
                   <th className="px-3 py-2">Locations (Count)</th>
                   <th className="px-3 py-2">Tour Code</th>
+                  <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100">
                 {filtered.map((item, index) => (
-                  <tr key={item.id}>
+                  <tr
+                    key={item.id}
+                    className={item.status !== "active" ? "bg-stone-50/70" : undefined}
+                  >
                     <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3">
                       <ImageThumbRow
@@ -403,6 +456,16 @@ export function MasterItinerariesView() {
                     <td className="px-3 py-3 text-stone-600">{locationsCountOf(item)}</td>
                     <td className="px-3 py-3 font-mono font-medium text-stone-800">
                       {tourCodeOf(item)}
+                    </td>
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col gap-2">
+                        <StatusBadge status={item.status} />
+                        <Toggle
+                          checked={item.status === "active"}
+                          onChange={(v) => void toggleActive(item, v)}
+                          label={item.status === "active" ? "Active" : "Inactive"}
+                        />
+                      </div>
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex flex-wrap items-center gap-2">
@@ -428,8 +491,10 @@ export function MasterItinerariesView() {
                 ))}
                 {!filtered.length && (
                   <tr>
-                    <td colSpan={7} className="px-3 py-8 text-center text-stone-500">
-                      No itineraries yet. Add a package to get started.
+                    <td colSpan={8} className="px-3 py-8 text-center text-stone-500">
+                      {statusFilter === "active"
+                        ? "No active itineraries. Existing packages are inactive — switch filter to view them."
+                        : "No itineraries match this filter."}
                     </td>
                   </tr>
                 )}

@@ -9,6 +9,7 @@ function useSupabaseMaster(): boolean {
 }
 
 const STORAGE_KEY = "td-master-itineraries-v1";
+const HIDE_EXISTING_FLAG = "td-master-itineraries-hide-existing-v1";
 
 function parseStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -50,10 +51,10 @@ function seed(): Itinerary[] {
       cover_image_url: null,
       package_type: "Domestic",
       package_duration: "4 Days 3 Nights",
-      show_on_website: true,
+      show_on_website: false,
       is_trending: false,
       display_mode: "list",
-      status: "active",
+      status: "inactive",
       download_count: 0,
       created_at: now,
       updated_at: now,
@@ -84,9 +85,21 @@ function readLocal(): Itinerary[] {
     if (!raw) {
       const s = seed();
       localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+      localStorage.setItem(HIDE_EXISTING_FLAG, "1");
       return s;
     }
-    return JSON.parse(raw) as Itinerary[];
+    let items = JSON.parse(raw) as Itinerary[];
+    // One-shot: soft-hide packages that existed before inactive workflow.
+    if (!localStorage.getItem(HIDE_EXISTING_FLAG)) {
+      items = items.map((item) => ({
+        ...item,
+        status: "inactive",
+        show_on_website: false,
+      }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+      localStorage.setItem(HIDE_EXISTING_FLAG, "1");
+    }
+    return items;
   } catch {
     return seed();
   }
