@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build && bash /opt/daysrajasthan/scripts/deploy-web.sh main",
     "start": "next start",
     "lint": "eslint"
   },
