@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
@@ -25,8 +25,12 @@ import {
 import {
   findHotelByOptionLabel,
   formatHotelOption,
+  hotelFromWebsiteItem,
   hotelLocations,
+  hotelPriceDescription,
   hotelsForLocation,
+  HOTEL_MASTER,
+  mergeHotelCatalog,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
 import { listMasterContent, updateMasterContent, createMasterContent } from "@/lib/master-data/content-store";
@@ -48,6 +52,7 @@ import {
   Coffee,
   FileText,
   IndianRupee,
+  Info,
   Lightbulb,
   MapPin,
   Moon,
@@ -226,20 +231,109 @@ function DayTitleSuggest({
   );
 }
 
+function SelectedHotelCard({
+  label,
+  hotel,
+  onClear,
+  className,
+}: {
+  label: string;
+  hotel: HotelMasterItem | null;
+  onClear: () => void;
+  className?: string;
+}) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const priceText = hotelPriceDescription(hotel);
+
+  useEffect(() => {
+    if (!infoOpen) return;
+    function onDocPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setInfoOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setInfoOpen(false);
+    }
+    document.addEventListener("mousedown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [infoOpen]);
+
+  return (
+    <div
+      ref={rootRef}
+      className={cn(
+        "relative flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2",
+        className
+      )}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={hotel?.image_url ?? PLACEHOLDER_IMAGES.hotel}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded object-cover"
+      />
+      <span className="min-w-0 flex-1 truncate text-xs font-medium text-stone-800">
+        {hotel?.name ?? label}
+      </span>
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          className={cn(
+            "rounded-full p-1 text-stone-500 hover:bg-white hover:text-blue-600",
+            infoOpen && "bg-white text-blue-600"
+          )}
+          aria-label="Price description"
+          aria-expanded={infoOpen}
+          onClick={() => setInfoOpen((v) => !v)}
+        >
+          <Info className="h-3.5 w-3.5" />
+        </button>
+        {infoOpen && (
+          <div
+            role="dialog"
+            aria-label="Price description"
+            className="absolute right-0 bottom-full z-20 mb-2 w-64 rounded-lg border border-stone-200 bg-white p-3 text-left shadow-lg"
+          >
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+              Price Description
+            </p>
+            <p className="whitespace-pre-wrap text-xs leading-relaxed text-stone-800">
+              {priceText}
+            </p>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        className="shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold text-stone-600 hover:bg-white hover:text-stone-900"
+        onClick={onClear}
+      >
+        Clear
+      </button>
+    </div>
+  );
+}
+
 function NightHotelCard({
   day,
   dayIndex,
   nightNo,
   onChange,
+  hotelCatalog,
 }: {
   day: ItineraryDay;
   dayIndex: number;
   nightNo: string;
   onChange: (updater: (d: ItineraryDay) => ItineraryDay) => void;
+  hotelCatalog: HotelMasterItem[];
 }) {
   const locationHotels = useMemo(
-    () => hotelsForLocation(day.location),
-    [day.location]
+    () => hotelsForLocation(day.location, hotelCatalog),
+    [day.location, hotelCatalog]
   );
 
   const breakfastSelected = [day.breakfast_hotels[0], day.breakfast_hotels[1]].filter(
@@ -300,6 +394,34 @@ function NightHotelCard({
         breakfast_hotels: pair,
         hotel_name: pair[0] || d.hotel_name,
       };
+    });
+  }
+
+  function clearSelectedHotel(
+    field: "breakfast_hotels" | "lunch_hotels" | "dinner_hotels",
+    label: string
+  ) {
+    onChange((d) => {
+      const pair: [string | null, string | null] = [
+        d[field][0] === label ? null : d[field][0],
+        d[field][1] === label ? null : d[field][1],
+      ];
+      const next = { ...d, [field]: pair };
+      if (field === "dinner_hotels") next.hotel_name = pair[0] || null;
+      if (field === "breakfast_hotels") {
+        const allowed = [pair[0], pair[1]].filter(Boolean) as string[];
+        if (allowed.length > 0) {
+          next.lunch_hotels = [
+            allowed.includes(d.lunch_hotels[0] ?? "") ? d.lunch_hotels[0] : null,
+            allowed.includes(d.lunch_hotels[1] ?? "") ? d.lunch_hotels[1] : null,
+          ];
+          next.dinner_hotels = [
+            allowed.includes(d.dinner_hotels[0] ?? "") ? d.dinner_hotels[0] : null,
+            allowed.includes(d.dinner_hotels[1] ?? "") ? d.dinner_hotels[1] : null,
+          ];
+        }
+      }
+      return next;
     });
   }
 
@@ -372,40 +494,14 @@ function NightHotelCard({
           </div>
           {(day.breakfast_hotels[0] || day.breakfast_hotels[1]) && (
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {day.breakfast_hotels.filter(Boolean).map((label) => {
-                const hotel = findHotelByOptionLabel(label!);
-                return (
-                  <div
-                    key={label}
-                    className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 p-2"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={hotel?.image_url ?? PLACEHOLDER_IMAGES.hotel}
-                      alt=""
-                      className="h-10 w-10 rounded object-cover"
-                    />
-                    <span className="min-w-0 flex-1 truncate text-xs font-medium text-stone-800">
-                      {hotel?.name ?? label}
-                    </span>
-                    <button
-                      type="button"
-                      className="text-red-500"
-                      onClick={() => {
-                        onChange((d) => ({
-                          ...d,
-                          breakfast_hotels: [
-                            d.breakfast_hotels[0] === label ? null : d.breakfast_hotels[0],
-                            d.breakfast_hotels[1] === label ? null : d.breakfast_hotels[1],
-                          ],
-                        }));
-                      }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
+              {day.breakfast_hotels.filter(Boolean).map((label) => (
+                <SelectedHotelCard
+                  key={label}
+                  label={label!}
+                  hotel={findHotelByOptionLabel(label!, hotelCatalog)}
+                  onClear={() => clearSelectedHotel("breakfast_hotels", label!)}
+                />
+              ))}
             </div>
           )}
         </div>
@@ -450,6 +546,18 @@ function NightHotelCard({
                   );
                 })}
               </div>
+              {(day[field][0] || day[field][1]) && (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {day[field].filter(Boolean).map((selectedLabel) => (
+                    <SelectedHotelCard
+                      key={`${field}-${selectedLabel}`}
+                      label={selectedLabel!}
+                      hotel={findHotelByOptionLabel(selectedLabel!, hotelCatalog)}
+                      onClear={() => clearSelectedHotel(field, selectedLabel!)}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -472,6 +580,22 @@ function NightHotelCard({
   );
 }
 
+/** Fields that gate the Save button when `saveRequiresChanges` is on. */
+function itineraryEditFingerprint(snapshot: ItinerarySnapshot): string {
+  const s = normalizeSnapshot(snapshot);
+  return JSON.stringify({
+    title: s.header.title,
+    alternate_titles: s.header.alternate_titles,
+    days: s.days.map((d) => ({
+      day_uuid: d.day_uuid,
+      day_title: d.day_title,
+      alternate_day_titles: d.alternate_day_titles,
+      day_description: d.day_description,
+      location: d.location ?? "",
+    })),
+  });
+}
+
 export function V1BuilderForm({
   snapshot,
   onChange,
@@ -481,6 +605,7 @@ export function V1BuilderForm({
   onPreview,
   onAddNote,
   saveLabel = "Save New Itinerary",
+  saveRequiresChanges = false,
 }: {
   snapshot: ItinerarySnapshot;
   onChange: (next: ItinerarySnapshot) => void;
@@ -490,13 +615,23 @@ export function V1BuilderForm({
   onPreview: () => void;
   onAddNote?: () => void;
   saveLabel?: string;
+  /** When true, hide Save until title / description / location / day add-delete changes. */
+  saveRequiresChanges?: boolean;
 }) {
   const { show } = useToast();
   const { currentMember } = useSystem();
   const s = normalizeSnapshot(snapshot);
+  const baselineFingerprintRef = useRef(
+    saveRequiresChanges ? itineraryEditFingerprint(snapshot) : null
+  );
+  const hasItineraryEdits = useMemo(() => {
+    if (!saveRequiresChanges || baselineFingerprintRef.current == null) return true;
+    return itineraryEditFingerprint(s) !== baselineFingerprintRef.current;
+  }, [s, saveRequiresChanges]);
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
     buildFallbackCatalog()
   );
+  const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>(HOTEL_MASTER);
   const [uploadingDayImage, setUploadingDayImage] = useState<number | null>(null);
   const locs = useMemo(
     () => locationCatalog.map((e) => e.name),
@@ -545,6 +680,20 @@ export function V1BuilderForm({
       setLocationCatalog(
         Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
       );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterContent("hotels").then((items) => {
+      if (cancelled) return;
+      const mapped = items
+        .map(hotelFromWebsiteItem)
+        .filter((h): h is HotelMasterItem => Boolean(h));
+      setHotelCatalog(mergeHotelCatalog(mapped, HOTEL_MASTER));
     });
     return () => {
       cancelled = true;
@@ -1349,6 +1498,7 @@ export function V1BuilderForm({
                 day={day}
                 dayIndex={dayIndex}
                 nightNo={nightNo}
+                hotelCatalog={hotelCatalog}
                 onChange={(updater) => updateDay(dayIndex, updater)}
               />
             );
@@ -1356,12 +1506,14 @@ export function V1BuilderForm({
         </div>
       </div>
 
-      <div className="flex justify-start pb-2">
-        <Button type="button" onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700">
-          <Save className="h-4 w-4" />
-          {saveLabel}
-        </Button>
-      </div>
+      {hasItineraryEdits ? (
+        <div className="flex justify-start pb-2">
+          <Button type="button" onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700">
+            <Save className="h-4 w-4" />
+            {saveLabel}
+          </Button>
+        </div>
+      ) : null}
 
       <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
         <div className="mb-3 flex items-center gap-2">

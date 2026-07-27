@@ -39,7 +39,6 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
-  Eye,
   Info,
   Mail,
   MapPin,
@@ -68,6 +67,31 @@ function hotelLabelsForDay(day: ItineraryDay): string[] {
   return Array.from(new Set(labels));
 }
 
+/** Meal / plan bullets for a hotel option on a day (preview cards). */
+function hotelSelectionBullets(day: ItineraryDay, label: string): string[] {
+  if (day.guest_self_booked_hotel) {
+    return ["Guest Accommodation (own management)"];
+  }
+  if (day.epai_plan_only) {
+    return ["EPAI (Stay Only)"];
+  }
+  const bullets: string[] = [];
+  if (day.breakfast_hotels.includes(label)) bullets.push("Breakfast");
+  if (day.lunch_hotels.includes(label)) bullets.push("Lunch");
+  if (day.dinner_hotels.includes(label) || day.hotel_name === label) {
+    if (!bullets.includes("Dinner")) bullets.push("Dinner");
+  }
+  return bullets;
+}
+
+function travelerCount(client: ItinerarySnapshot["client"]): number {
+  return (
+    (client.adults || 0) +
+    (client.children_5_12 || 0) +
+    (client.children_below_5 || 0)
+  );
+}
+
 function PolicyAccordion({
   title,
   icon,
@@ -79,7 +103,9 @@ function PolicyAccordion({
   tone: "stone" | "orange" | "violet";
   items: PolicyLine[];
 }) {
-  const [openId, setOpenId] = useState<string | null>(items[0]?.id ?? null);
+  const [openId, setOpenId] = useState<string | null>(
+    items.find((i) => i.description?.trim())?.id ?? null
+  );
   const wrap =
     tone === "orange"
       ? "border-orange-200 bg-orange-50/70"
@@ -108,26 +134,36 @@ function PolicyAccordion({
       <div className="space-y-2">
         {items.map((item) => {
           const open = openId === item.id;
+          const hasBody = Boolean(item.description?.trim());
           return (
             <div key={item.id} className="overflow-hidden rounded-xl border border-white/80 bg-white">
-              <button
-                type="button"
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium",
-                  itemTone
-                )}
-                onClick={() => setOpenId(open ? null : item.id)}
-              >
-                <span>{item.title}</span>
-                {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
-              </button>
-              {open && (
-                <div className="border-t border-stone-100 px-4 py-3 text-sm text-stone-600">
-                  {item.description || (
-                    <span className="italic text-stone-400">Master policy item (fixed)</span>
+              {hasBody ? (
+                <button
+                  type="button"
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium",
+                    itemTone
                   )}
+                  onClick={() => setOpenId(open ? null : item.id)}
+                >
+                  <span>{item.title}</span>
+                  {open ? <ChevronUp className="h-4 w-4 shrink-0" /> : <ChevronDown className="h-4 w-4 shrink-0" />}
+                </button>
+              ) : (
+                <div
+                  className={cn(
+                    "flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium",
+                    itemTone
+                  )}
+                >
+                  <span>{item.title}</span>
                 </div>
               )}
+              {open && hasBody ? (
+                <div className="border-t border-stone-100 px-4 py-3 text-sm text-stone-600">
+                  {item.description}
+                </div>
+              ) : null}
             </div>
           );
         })}
@@ -371,14 +407,18 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
   }
 
-  async function handlePreview() {
-    const result = await handleSave();
-    if (!result) return;
-    router.push(`/itinerary-builder/${itineraryId}/quotation`);
-  }
-
   const primaryTier = snapshot.category_pricing;
   const advanceRate = advanceRateFromPercent(snapshot.advance_percent);
+  const clientLabel = [snapshot.client.title, snapshot.client.client_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+  const categoryLabels = primaryTier.map((t) => t.label).filter(Boolean);
+  const primaryBase =
+    primaryTier[0]?.package_price ??
+    primaryTier[0]?.grand_total ??
+    snapshot.final_price ??
+    0;
 
   return (
     <div className={cn("min-h-screen", themeShell)}>
@@ -401,7 +441,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             </Link>
             <Button type="button" size="sm" className="bg-teal-800 hover:bg-teal-900" onClick={handleSave}>
               <Save className="h-4 w-4" />
-              Save
+              Save to Draft
             </Button>
             <Button type="button" size="sm" className="bg-sky-500 hover:bg-sky-600" onClick={handleDownloadPdf}>
               <Download className="h-4 w-4" />
@@ -410,19 +450,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             <Button
               type="button"
               size="sm"
-              className="bg-teal-700 hover:bg-teal-800"
-              onClick={handlePreview}
-            >
-              <Eye className="h-4 w-4" />
-              Preview
-            </Button>
-            <Button
-              type="button"
-              size="sm"
               className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
               onClick={handleNext}
             >
-              Next
+              Continue Payment Details
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -430,6 +461,59 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
       </div>
 
       <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 print:max-w-none">
+        {/* Client + package summary (above itinerary days) */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-base font-bold text-teal-800">Client Details</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              {(
+                [
+                  ["Name", clientLabel || "—"],
+                  ["Email", snapshot.client.email?.trim() || "—"],
+                  ["Phone", snapshot.client.phone?.trim() || "—"],
+                  [
+                    "Travel Date",
+                    snapshot.client.travel_date
+                      ? formatDate(snapshot.client.travel_date)
+                      : "—",
+                  ],
+                  ["Travelers", String(travelerCount(snapshot.client) || "—")],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0">
+                  <dt className="shrink-0 font-medium text-stone-500">{label}</dt>
+                  <dd className="text-right font-medium text-stone-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+          <section className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+            <h2 className="text-base font-bold text-teal-800">Package Summary</h2>
+            <dl className="mt-3 space-y-2 text-sm">
+              {(
+                [
+                  ["Duration", snapshot.header.duration_label || "—"],
+                  [
+                    "Categories",
+                    categoryLabels.length ? categoryLabels.join(", ") : "—",
+                  ],
+                  [
+                    categoryLabels[0]
+                      ? `Base Price (${categoryLabels[0]})`
+                      : "Base Price",
+                    formatInr(primaryBase),
+                  ],
+                ] as const
+              ).map(([label, value]) => (
+                <div key={label} className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0">
+                  <dt className="shrink-0 font-medium text-stone-500">{label}</dt>
+                  <dd className="text-right font-medium text-stone-900">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
+        </div>
+
         {/* Day cards */}
         <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
           <div className="space-y-4">
@@ -465,9 +549,12 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                         <p className="mt-2 text-sm text-stone-600 line-clamp-3">{day.day_description}</p>
                       )}
                       {day.guest_self_booked_hotel ? (
-                        <p className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                          No hotels booked — guest arranging own accommodation.
-                        </p>
+                        <div className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                          <p>No hotels booked — guest arranging own accommodation.</p>
+                          <ul className="mt-1 list-disc pl-5 text-xs text-stone-500">
+                            <li>Guest Accommodation (own management)</li>
+                          </ul>
+                        </div>
                       ) : hotels.length > 0 ? (
                         <div className="mt-3 rounded-xl border border-stone-100 bg-stone-50 p-3">
                           <p className="text-sm font-semibold text-stone-800">
@@ -480,28 +567,38 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             {hotels.slice(0, 4).map((label) => {
                               const hotel = findHotelByOptionLabel(label);
+                              const bullets = hotelSelectionBullets(day, label);
                               return (
                                 <div
                                   key={label}
-                                  className="flex items-center gap-2 rounded-lg border border-stone-200 bg-white p-2"
+                                  className="rounded-lg border border-stone-200 bg-white p-2"
                                 >
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img
-                                    src={hotel?.image_url ?? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=100&q=80"}
-                                    alt=""
-                                    className="h-12 w-12 rounded object-cover"
-                                  />
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-medium text-stone-900">
-                                      {hotel?.name ?? label.split(" - ")[0]}
-                                    </p>
-                                    <p className="text-xs text-amber-600">
-                                      ★ {hotel?.rating?.toFixed(1) ?? "4.5"}{" "}
-                                      <span className="text-stone-400">
-                                        ({Math.round((hotel?.rating ?? 4.5) * 300)} reviews)
-                                      </span>
-                                    </p>
+                                  <div className="flex items-center gap-2">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={hotel?.image_url ?? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=100&q=80"}
+                                      alt=""
+                                      className="h-12 w-12 shrink-0 rounded object-cover"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-stone-900">
+                                        {hotel?.name ?? label.split(" - ")[0]}
+                                      </p>
+                                      <p className="text-xs text-amber-600">
+                                        ★ {hotel?.rating?.toFixed(1) ?? "4.5"}{" "}
+                                        <span className="text-stone-400">
+                                          ({Math.round((hotel?.rating ?? 4.5) * 300)} reviews)
+                                        </span>
+                                      </p>
+                                    </div>
                                   </div>
+                                  {bullets.length > 0 && (
+                                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] leading-snug text-stone-600">
+                                      {bullets.map((b) => (
+                                        <li key={b}>{b}</li>
+                                      ))}
+                                    </ul>
+                                  )}
                                 </div>
                               );
                             })}
@@ -720,18 +817,14 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
           <div className="flex flex-wrap gap-2">
             <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={handleSave}>
               <Save className="h-4 w-4" />
-              Save
+              Save to Draft
             </Button>
             <Button type="button" className="bg-sky-500 hover:bg-sky-600" onClick={handleDownloadPdf}>
               <Download className="h-4 w-4" />
               Download PDF
             </Button>
-            <Button type="button" className="bg-teal-700 hover:bg-teal-800" onClick={handlePreview}>
-              <Eye className="h-4 w-4" />
-              Preview
-            </Button>
             <Button type="button" className="bg-[#7B1E2E] hover:bg-[#5C0F1A]" onClick={handleNext}>
-              Next
+              Continue Payment Details
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

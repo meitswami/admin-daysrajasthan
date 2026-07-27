@@ -541,6 +541,7 @@ export function NewItineraryWizard() {
             }
           }}
           saveLabel="Save New Itinerary"
+          saveRequiresChanges
         />
       )}
 

@@ -1,3 +1,4 @@
+import type { WebsiteContentItem } from "@/types/database";
 import type { HotelCategoryKey } from "@/types/itinerary-builder";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 
@@ -8,6 +9,8 @@ export type HotelMasterItem = {
   rating: number;
   category_key: HotelCategoryKey;
   image_url: string;
+  /** Free-text Price Description from Master Data (Price/Night column) */
+  price_description?: string | null;
 };
 
 const IMG =
@@ -18,9 +21,10 @@ function h(
   name: string,
   location: string,
   rating: number,
-  category_key: HotelCategoryKey
+  category_key: HotelCategoryKey,
+  price_description?: string | null
 ): HotelMasterItem {
-  return { id, name, location, rating, category_key, image_url: IMG };
+  return { id, name, location, rating, category_key, image_url: IMG, price_description };
 }
 
 /** Dummy location-scoped hotel inventory for V1 night picker */
@@ -108,8 +112,19 @@ export function categoryLabel(key: HotelCategoryKey): string {
   return HOTEL_CATEGORY_OPTIONS.find((o) => o.key === key)?.label ?? key;
 }
 
+export function categoryKeyFromLabel(label: string | null | undefined): HotelCategoryKey {
+  const q = (label ?? "").trim().toLowerCase();
+  const hit = HOTEL_CATEGORY_OPTIONS.find((o) => o.label.toLowerCase() === q);
+  return hit?.key ?? "deluxe_hotels";
+}
+
 export function formatHotelOption(hotel: HotelMasterItem): string {
   return `${hotel.name} - ${hotel.rating.toFixed(1)}★ - ${categoryLabel(hotel.category_key)}`;
+}
+
+export function hotelPriceDescription(hotel: HotelMasterItem | null | undefined): string {
+  const text = hotel?.price_description?.trim();
+  return text || "Not specified";
 }
 
 function normalizeLoc(value: string): string {
@@ -120,24 +135,63 @@ function normalizeLoc(value: string): string {
     .trim();
 }
 
-export function hotelsForLocation(location: string | null | undefined): HotelMasterItem[] {
+export function hotelFromWebsiteItem(item: WebsiteContentItem): HotelMasterItem | null {
+  const name = item.name?.trim();
+  const location = item.location?.trim();
+  if (!name || !location) return null;
+  return {
+    id: item.id,
+    name,
+    location,
+    rating: typeof item.rating === "number" && !Number.isNaN(item.rating) ? item.rating : 0,
+    category_key: categoryKeyFromLabel(item.category),
+    image_url: item.image_url || IMG,
+    price_description: item.price_description ?? null,
+  };
+}
+
+/** Prefer Master Data hotels for a location; fall back to dummy inventory for gaps. */
+export function mergeHotelCatalog(
+  masterHotels: HotelMasterItem[],
+  fallback: HotelMasterItem[] = HOTEL_MASTER
+): HotelMasterItem[] {
+  if (!masterHotels.length) return fallback;
+  const masterLocs = new Set(masterHotels.map((h) => normalizeLoc(h.location)));
+  const keptFallback = fallback.filter((h) => !masterLocs.has(normalizeLoc(h.location)));
+  return [...masterHotels, ...keptFallback];
+}
+
+function filterByLocation(
+  catalog: HotelMasterItem[],
+  location: string | null | undefined
+): HotelMasterItem[] {
   if (!location) return [];
   const loc = normalizeLoc(location);
   if (!loc || loc === "departure") return [];
 
-  const exact = HOTEL_MASTER.filter((h) => normalizeLoc(h.location) === loc);
+  const exact = catalog.filter((h) => normalizeLoc(h.location) === loc);
   if (exact.length) return exact;
 
-  return HOTEL_MASTER.filter((h) => {
+  return catalog.filter((h) => {
     const hl = normalizeLoc(h.location);
     return loc.includes(hl) || hl.includes(loc);
   });
 }
 
-export function findHotelByOptionLabel(label: string): HotelMasterItem | null {
-  return HOTEL_MASTER.find((h) => formatHotelOption(h) === label) ?? null;
+export function hotelsForLocation(
+  location: string | null | undefined,
+  catalog: HotelMasterItem[] = HOTEL_MASTER
+): HotelMasterItem[] {
+  return filterByLocation(catalog, location);
 }
 
-export function hotelLocations(): string[] {
-  return Array.from(new Set(HOTEL_MASTER.map((h) => h.location))).sort();
+export function findHotelByOptionLabel(
+  label: string,
+  catalog: HotelMasterItem[] = HOTEL_MASTER
+): HotelMasterItem | null {
+  return catalog.find((h) => formatHotelOption(h) === label) ?? null;
+}
+
+export function hotelLocations(catalog: HotelMasterItem[] = HOTEL_MASTER): string[] {
+  return Array.from(new Set(catalog.map((h) => h.location))).sort();
 }
