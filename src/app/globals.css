@@ -91,14 +91,4 @@ body {
     box-shadow: none !important;
     border: none !important;
   }
-
-  /* Theme 3 side rails: keep flush to page edges when printing */
-  .theme3-side-rail-left {
-    left: 0 !important;
-  }
-
-  .theme3-side-rail-right {
-    left: auto !important;
-    right: 0 !important;
-  }
 }

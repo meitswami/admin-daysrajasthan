@@ -569,27 +569,30 @@ export function QuotationDocument({
   const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
   const advanceRate = advancePercent / 100;
 
-  return (
-    <article
-      className={`quotation-document quotation-theme-${theme.id} relative isolate mx-auto text-stone-900 ${
-        mode === "print"
-          ? isTheme3
-            ? "max-w-5xl overflow-visible p-0"
-            : "max-w-none p-0"
-          : isTheme3
-            ? "max-w-5xl overflow-visible rounded-2xl border border-stone-200 shadow-sm"
-            : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"
-      }`}
-      style={{
-        backgroundColor:
-          theme.id === 3 ? "#FBF7F0" : theme.id === 1 ? "#ffffff" : theme.id === 5 ? "#F8FAFC" : "#ffffff",
-        WebkitPrintColorAdjust: "exact",
-        printColorAdjust: "exact",
-      }}
-      data-theme={theme.id}
-    >
-      {isTheme3 && <Theme3SideRails />}
+  const documentClassName = isTheme3
+    ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-[#FBF7F0] p-0 text-stone-900"
+    : mode === "print"
+      ? `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-none p-0 text-stone-900`
+      : `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-4xl rounded-2xl border border-stone-200 text-stone-900 shadow-sm`;
 
+  const documentStyle = {
+    backgroundColor: isTheme3
+      ? "#FBF7F0"
+      : theme.id === 1
+        ? "#ffffff"
+        : theme.id === 5
+          ? "#F8FAFC"
+          : "#ffffff",
+    WebkitPrintColorAdjust: "exact" as const,
+    printColorAdjust: "exact" as const,
+  };
+
+  const body = (
+      <article
+        className={documentClassName}
+        style={documentStyle}
+        data-theme={theme.id}
+      >
       <QuotationThemeHero
         theme={theme}
         brand={displayBrand}
@@ -871,5 +874,20 @@ export function QuotationDocument({
         </>
       )}
     </article>
+  );
+
+  if (!isTheme3) return body;
+
+  return (
+    <div
+      className="relative w-full overflow-hidden text-stone-900"
+      style={{
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
+      }}
+    >
+      <Theme3SideRails />
+      {body}
+    </div>
   );
 }
