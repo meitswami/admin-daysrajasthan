@@ -7,7 +7,7 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Sheet } from "@/components/ui/sheet";
 import { Modal } from "@/components/ui/modal";
-import { PageMain, PageToolbar } from "@/components/ui/data-table";
+import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
 import {
@@ -584,19 +584,20 @@ export function StaffManagementView() {
                           {accessLabel(m)}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="whitespace-nowrap px-4 py-3">
+                        <TableRowActions>
                           <Toggle
                             checked={m.is_active}
                             onChange={(v) => void toggleMemberActive(m, v)}
                           />
-                          <Button type="button" size="sm" variant="ghost" onClick={() => openEdit(m)}>
+                          <Button type="button" size="sm" variant="ghost" className="shrink-0" onClick={() => openEdit(m)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             type="button"
                             size="sm"
                             variant="ghost"
+                            className="shrink-0"
                             onClick={() => openCredentials(m)}
                             title="Reset password"
                           >
@@ -606,6 +607,7 @@ export function StaffManagementView() {
                             type="button"
                             size="sm"
                             variant="ghost"
+                            className="shrink-0"
                             disabled={m.id === currentMember.id}
                             title={
                               m.id === currentMember.id
@@ -616,7 +618,7 @@ export function StaffManagementView() {
                           >
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
-                        </div>
+                        </TableRowActions>
                       </td>
                     </tr>
                   );

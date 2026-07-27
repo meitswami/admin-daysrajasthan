@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/toast";
+import { TableRowActions } from "@/components/ui/data-table";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
 import { getCurrentSnapshot } from "@/lib/itinerary-builder/storage";
 import { listMasterContent } from "@/lib/master-data/content-store";
@@ -332,17 +333,17 @@ export function TransportationSheetsView() {
                       )}
                     </td>
                     <td className="px-4 py-3">{formatInr(r.transport?.driver_advance ?? 0)}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        <Button type="button" size="sm" onClick={() => openEdit(r)}>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <TableRowActions className="gap-1.5">
+                        <Button type="button" size="sm" className="shrink-0" onClick={() => openEdit(r)}>
                           <Pencil className="h-3.5 w-3.5" />
                           Edit
                         </Button>
-                        <Button type="button" size="sm" variant="outline" onClick={() => openAdvance(r)}>
+                        <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => openAdvance(r)}>
                           <Wallet className="h-3.5 w-3.5" />
                           Advance
                         </Button>
-                      </div>
+                      </TableRowActions>
                     </td>
                   </tr>
                 ))

@@ -11,7 +11,7 @@ import {
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
-import { PageMain, PageToolbar } from "@/components/ui/data-table";
+import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
 import type { Itinerary, ItineraryDayPlan } from "@/types/database";
@@ -467,12 +467,12 @@ export function MasterItinerariesView() {
                         />
                       </div>
                     </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <td className="whitespace-nowrap px-3 py-3">
+                      <TableRowActions>
                         <Button
                           type="button"
                           size="sm"
-                          className="bg-blue-600 text-white hover:bg-blue-700"
+                          className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
                           onClick={() => openEdit(item)}
                         >
                           Edit
@@ -481,11 +481,12 @@ export function MasterItinerariesView() {
                           type="button"
                           size="sm"
                           variant="destructive"
+                          className="shrink-0"
                           onClick={() => void remove(item)}
                         >
                           Delete
                         </Button>
-                      </div>
+                      </TableRowActions>
                     </td>
                   </tr>
                 ))}

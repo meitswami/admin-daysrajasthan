@@ -13,7 +13,7 @@ import {
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
 import { useToast } from "@/components/ui/toast";
-import { PageMain, PageToolbar } from "@/components/ui/data-table";
+import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
 import type { DisplayMode, WebsiteContentItem } from "@/types/database";
@@ -310,17 +310,21 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
 
         <PageToolbar>
           {tab === "hotels" ? (
-            <div className="flex w-full flex-col gap-3">
-              <div className="flex flex-wrap items-end justify-between gap-3">
-                <p className="text-sm font-semibold text-stone-700">Filter Hotels</p>
+            <div className="flex w-full min-w-0 max-w-full flex-col gap-3">
+              <div className="flex w-full min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="min-w-0 shrink text-sm font-semibold text-stone-700">Filter Hotels</p>
                 {canCreate && (
-                  <Button type="button" onClick={openAdd}>
+                  <Button
+                    type="button"
+                    className="w-full shrink-0 whitespace-nowrap sm:w-auto"
+                    onClick={openAdd}
+                  >
                     <Plus className="h-4 w-4" /> Add Hotel
                   </Button>
                 )}
               </div>
-              <div className="grid w-full gap-3 sm:grid-cols-3">
-                <div>
+              <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="min-w-0">
                   <Label htmlFor="hotel-filter-name">Hotel Name</Label>
                   <div className="relative mt-1.5">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
@@ -333,7 +337,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     />
                   </div>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <Label htmlFor="hotel-filter-category">Category</Label>
                   <Select
                     id="hotel-filter-category"
@@ -349,7 +353,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     ))}
                   </Select>
                 </div>
-                <div>
+                <div className="min-w-0 sm:col-span-2 lg:col-span-1">
                   <Label htmlFor="hotel-filter-location">Location</Label>
                   <Select
                     id="hotel-filter-location"
@@ -369,7 +373,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
             </div>
           ) : (
             <>
-              <div className="relative w-full sm:max-w-xs">
+              <div className="relative w-full min-w-0 sm:max-w-xs">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
                 <Input
                   placeholder="Search here…"
@@ -378,7 +382,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex w-full min-w-0 flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
                 <div className="flex rounded-lg border border-stone-200 bg-white p-0.5">
                   <button
                     type="button"
@@ -402,7 +406,11 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   </button>
                 </div>
                 {canCreate && (
-                  <Button type="button" onClick={openAdd}>
+                  <Button
+                    type="button"
+                    className="w-full shrink-0 whitespace-nowrap sm:w-auto"
+                    onClick={openAdd}
+                  >
                     <Plus className="h-4 w-4" /> Add New
                   </Button>
                 )}
@@ -414,8 +422,8 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         {loading ? (
           <p className="text-sm text-stone-500">Loading…</p>
         ) : tab === "hotels" || viewMode === "list" ? (
-          <div className="overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[640px] text-sm">
+          <div className="w-0 min-w-full max-w-full overflow-x-auto rounded-xl border border-stone-200 bg-white">
+            <table className="w-full min-w-[960px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 {tab === "hotels" ? (
                   <tr>
@@ -428,14 +436,14 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     <th className="px-3 py-2">Rating</th>
                     <th className="px-3 py-2">Reviews</th>
                     <th className="px-3 py-2">Google Reviews</th>
-                    <th className="px-3 py-2">Actions</th>
+                    <th className="whitespace-nowrap px-3 py-2">Actions</th>
                   </tr>
                 ) : (
                   <tr>
                     <th className="px-3 py-2 w-12">S.No.</th>
                     <th className="px-3 py-2">Images</th>
                     <th className="px-3 py-2">{heading.singular} name</th>
-                    <th className="px-3 py-2">Actions</th>
+                    <th className="whitespace-nowrap px-3 py-2">Actions</th>
                   </tr>
                 )}
               </thead>
@@ -447,7 +455,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                       <tr key={item.id}>
                         <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                         <td className="px-3 py-3">
-                          <ImageThumbRow urls={images} size={48} max={4} />
+                          <ImageThumbRow urls={images.slice(0, 2)} size={40} max={2} />
                         </td>
                         <td className="px-3 py-3 font-semibold text-stone-900">{item.name}</td>
                         <td className="px-3 py-3 text-stone-700">{item.category || "—"}</td>
@@ -475,8 +483,8 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                             <span className="text-stone-400">—</span>
                           )}
                         </td>
-                        <td className="px-3 py-3">
-                          <div className="flex flex-wrap items-center gap-2">
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <TableRowActions>
                             <StatusToggle
                               active={item.show_on_website}
                               onChange={(v) => void toggleStatus(item, v)}
@@ -484,7 +492,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                             <Button
                               type="button"
                               size="sm"
-                              className="bg-blue-600 text-white hover:bg-blue-700"
+                              className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
                               onClick={() => openEdit(item)}
                             >
                               Edit
@@ -493,11 +501,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                               type="button"
                               size="sm"
                               variant="destructive"
+                              className="shrink-0"
                               onClick={() => void remove(item)}
                             >
                               Delete
                             </Button>
-                          </div>
+                          </TableRowActions>
                         </td>
                       </tr>
                     );
@@ -523,12 +532,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                           Created by {item.created_by_name ?? "Unknown"}
                         </p>
                       </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
+                      <td className="whitespace-nowrap px-3 py-3">
+                        <TableRowActions>
                           <Button
                             type="button"
                             size="sm"
-                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
                             onClick={() => openEdit(item)}
                           >
                             Edit
@@ -537,11 +546,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                             type="button"
                             size="sm"
                             variant="destructive"
+                            className="shrink-0"
                             onClick={() => void remove(item)}
                           >
                             Delete
                           </Button>
-                        </div>
+                        </TableRowActions>
                       </td>
                     </tr>
                   );

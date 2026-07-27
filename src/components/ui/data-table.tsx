@@ -89,12 +89,41 @@ export function DataTable<T extends { id: string }>({
 
 export function PageToolbar({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between", className)}>
+    <div
+      className={cn(
+        "flex w-full min-w-0 max-w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between",
+        className
+      )}
+    >
       {children}
     </div>
   );
 }
 
 export function PageMain({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <main className={cn("flex-1 space-y-4 p-4 sm:space-y-6 sm:p-6", className)}>{children}</main>;
+  return (
+    <main className={cn("min-w-0 w-full max-w-full flex-1 space-y-4 overflow-x-hidden p-4 sm:space-y-6 sm:p-6", className)}>
+      {children}
+    </main>
+  );
+}
+
+/** Keep toggle / Edit / Delete (and similar) on one horizontal row in table Actions cells. */
+export function TableRowActions({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex flex-nowrap items-center gap-2 whitespace-nowrap",
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
 }

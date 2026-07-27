@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { PageMain, PageToolbar } from "@/components/ui/data-table";
+import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
 import { canCreateMasterData } from "@/lib/rbac/ownership";
@@ -113,11 +113,12 @@ export function MasterDataCategoriesView() {
                     {item.created_by_name ?? "Unknown"}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
+                    <div>
+                      <TableRowActions>
                       <Button
                         type="button"
                         size="sm"
-                        className="bg-blue-600 text-white hover:bg-blue-700"
+                        className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
                         onClick={() => openEdit(item)}
                       >
                         Edit
@@ -126,10 +127,12 @@ export function MasterDataCategoriesView() {
                         type="button"
                         size="sm"
                         variant="destructive"
+                        className="shrink-0"
                         onClick={() => remove(item)}
                       >
                         Delete
                       </Button>
+                      </TableRowActions>
                     </div>
                   </td>
                 </tr>

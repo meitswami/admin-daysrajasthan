@@ -72,9 +72,9 @@ export function Header({ title, description }: { title?: string; description?: s
   const unreadChat = chatNotifs.length;
 
   return (
-    <header className="sticky top-0 z-30 border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
-      <div className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-        <div className="flex items-start gap-3">
+    <header className="sticky top-0 z-30 w-full min-w-0 max-w-full overflow-x-hidden border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
+      <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+        <div className="flex min-w-0 items-start gap-3">
           <button
             type="button"
             onClick={toggle}
@@ -94,7 +94,7 @@ export function Header({ title, description }: { title?: string; description?: s
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="relative" ref={notifRef}>
             <button
               type="button"

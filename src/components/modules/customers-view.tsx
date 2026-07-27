@@ -16,6 +16,7 @@ import {
 import { pushCustomerToCrmWebhook } from "@/lib/crm/customers";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
 import { useToast } from "@/components/ui/toast";
+import { TableRowActions } from "@/components/ui/data-table";
 import { RefreshCw, Search, User } from "lucide-react";
 
 export function CustomersView() {
@@ -126,9 +127,9 @@ export function CustomersView() {
                       {c.crm_synced ? "Synced" : "Pending"}
                     </Badge>
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-1">
-                      <Button type="button" size="sm" variant="outline" onClick={() => setSelected(c)}>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <TableRowActions className="gap-1">
+                      <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={() => setSelected(c)}>
                         View
                       </Button>
                       {!c.crm_synced && (
@@ -136,6 +137,7 @@ export function CustomersView() {
                           type="button"
                           size="sm"
                           variant="outline"
+                          className="shrink-0"
                           onClick={async () => {
                             const ok = await pushCustomerToCrmWebhook(c, {
                               quote_ids: c.quotes.map((q) => q.quote_id),
@@ -147,7 +149,7 @@ export function CustomersView() {
                           Sync CRM
                         </Button>
                       )}
-                    </div>
+                    </TableRowActions>
                   </td>
                 </tr>
               ))}
