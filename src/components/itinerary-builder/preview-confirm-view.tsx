@@ -449,7 +449,9 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         // Local open still works even if publish fails
       }
     }
-    const themeId = result?.revision.snapshot.preview_theme ?? snapshot.preview_theme;
+    const themeId =
+      result?.revision.snapshot.preview_theme ?? snapshot?.preview_theme;
+    if (themeId == null) return;
     window.open(publicQuotationUrl(itineraryId, null, themeId), "_blank", "noopener,noreferrer");
   }
 
