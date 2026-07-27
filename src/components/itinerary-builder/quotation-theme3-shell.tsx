@@ -1,14 +1,15 @@
 /** Decorative parchment side rails for Theme 3 (SenduserviewData4).
- *  Sit above section backgrounds (z-[2]) so they stay visible in the side gutters,
- *  but remain below the sticky app chrome (z-40).
+ *  Full asset width (338px), pinned to the true left/right extremes of the
+ *  page, spanning the full document height. Below sticky chrome (z-40).
  */
 export function Theme3SideRails() {
   return (
     <>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 left-0 z-[3] w-8 sm:w-12 md:w-14"
+        className="theme3-side-rail theme3-side-rail-left pointer-events-none absolute inset-y-0 z-[3] w-[min(338px,28vw)] print:w-[7.5rem]"
         style={{
+          left: "calc(50% - 50vw)",
           backgroundImage: "url(/theme-assets/theme3/side-left.png)",
           backgroundRepeat: "repeat-y",
           backgroundPosition: "left top",
@@ -17,8 +18,10 @@ export function Theme3SideRails() {
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 z-[3] w-8 sm:w-12 md:w-14"
+        className="theme3-side-rail theme3-side-rail-right pointer-events-none absolute inset-y-0 z-[3] w-[min(338px,28vw)] print:w-[7.5rem]"
         style={{
+          left: "auto",
+          right: "calc(50% - 50vw)",
           backgroundImage: "url(/theme-assets/theme3/side-right.png)",
           backgroundRepeat: "repeat-y",
           backgroundPosition: "right top",

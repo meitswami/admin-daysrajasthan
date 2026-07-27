@@ -227,10 +227,15 @@ export function QuotationPrintView({
   }
 
   const theme = getPreviewTheme(snapshot.preview_theme);
-  const bookAccent = theme.id === 2 ? "#56AB2F" : theme.id === 3 ? "#7B1E2E" : "#D97706";
+  const isTheme3 = theme.id === 3;
+  const bookAccent = theme.id === 2 ? "#56AB2F" : isTheme3 ? "#7B1E2E" : "#D97706";
 
   return (
-    <div className="min-h-screen bg-stone-100 print:bg-transparent">
+    <div
+      className={`min-h-screen overflow-x-clip print:bg-transparent ${
+        isTheme3 ? "bg-[#FBF7F0]" : "bg-stone-100"
+      }`}
+    >
       <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           {publicMode ? (
@@ -274,7 +279,12 @@ export function QuotationPrintView({
           </div>
         </div>
       </div>
-      <div className="mx-auto max-w-5xl px-2 py-6 sm:px-4 print:max-w-none print:p-0" id="book">
+      <div
+        className={`relative mx-auto max-w-5xl py-6 print:max-w-none print:p-0 ${
+          isTheme3 ? "overflow-visible px-0 sm:px-0" : "px-2 sm:px-4"
+        }`}
+        id="book"
+      >
         <QuotationDocument
           quoteId={record.quote_id}
           versionNumber={record.current_version}

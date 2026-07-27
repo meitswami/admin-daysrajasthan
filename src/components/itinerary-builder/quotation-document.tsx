@@ -574,10 +574,10 @@ export function QuotationDocument({
       className={`quotation-document quotation-theme-${theme.id} relative isolate mx-auto text-stone-900 ${
         mode === "print"
           ? isTheme3
-            ? "max-w-none overflow-hidden p-0"
+            ? "max-w-5xl overflow-visible p-0"
             : "max-w-none p-0"
           : isTheme3
-            ? "max-w-5xl overflow-hidden rounded-2xl border border-stone-200 shadow-sm"
+            ? "max-w-5xl overflow-visible rounded-2xl border border-stone-200 shadow-sm"
             : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"
       }`}
       style={{
