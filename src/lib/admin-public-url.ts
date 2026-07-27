@@ -3,6 +3,12 @@
  * (quotations, proposals) — never expose internal PM2 localhost ports.
  */
 
+import {
+  clampPreviewTheme,
+  type PreviewThemeId,
+} from "@/lib/itinerary-builder/preview-themes";
+import { encodeThemeToken } from "@/lib/itinerary-builder/theme-token";
+
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/$/, "");
 }
@@ -45,9 +51,19 @@ export function getAdminPublicOrigin(explicit?: string | null): string {
   return DEFAULT_ADMIN_PUBLIC_ORIGIN;
 }
 
-/** Absolute public quotation URL for an itinerary id. */
-export function publicQuotationUrl(itineraryId: string, origin?: string | null): string {
-  return `${getAdminPublicOrigin(origin)}/itinerary-builder/${itineraryId}/quotation`;
+/**
+ * Absolute public quotation URL for an itinerary id.
+ * When `themeId` is set, appends an opaque `?v=` lock so the theme stays fixed for that link.
+ */
+export function publicQuotationUrl(
+  itineraryId: string,
+  origin?: string | null,
+  themeId?: PreviewThemeId | null
+): string {
+  const base = `${getAdminPublicOrigin(origin)}/itinerary-builder/${itineraryId}/quotation`;
+  if (themeId == null) return base;
+  const token = encodeThemeToken(clampPreviewTheme(themeId));
+  return `${base}?v=${encodeURIComponent(token)}`;
 }
 
 /**

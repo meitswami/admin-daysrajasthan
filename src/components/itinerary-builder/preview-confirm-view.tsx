@@ -449,7 +449,8 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         // Local open still works even if publish fails
       }
     }
-    window.open(publicQuotationUrl(itineraryId), "_blank", "noopener,noreferrer");
+    const themeId = result?.revision.snapshot.preview_theme ?? snapshot.preview_theme;
+    window.open(publicQuotationUrl(itineraryId, null, themeId), "_blank", "noopener,noreferrer");
   }
 
   /** Publish selected theme snapshot and open the public quotation URL. */
@@ -458,7 +459,12 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     if (!result) return;
 
     // Always use the browser's public host (admin.daysrajasthan.com), never PM2 localhost:3102.
-    const publicUrl = publicQuotationUrl(itineraryId);
+    // Opaque ?v= lock pins this theme so later theme edits do not change shared links.
+    const publicUrl = publicQuotationUrl(
+      itineraryId,
+      null,
+      result.revision.snapshot.preview_theme
+    );
     try {
       await fetch(`/api/public/quotation/${itineraryId}`, {
         method: "POST",

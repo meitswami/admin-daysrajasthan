@@ -23,8 +23,24 @@ import type { CategoryTotalSummary, ClientItineraryRecord, ItinerarySnapshot } f
 import {
   getPreviewTheme,
 } from "@/lib/itinerary-builder/preview-themes";
+import {
+  applyPinnedTheme,
+  encodeThemeToken,
+} from "@/lib/itinerary-builder/theme-token";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useReportBrand } from "@/hooks/use-report-brand";
+
+function ensureThemeLockInUrl(themeId: ItinerarySnapshot["preview_theme"]) {
+  if (typeof window === "undefined") return;
+  try {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("v")) return;
+    url.searchParams.set("v", encodeThemeToken(themeId));
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {
+    // ignore
+  }
+}
 
 async function waitForDocumentImages(root: ParentNode = document) {
   const images = Array.from(root.querySelectorAll("img"));
@@ -74,9 +90,12 @@ async function publishQuotationPayload(input: {
 export function QuotationPrintView({
   itineraryId,
   publicMode = false,
+  themeToken = null,
 }: {
   itineraryId: string;
   publicMode?: boolean;
+  /** Opaque `?v=` theme lock from the public URL */
+  themeToken?: string | null;
 }) {
   const siteBrand = useReportBrand();
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
@@ -106,6 +125,7 @@ export function QuotationPrintView({
         if (res.ok) {
           const json = await res.json();
           if (!cancelled && json?.snapshot) {
+            const snap = applyPinnedTheme(normalizeSnapshot(json.snapshot), themeToken);
             setRecord({
               id: itineraryId,
               quote_id: json.quote_id,
@@ -113,9 +133,10 @@ export function QuotationPrintView({
               client_name: json.client_name,
               category_totals: json.category_totals ?? [],
             } as ClientItineraryRecord);
-            setSnapshot(normalizeSnapshot(json.snapshot));
+            setSnapshot(snap);
             setRevisionId(json.revision_id);
             setCategoryTotals(json.category_totals ?? []);
+            ensureThemeLockInUrl(snap.preview_theme);
             return;
           }
         }
@@ -127,7 +148,7 @@ export function QuotationPrintView({
       const revs = getRevisions(itineraryId);
       const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
       if (r && current) {
-        const snap = normalizeSnapshot(current.snapshot);
+        const snap = applyPinnedTheme(normalizeSnapshot(current.snapshot), themeToken);
         if (!cancelled) {
           setRecord(r);
           setSnapshot(snap);
@@ -140,6 +161,7 @@ export function QuotationPrintView({
             version_number: current.version_number,
             type: "quotation",
           });
+          ensureThemeLockInUrl(snap.preview_theme);
           void publishQuotationPayload({
             itineraryId: r.id,
             quoteId: r.quote_id,
@@ -160,7 +182,7 @@ export function QuotationPrintView({
     return () => {
       cancelled = true;
     };
-  }, [itineraryId]);
+  }, [itineraryId, themeToken]);
 
   const brand = {
     ...siteBrand,

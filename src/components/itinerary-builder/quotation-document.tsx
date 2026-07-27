@@ -5,10 +5,9 @@ import {
   buildNightSegments,
   DEFAULT_CANCELLATION_POLICY,
   DEFAULT_PAYMENT_POLICY,
+  displayHotelRating,
   formatDestinationsSummary,
-  getHotelStaysForTier,
   tierRowsFromSnapshot,
-  type HotelStay,
   type NightSegment,
 } from "@/lib/itinerary-builder/quotation-layout";
 import {
@@ -42,6 +41,7 @@ import {
   Theme2Contact,
   Theme2TourPolicies,
 } from "@/components/itinerary-builder/quotation-theme2-sections";
+import { Theme3SideRails } from "@/components/itinerary-builder/quotation-theme3-shell";
 import {
   QuotationLegacyAbout,
   QuotationLegacyExploreBanner,
@@ -220,24 +220,34 @@ function PackageOptionCard({
   );
 }
 
-function HotelCard({ stay }: { stay: HotelStay }) {
+function DayHotelBlock({
+  day,
+  accent,
+}: {
+  day: ItineraryDay;
+  accent: string;
+}) {
+  if (!day.hotel_name) return null;
+  const { rating, reviewCount } = displayHotelRating(day.hotel_name);
+
   return (
-    <div className="break-inside-avoid rounded-xl border border-stone-200 bg-white p-4">
+    <div className="mt-3 break-inside-avoid rounded-xl border border-stone-200 bg-stone-50/80 p-3 sm:p-4">
       <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="font-semibold text-stone-900">{stay.hotelName}</p>
-          <p className="text-xs text-stone-500">{stay.destination}</p>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">Stay</p>
+          <p className="mt-0.5 font-semibold text-stone-900">{day.hotel_name}</p>
+          {day.location && <p className="text-xs text-stone-500">{day.location}</p>}
         </div>
-        <StarRating rating={stay.rating} />
+        <StarRating rating={rating} />
       </div>
-      <p className="mt-1 text-[11px] text-stone-500">({stay.reviewCount.toLocaleString("en-IN")} reviews)</p>
-      <div className="mt-3 grid gap-1 text-xs text-stone-600">
-        {stay.checkIn && <p>Check-in: {stay.checkIn}</p>}
-        {stay.checkOut && <p>Check-out: {stay.checkOut}</p>}
-        <p className="font-medium text-emerald-700">
-          {stay.roomCategory} · {stay.breakfast ? "Breakfast included" : "Room only"}
-        </p>
-      </div>
+      <p className="mt-1 text-[11px] text-stone-500">
+        ({reviewCount.toLocaleString("en-IN")} reviews)
+      </p>
+      <p className="mt-2 text-xs font-medium" style={{ color: accent }}>
+        {[day.room_category, day.breakfast ? "Breakfast included" : null, day.meal_plan]
+          .filter(Boolean)
+          .join(" · ")}
+      </p>
     </div>
   );
 }
@@ -306,11 +316,7 @@ function TimelineDayCard({
                 {day.day_description}
               </p>
             )}
-            {day.hotel_name && (
-              <p className="mt-3 text-xs font-medium" style={{ color: accent }}>
-                🏨 {day.hotel_name}
-              </p>
-            )}
+            <DayHotelBlock day={day} accent={accent} />
           </div>
         </>
       ) : (
@@ -327,11 +333,7 @@ function TimelineDayCard({
               {day.day_description}
             </p>
           )}
-          {day.hotel_name && (
-            <p className="mt-3 text-xs font-medium" style={{ color: accent }}>
-              🏨 {day.hotel_name}
-            </p>
-          )}
+          <DayHotelBlock day={day} accent={accent} />
         </div>
       )}
     </div>
@@ -371,11 +373,7 @@ function DayCard({
           {day.day_description && (
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
           )}
-          {day.hotel_name && (
-            <p className="mt-3 text-xs font-medium" style={{ color: theme.accent }}>
-              🏨 {day.hotel_name}
-            </p>
-          )}
+          <DayHotelBlock day={day} accent={theme.accent} />
         </div>
         <div className="overflow-hidden rounded-xl">
           <QuotationDayCarousel
@@ -429,18 +427,6 @@ function DayCard({
               </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {day.hotel_name && (
-                <span
-                  className="rounded-full px-2.5 py-1 font-medium ring-1"
-                  style={{
-                    backgroundColor: theme.accentSoft,
-                    color: theme.heading,
-                    borderColor: `${theme.accent}33`,
-                  }}
-                >
-                  🏨 {day.hotel_name}
-                </span>
-              )}
               {day.vehicle_type && (
                 <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
                   🚗 {day.vehicle_type}
@@ -452,6 +438,7 @@ function DayCard({
                 </span>
               )}
             </div>
+            <DayHotelBlock day={day} accent={theme.accent} />
             {(day.activities ?? []).length > 0 && (
               <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
                 {(day.activities ?? []).map((activity) => (
@@ -551,6 +538,8 @@ export function QuotationDocument({
   const theme = getPreviewTheme(snapshot.preview_theme);
   const isLegacyTheme = theme.id === 1;
   const isTheme2 = theme.id === 2;
+  const isTheme3 = theme.id === 3;
+  const usesRichPolicies = isTheme2 || isTheme3;
   const usesTimelineDays = theme.id === 2 || theme.id === 3 || theme.id === 4 || theme.id === 5;
   const selectedContact = findSelectedContact(contacts, snapshot.selected_contact_id);
   // Cover uses company brand; agent appears in payment footer.
@@ -582,8 +571,12 @@ export function QuotationDocument({
 
   return (
     <article
-      className={`quotation-document quotation-theme-${theme.id} mx-auto text-stone-900 ${
-        mode === "print" ? "max-w-none p-0" : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"
+      className={`quotation-document quotation-theme-${theme.id} relative mx-auto text-stone-900 ${
+        mode === "print"
+          ? "max-w-none p-0"
+          : isTheme3
+            ? "max-w-5xl overflow-hidden rounded-2xl border border-stone-200 shadow-sm"
+            : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"
       }`}
       style={{
         backgroundColor:
@@ -593,6 +586,8 @@ export function QuotationDocument({
       }}
       data-theme={theme.id}
     >
+      {isTheme3 && <Theme3SideRails />}
+
       <QuotationThemeHero
         theme={theme}
         brand={displayBrand}
@@ -607,7 +602,15 @@ export function QuotationDocument({
 
       {isLegacyTheme && <QuotationLegacyExploreBanner />}
 
-      <div className={`space-y-8 ${isLegacyTheme ? "px-4 py-6 sm:px-6" : "px-6 py-8"}`}>
+      <div
+        className={`relative z-[2] space-y-8 ${
+          isLegacyTheme
+            ? "px-4 py-6 sm:px-6"
+            : isTheme3
+              ? "px-10 py-8 sm:px-14 md:px-16"
+              : "px-6 py-8"
+        }`}
+      >
         {!isLegacyTheme && theme.id !== 2 && theme.id !== 3 && (
           <div className="grid gap-6 lg:grid-cols-2">
             <ClientDetailsTable
@@ -737,36 +740,12 @@ export function QuotationDocument({
           </div>
         </section>
 
-        {hasTiers && (
-          <section className="break-inside-avoid">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-              Hotels by Package
-            </h2>
-            <div className="mt-4 space-y-6">
-              {tierRows.map((tier, index) => {
-                const stays = getHotelStaysForTier(days, tier.room_category, client.travel_date);
-                if (stays.length === 0) return null;
-                return (
-                  <div key={tier.category_key}>
-                    <h3 className="text-sm font-semibold text-stone-900">
-                      Option {index + 1}: {tier.label}
-                    </h3>
-                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                      {stays.map((stay) => (
-                        <HotelCard key={`${tier.category_key}-${stay.hotelName}-${stay.checkIn}`} stay={stay} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {isTheme2 ? (
+        {usesRichPolicies ? (
           <Theme2TourPolicies
             inclusionItems={inclusionItems}
             exclusionItems={exclusionItems}
+            variant={isTheme3 ? "theme3" : "theme2"}
+            accent={theme.accent}
           />
         ) : (
           !isLegacyTheme && (
@@ -779,7 +758,7 @@ export function QuotationDocument({
           )
         )}
 
-        {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && !isTheme2 && (
+        {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && !usesRichPolicies && (
           <section className="break-inside-avoid">
             <h2 className="text-sm font-bold uppercase text-stone-800">Pricing Summary</h2>
             <table className="mt-3 w-full text-sm">
@@ -815,13 +794,20 @@ export function QuotationDocument({
           </section>
         )}
 
-        {isTheme2 ? (
+        {usesRichPolicies ? (
           <>
-            <Theme2About structure={structure} brand={displayBrand} />
+            <Theme2About
+              structure={structure}
+              brand={displayBrand}
+              variant={isTheme3 ? "theme3" : "theme2"}
+              accent={theme.accent}
+            />
             <Theme2Contact
               brand={displayBrand}
               contact={selectedContact}
               structure={structure}
+              variant={isTheme3 ? "theme3" : "theme2"}
+              accent={theme.accent}
             />
             <p className="pt-4 text-center text-[10px] text-stone-400">
               This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}

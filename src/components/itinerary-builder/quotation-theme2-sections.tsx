@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReportBrand } from "@/lib/branding/report-brand";
 import {
   MASTER_CANCELLATION,
@@ -10,6 +10,10 @@ import {
   type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
 import { GOOGLE_REVIEWS_URL } from "@/lib/itinerary-builder/review-links";
+import {
+  listInclusionExclusions,
+  type InclusionExclusionItem,
+} from "@/lib/master-data/inclusions-store";
 import type { CompanyStructure } from "@/types/company-structure";
 import {
   DEFAULT_ACHIEVEMENT_DESCRIPTION,
@@ -20,12 +24,37 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  CircleX,
+  CreditCard,
+  FileText,
   Globe,
   Info,
+  RotateCcw,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-const ACCENT = "#56AB2F";
+/** Attach master-library images to inclusion cards matched by title. */
+function enrichInclusionIcons(
+  items: ContentBlockItem[],
+  master: InclusionExclusionItem[]
+): ContentBlockItem[] {
+  const byTitle = new Map<string, string>();
+  for (const row of master) {
+    if (row.kind !== "inclusion" || !row.image_url) continue;
+    byTitle.set(row.text.trim().toLowerCase(), row.image_url);
+  }
+  return items.map((item) => {
+    if (item.images?.some(Boolean)) return item;
+    const url = byTitle.get(item.title.trim().toLowerCase());
+    return url ? { ...item, images: [url] } : item;
+  });
+}
+
+const THEME2_ACCENT = "#56AB2F";
+const THEME3_ACCENT = "#7B1E2E";
+
+export type TourPolicyVariant = "theme2" | "theme3";
 
 type PolicyTabId =
   | "inclusions"
@@ -34,47 +63,83 @@ type PolicyTabId =
   | "cancellation"
   | "payment";
 
-const TABS: { id: PolicyTabId; label: string }[] = [
-  { id: "inclusions", label: "Inclusions" },
-  { id: "exclusions", label: "Exclusions" },
-  { id: "terms", label: "Terms & Conditions" },
-  { id: "cancellation", label: "Cancellation & Refund Policy" },
-  { id: "payment", label: "Payment Policy" },
+const TABS: { id: PolicyTabId; label: string; Icon: LucideIcon }[] = [
+  { id: "inclusions", label: "Inclusions", Icon: Check },
+  { id: "exclusions", label: "Exclusions", Icon: CircleX },
+  { id: "terms", label: "Terms & Conditions", Icon: FileText },
+  { id: "cancellation", label: "Cancellation & Refund Policy", Icon: RotateCcw },
+  { id: "payment", label: "Payment Policy", Icon: CreditCard },
 ];
 
 function PolicyAccordionItem({
   item,
   defaultOpen = false,
+  accent,
+  variant,
 }: {
   item: ContentBlockItem;
   defaultOpen?: boolean;
+  accent: string;
+  variant: TourPolicyVariant;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const hasBody = Boolean(item.description?.trim() || item.images?.length);
-  const image = item.images?.[0];
+  const iconImage = item.images?.find(Boolean) ?? null;
+  const extraImages = (item.images ?? []).filter(Boolean).slice(1);
+  const hasBody = Boolean(item.description?.trim() || extraImages.length);
 
   return (
-    <div className="break-inside-avoid overflow-hidden rounded-xl border-2 border-stone-200 bg-white shadow-sm print:shadow-none">
+    <div
+      className={cn(
+        "break-inside-avoid overflow-hidden rounded-xl border bg-white shadow-sm print:shadow-none",
+        variant === "theme3" ? "border-stone-200" : "border-2 border-stone-200"
+      )}
+    >
       <button
         type="button"
         className={cn(
-          "flex w-full items-center justify-between gap-3 bg-gradient-to-r from-stone-50 to-white px-4 py-3.5 text-left sm:px-5",
-          hasBody && "hover:from-green-50"
+          "flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5",
+          variant === "theme3"
+            ? "bg-white hover:bg-[#F8E9EC]/40"
+            : "bg-gradient-to-r from-stone-50 to-white",
+          hasBody && variant !== "theme3" && "hover:from-green-50"
         )}
         onClick={() => hasBody && setOpen((v) => !v)}
         aria-expanded={open}
       >
         <span className="flex min-w-0 items-center gap-3">
+          {iconImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={iconImage}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-lg object-cover ring-1 ring-stone-200"
+            />
+          ) : variant === "theme3" ? (
+            <span
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: accent }}
+            >
+              <Info className="h-3.5 w-3.5" strokeWidth={2.5} />
+            </span>
+          ) : (
+            <span
+              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: accent }}
+            >
+              <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            </span>
+          )}
           <span
-            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
-            style={{ backgroundColor: ACCENT }}
+            className={cn(
+              "text-sm font-semibold text-stone-800 sm:text-base",
+              variant === "theme3" ? "font-medium" : "font-bold"
+            )}
           >
-            <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            {item.title}
           </span>
-          <span className="text-sm font-bold text-stone-800 sm:text-base">{item.title}</span>
         </span>
         {hasBody && (
-          <span className="no-print shrink-0 print:hidden" style={{ color: ACCENT }}>
+          <span className="no-print shrink-0 print:hidden" style={{ color: accent }}>
             {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </span>
         )}
@@ -87,10 +152,10 @@ function PolicyAccordionItem({
           )}
         >
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            {image && (
+            {extraImages[0] && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={image}
+                src={extraImages[0]}
                 alt=""
                 className="h-28 w-40 shrink-0 rounded-lg object-cover sm:h-32 sm:w-44"
               />
@@ -123,14 +188,33 @@ function SimplePolicyCards({ lines }: { lines: string[] }) {
 export function Theme2TourPolicies({
   inclusionItems,
   exclusionItems,
+  variant = "theme2",
+  accent,
 }: {
   inclusionItems: ContentBlockItem[];
   exclusionItems: ContentBlockItem[];
+  variant?: TourPolicyVariant;
+  accent?: string;
 }) {
+  const tone = accent ?? (variant === "theme3" ? THEME3_ACCENT : THEME2_ACCENT);
   const [tab, setTab] = useState<PolicyTabId>("inclusions");
+  const [masterInclusions, setMasterInclusions] = useState<InclusionExclusionItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listInclusionExclusions().then((rows) => {
+      if (!cancelled) setMasterInclusions(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const panels = useMemo(() => {
-    const inclusions = inclusionItems.filter((i) => i.title.trim());
+    const inclusions = enrichInclusionIcons(
+      inclusionItems.filter((i) => i.title.trim()),
+      masterInclusions
+    );
     const exclusions = exclusionItems.filter((i) => i.title.trim());
     return {
       inclusions,
@@ -139,16 +223,24 @@ export function Theme2TourPolicies({
       cancellation: MASTER_CANCELLATION.map((t) => t.title),
       payment: MASTER_PAYMENT.map((t) => t.title),
     };
-  }, [inclusionItems, exclusionItems]);
+  }, [inclusionItems, exclusionItems, masterInclusions]);
 
   return (
     <section className="break-inside-avoid">
-      <h2 className="text-2xl font-bold text-stone-700">Tour Policies</h2>
+      <h2
+        className={cn(
+          "font-bold text-stone-700",
+          variant === "theme3" ? "font-serif text-2xl text-stone-800 sm:text-3xl" : "text-2xl"
+        )}
+      >
+        Tour Policies
+      </h2>
 
       {/* Screen tabs */}
       <div className="no-print mt-4 flex flex-wrap gap-x-5 gap-y-2 border-b border-stone-200 print:hidden">
         {TABS.map((t) => {
           const active = tab === t.id;
+          const TabIcon = variant === "theme2" && t.id === "inclusions" ? Info : t.Icon;
           return (
             <button
               key={t.id}
@@ -158,9 +250,9 @@ export function Theme2TourPolicies({
                 "flex items-center gap-2 pb-2 text-sm transition-colors sm:text-base",
                 active ? "border-b-2 font-semibold text-stone-900" : "text-stone-500 hover:text-stone-700"
               )}
-              style={active ? { borderColor: ACCENT, color: ACCENT } : undefined}
+              style={active ? { borderColor: tone, color: tone } : undefined}
             >
-              <Info className="h-4 w-4" style={{ color: active ? ACCENT : undefined }} />
+              <TabIcon className="h-4 w-4" style={{ color: active ? tone : undefined }} />
               {t.label}
             </button>
           );
@@ -172,7 +264,13 @@ export function Theme2TourPolicies({
         {tab === "inclusions" && (
           <div className="space-y-3">
             {panels.inclusions.map((item, i) => (
-              <PolicyAccordionItem key={item.id} item={item} defaultOpen={i === 1} />
+              <PolicyAccordionItem
+                key={item.id}
+                item={item}
+                defaultOpen={i === 1}
+                accent={tone}
+                variant={variant}
+              />
             ))}
           </div>
         )}
@@ -185,35 +283,41 @@ export function Theme2TourPolicies({
       {/* Print / PDF: all sections expanded */}
       <div className="mt-4 hidden space-y-8 print:block">
         <div>
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Inclusions
           </h3>
           <div className="space-y-3">
             {panels.inclusions.map((item) => (
-              <PolicyAccordionItem key={`print-${item.id}`} item={item} defaultOpen />
+              <PolicyAccordionItem
+                key={`print-${item.id}`}
+                item={item}
+                defaultOpen
+                accent={tone}
+                variant={variant}
+              />
             ))}
           </div>
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Exclusions
           </h3>
           <SimplePolicyCards lines={panels.exclusions} />
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Terms & Conditions
           </h3>
           <SimplePolicyCards lines={panels.terms} />
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Cancellation & Refund Policy
           </h3>
           <SimplePolicyCards lines={panels.cancellation} />
         </div>
         <div>
-          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: ACCENT }}>
+          <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Payment Policy
           </h3>
           <SimplePolicyCards lines={panels.payment} />
@@ -226,10 +330,15 @@ export function Theme2TourPolicies({
 export function Theme2About({
   structure,
   brand,
+  variant = "theme2",
+  accent,
 }: {
   structure: CompanyStructure | null;
   brand: ReportBrand;
+  variant?: TourPolicyVariant;
+  accent?: string;
 }) {
+  const tone = accent ?? (variant === "theme3" ? THEME3_ACCENT : THEME2_ACCENT);
   const ach = structure?.achievements?.find((a) => a.name.trim()) ?? null;
   const title = ach?.name || DEFAULT_ACHIEVEMENT_NAME;
   const description = ach?.description || brand.siteDescription || DEFAULT_ACHIEVEMENT_DESCRIPTION;
@@ -243,8 +352,15 @@ export function Theme2About({
   return (
     <section className="mt-10 space-y-8">
       <div>
-        <h2 className="text-xl font-bold text-stone-800 sm:text-2xl">{title}</h2>
-        <div className="mt-4 grid gap-4 text-sm leading-relaxed text-stone-600 sm:grid-cols-2">
+        <h2
+          className={cn(
+            "font-bold text-stone-800 sm:text-2xl",
+            variant === "theme3" ? "font-serif text-2xl sm:text-3xl" : "text-xl"
+          )}
+        >
+          {title}
+        </h2>
+        <div className="mt-4 grid gap-4 text-sm leading-relaxed text-stone-600 sm:grid-cols-2 sm:text-justify">
           {paragraphs.length >= 2 ? (
             <>
               <p className="whitespace-pre-wrap">{paragraphs[0]}</p>
@@ -258,8 +374,11 @@ export function Theme2About({
 
       <div>
         <h3
-          className="text-lg font-bold text-stone-900 underline decoration-2 underline-offset-4"
-          style={{ textDecorationColor: ACCENT }}
+          className={cn(
+            "font-bold text-stone-900 underline decoration-2 underline-offset-4",
+            variant === "theme3" ? "font-serif text-xl text-sky-800" : "text-lg"
+          )}
+          style={variant === "theme3" ? undefined : { textDecorationColor: tone }}
         >
           Achievements
         </h3>
@@ -275,7 +394,7 @@ export function Theme2About({
 
       <div
         className="relative overflow-hidden rounded-xl px-4 py-10 text-center"
-        style={{ backgroundColor: ACCENT }}
+        style={{ backgroundColor: tone }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -293,7 +412,12 @@ export function Theme2About({
           href={website.startsWith("http") ? website : `https://${website}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="relative inline-flex rounded-full border border-white/80 bg-[#6BC23E] px-6 py-2.5 text-sm font-semibold text-white shadow-sm"
+          className={cn(
+            "relative inline-flex rounded-full border px-6 py-2.5 text-sm font-semibold shadow-sm",
+            variant === "theme3"
+              ? "border-white/90 bg-transparent text-white"
+              : "border-white/80 bg-[#6BC23E] text-white"
+          )}
         >
           Click To View About Our Travel Agency
         </a>
@@ -306,11 +430,16 @@ export function Theme2Contact({
   brand,
   contact,
   structure,
+  accent,
+  variant = "theme2",
 }: {
   brand: ReportBrand;
   contact: PreviewContact | null;
   structure: CompanyStructure | null;
+  accent?: string;
+  variant?: TourPolicyVariant;
 }) {
+  const tone = accent ?? (variant === "theme3" ? THEME3_ACCENT : THEME2_ACCENT);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -375,7 +504,7 @@ export function Theme2Contact({
           <button
             type="submit"
             className="mt-4 w-full rounded-lg py-2.5 text-sm font-bold text-white"
-            style={{ backgroundColor: ACCENT }}
+            style={{ backgroundColor: tone }}
           >
             Submit
           </button>

@@ -257,28 +257,7 @@ export function Theme3Hero({
     .toUpperCase();
 
   return (
-    <header className="relative overflow-hidden bg-[#FBF7F0] px-6 py-6">
-      <div
-        className="pointer-events-none absolute inset-y-0 left-0 w-10 opacity-25 sm:w-14"
-        style={{
-          backgroundImage:
-            "url(/theme-assets/reviews/corner-pattern.png), repeating-linear-gradient(180deg, #7B1E2E22 0 2px, transparent 2px 12px)",
-          backgroundSize: "140px auto, auto",
-          backgroundRepeat: "repeat-y, repeat",
-          backgroundPosition: "left top, 0 0",
-        }}
-      />
-      <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-10 opacity-25 sm:w-14"
-        style={{
-          backgroundImage:
-            "url(/theme-assets/reviews/corner-pattern.png), repeating-linear-gradient(180deg, #7B1E2E22 0 2px, transparent 2px 12px)",
-          backgroundSize: "140px auto, auto",
-          backgroundRepeat: "repeat-y, repeat",
-          backgroundPosition: "right top, 0 0",
-        }}
-      />
-
+    <header className="relative z-[2] overflow-hidden bg-[#FBF7F0] px-10 py-6 sm:px-14 md:px-16">
       <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <BrandMark brand={brand} />

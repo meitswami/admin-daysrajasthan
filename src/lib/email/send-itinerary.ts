@@ -21,7 +21,7 @@ export function buildTemplateContext(
     travel_date: record.travel_date,
     category_totals: record.category_totals ?? [],
     proposal_link: opts?.proposalToken ? `${origin}/proposal/${opts.proposalToken}` : null,
-    quotation_link: publicQuotationUrl(record.id, origin),
+    quotation_link: publicQuotationUrl(record.id, origin, snapshot?.preview_theme ?? null),
     agent_name: TEAM_MAIL_DEFAULTS.agent_name,
     company_name: TEAM_MAIL_DEFAULTS.company_name,
   };
