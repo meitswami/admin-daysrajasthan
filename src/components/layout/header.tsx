@@ -72,7 +72,7 @@ export function Header({ title, description }: { title?: string; description?: s
   const unreadChat = chatNotifs.length;
 
   return (
-    <header className="sticky top-0 z-30 w-full min-w-0 max-w-full overflow-x-hidden border-b border-stone-200/80 bg-white/95 backdrop-blur-md">
+    <header className="sticky top-0 z-40 w-full min-w-0 max-w-full isolate overflow-x-hidden border-b border-stone-200/80 bg-white">
       <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex min-w-0 items-start gap-3">
           <button

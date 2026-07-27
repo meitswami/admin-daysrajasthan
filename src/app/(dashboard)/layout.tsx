@@ -10,7 +10,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div className="flex min-h-screen bg-[#f8f7f4] lg:pl-64">
           <Sidebar />
           <MobileDrawer />
-          <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-x-hidden">{children}</div>
+          <div className="flex min-w-0 max-w-full flex-1 flex-col overflow-x-clip">{children}</div>
         </div>
         {/* Chat lead accept / rotate / claim + admin SWAL alerts */}
         <ChatLeadAlerts />

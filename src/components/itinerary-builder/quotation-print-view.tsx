@@ -231,7 +231,7 @@ export function QuotationPrintView({
 
   return (
     <div className="min-h-screen bg-stone-100 print:bg-transparent">
-      <div className="no-print sticky top-0 z-10 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
+      <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
           {publicMode ? (
             <p className="text-sm font-semibold text-stone-800">

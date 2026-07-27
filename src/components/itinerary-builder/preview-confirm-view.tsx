@@ -506,7 +506,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
 
   return (
     <div className={cn("min-h-screen", themeShell)}>
-      <div className="no-print sticky top-0 z-20 border-b border-stone-200 bg-white/95 px-4 py-3 backdrop-blur print:hidden">
+      <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-stone-500">

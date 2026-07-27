@@ -571,9 +571,11 @@ export function QuotationDocument({
 
   return (
     <article
-      className={`quotation-document quotation-theme-${theme.id} relative mx-auto text-stone-900 ${
+      className={`quotation-document quotation-theme-${theme.id} relative isolate mx-auto text-stone-900 ${
         mode === "print"
-          ? "max-w-none p-0"
+          ? isTheme3
+            ? "max-w-none overflow-hidden p-0"
+            : "max-w-none p-0"
           : isTheme3
             ? "max-w-5xl overflow-hidden rounded-2xl border border-stone-200 shadow-sm"
             : "max-w-4xl rounded-2xl border border-stone-200 shadow-sm"

@@ -95,7 +95,7 @@ export function ItineraryBuilderWorkspace({
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col">
-      <div className="sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
+      <div className="sticky top-0 z-30 border-b border-stone-200 bg-white">
         <div className="flex flex-wrap items-center gap-3 px-4 py-3">
           <Link
             href="/itinerary-builder"
