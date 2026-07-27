@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createShareLink } from "@/lib/itinerary-builder/share-store";
+import { resolveAdminRequestOrigin } from "@/lib/admin-public-url";
 import type { ItinerarySnapshot } from "@/types/itinerary-builder";
 
 const bodySchema = z.object({
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     snapshot: parsed.data.snapshot as unknown as ItinerarySnapshot,
   });
 
-  const origin = new URL(request.url).origin;
+  const origin = resolveAdminRequestOrigin(request);
   return NextResponse.json({
     token: link.token,
     url: `${origin}/proposal/${link.token}`,

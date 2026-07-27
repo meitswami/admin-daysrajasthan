@@ -4,6 +4,7 @@ import {
   getPublicQuotation,
   publishPublicQuotation,
 } from "@/lib/itinerary-builder/public-quotation-store";
+import { resolveAdminRequestOrigin } from "@/lib/admin-public-url";
 import type { CategoryTotalSummary, ItinerarySnapshot } from "@/types/itinerary-builder";
 
 type Params = { params: Promise<{ id: string }> };
@@ -45,7 +46,7 @@ export async function POST(request: Request, { params }: Params) {
     published_at: new Date().toISOString(),
   });
 
-  const origin = new URL(request.url).origin;
+  const origin = resolveAdminRequestOrigin(request);
   return NextResponse.json({
     ...payload,
     url: `${origin}/itinerary-builder/${id}/quotation`,

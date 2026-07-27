@@ -27,6 +27,7 @@ import type {
 } from "@/types/itinerary-builder";
 import { WORKFLOW_LABELS, WORKFLOW_PIPELINE, CLIENT_TITLES } from "@/types/itinerary-builder";
 import { logGeneratedDocument } from "@/lib/itinerary-builder/documents";
+import { publicQuotationUrl } from "@/lib/admin-public-url";
 import { ShareLinkModal } from "@/components/itinerary-builder/share-link-modal";
 import {
   ArrowLeft,
@@ -185,7 +186,7 @@ export function ItineraryBuilderWorkspace({
       version_number: record.current_version,
       type: "quotation",
     });
-    window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
+    window.open(publicQuotationUrl(itineraryId), "_blank", "noopener,noreferrer");
   }
 
   function saveAndPreview() {

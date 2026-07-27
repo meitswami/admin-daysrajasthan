@@ -3,13 +3,14 @@ import type { EmailTemplateId } from "@/types/team-email";
 import { renderTemplate, textToHtml, type TemplateRenderContext } from "@/lib/email/templates";
 import { queueOutboundSend, completeSend, TEAM_MAIL_DEFAULTS } from "@/lib/email/storage";
 import { getCurrentSnapshot } from "@/lib/itinerary-builder/storage";
+import { getAdminPublicOrigin, publicQuotationUrl } from "@/lib/admin-public-url";
 
 export function buildTemplateContext(
   record: ClientItineraryRecord,
   opts?: { proposalToken?: string }
 ): TemplateRenderContext {
   const snapshot = getCurrentSnapshot(record.id);
-  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const origin = getAdminPublicOrigin();
   return {
     client_name: record.client_name,
     client_title: snapshot?.client.title,
@@ -20,7 +21,7 @@ export function buildTemplateContext(
     travel_date: record.travel_date,
     category_totals: record.category_totals ?? [],
     proposal_link: opts?.proposalToken ? `${origin}/proposal/${opts.proposalToken}` : null,
-    quotation_link: `${origin}/itinerary-builder/${record.id}/quotation`,
+    quotation_link: publicQuotationUrl(record.id, origin),
     agent_name: TEAM_MAIL_DEFAULTS.agent_name,
     company_name: TEAM_MAIL_DEFAULTS.company_name,
   };

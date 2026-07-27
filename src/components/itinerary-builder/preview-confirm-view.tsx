@@ -24,6 +24,7 @@ import {
 } from "@/lib/itinerary-builder/policy-master";
 import { contactsFromStructure } from "@/lib/itinerary-builder/quotation-contacts";
 import { getCompanyStructure } from "@/lib/master-data/structure-store";
+import { publicQuotationUrl } from "@/lib/admin-public-url";
 import {
   PREVIEW_THEMES,
   themeCardLabel,
@@ -448,7 +449,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         // Local open still works even if publish fails
       }
     }
-    window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
+    window.open(publicQuotationUrl(itineraryId), "_blank", "noopener,noreferrer");
   }
 
   /** Publish selected theme snapshot and open the public quotation URL. */
@@ -456,9 +457,10 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     const result = await handleSave();
     if (!result) return;
 
-    let publicUrl = `${window.location.origin}/itinerary-builder/${itineraryId}/quotation`;
+    // Always use the browser's public host (admin.daysrajasthan.com), never PM2 localhost:3102.
+    const publicUrl = publicQuotationUrl(itineraryId);
     try {
-      const res = await fetch(`/api/public/quotation/${itineraryId}`, {
+      await fetch(`/api/public/quotation/${itineraryId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -470,12 +472,8 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
           category_totals: result.record.category_totals ?? [],
         }),
       });
-      if (res.ok) {
-        const json = (await res.json()) as { url?: string };
-        if (json.url) publicUrl = json.url;
-      }
     } catch {
-      // Still open local/public path
+      // Still open public path
     }
 
     try {
