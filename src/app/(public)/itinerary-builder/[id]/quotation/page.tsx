@@ -2,7 +2,7 @@ import { QuotationPrintView } from "@/components/itinerary-builder/quotation-pri
 
 type Props = { params: Promise<{ id: string }> };
 
-export default async function QuotationPage({ params }: Props) {
+export default async function PublicQuotationPage({ params }: Props) {
   const { id } = await params;
-  return <QuotationPrintView itineraryId={id} />;
+  return <QuotationPrintView itineraryId={id} publicMode />;
 }

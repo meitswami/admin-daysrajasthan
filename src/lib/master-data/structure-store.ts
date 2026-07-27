@@ -45,37 +45,37 @@ export function defaultCompanyStructure(): CompanyStructure {
     logo_url: DEFAULT_COMPANY_LOGO_URL,
     staff_contacts: [
       {
-        id: uid(),
+        id: "ct-vandana",
         name: "Vandana Shekhawat",
         emails: "rajasthantouringjaipur@gmail.com",
         mobiles: "+919351549292",
       },
       {
-        id: uid(),
+        id: "ct-shatrughan",
         name: "Shatrughan Singh",
         emails: "rajasthantouringjaipur@gmail.com",
         mobiles: "+918058100276",
       },
       {
-        id: uid(),
+        id: "ct-hemendra",
         name: "Hemendra Singh",
         emails: "rajasthantouringjaipur@gmail.com",
         mobiles: "+919257368877",
       },
       {
-        id: uid(),
+        id: "ct-priya",
         name: "Priya Vohra",
         emails: "sales.rajasthantouring@gmail.com",
         mobiles: "+918766266066",
       },
       {
-        id: uid(),
+        id: "ct-soniya",
         name: "Soniya Shekhawat",
         emails: "soniya.rajasthantouring@gmail.com",
         mobiles: "+917357571614",
       },
       {
-        id: uid(),
+        id: "ct-pooja",
         name: "Pooja Shekhawat",
         emails: "pooja.rajasthantouring@gmail.com",
         mobiles: "+919784011614",

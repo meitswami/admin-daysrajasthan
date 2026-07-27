@@ -1,10 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { QuotationDocument } from "@/components/itinerary-builder/quotation-document";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
+import { getCompanyStructure } from "@/lib/master-data/structure-store";
+import {
+  contactsFromStructure,
+  formatStructureAddress,
+  structureWebsite,
+} from "@/lib/itinerary-builder/quotation-contacts";
+import {
+  paymentDetailsFromStructure,
+  type PaymentDetails,
+} from "@/lib/itinerary-builder/payment-details";
+import type { PreviewContact } from "@/lib/itinerary-builder/policy-master";
+import type { CompanyStructure } from "@/types/company-structure";
 import type { ItinerarySnapshot } from "@/types/itinerary-builder";
 import { CheckCircle2, Printer } from "lucide-react";
 import { useReportBrand } from "@/hooks/use-report-brand";
@@ -28,12 +40,33 @@ export function ClientProposalView({
   acceptedByName: string | null;
   onAccept?: (name: string, pin: string) => Promise<boolean>;
 }) {
-  const brand = useReportBrand();
+  const siteBrand = useReportBrand();
   const [name, setName] = useState(snapshot.client.client_name);
   const [pin, setPin] = useState("");
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(Boolean(acceptedAt));
   const [acceptedName, setAcceptedName] = useState(acceptedByName);
+  const [structure, setStructure] = useState<CompanyStructure | null>(null);
+  const [contacts, setContacts] = useState<PreviewContact[]>([]);
+  const [payment, setPayment] = useState<PaymentDetails | undefined>(undefined);
+
+  useEffect(() => {
+    void getCompanyStructure().then((s) => {
+      setStructure(s);
+      setContacts(contactsFromStructure(s));
+      setPayment(paymentDetailsFromStructure(s));
+    });
+  }, []);
+
+  const brand = {
+    ...siteBrand,
+    companyName: siteBrand.companyName || "Rajasthan Touring",
+    logoUrl: structure?.logo_url || siteBrand.logoUrl,
+    address: formatStructureAddress(structure) || siteBrand.address,
+    websiteUrl: structureWebsite(structure) || siteBrand.websiteUrl,
+    phone: siteBrand.phone || "+919351549292",
+    email: siteBrand.email || "rajasthantouringjaipur@gmail.com",
+  };
 
   async function handleAccept() {
     if (!onAccept || !name.trim()) return;
@@ -53,7 +86,7 @@ export function ClientProposalView({
   return (
     <div className="min-h-screen bg-gradient-to-b from-amber-50/80 to-stone-100 print:bg-transparent">
       <div className="no-print sticky top-0 z-10 border-b border-amber-200/60 bg-white/90 backdrop-blur print:hidden">
-        <div className="mx-auto flex max-w-4xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-3">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-amber-800">
               Your travel proposal
@@ -71,7 +104,7 @@ export function ClientProposalView({
         </div>
       </div>
 
-      <div className="mx-auto max-w-4xl px-4 py-8 print:max-w-none print:p-0">
+      <div className="mx-auto max-w-5xl px-2 py-8 sm:px-4 print:max-w-none print:p-0">
         <QuotationDocument
           quoteId={quoteId}
           versionNumber={versionNumber}
@@ -79,6 +112,9 @@ export function ClientProposalView({
           snapshot={snapshot}
           brand={brand}
           mode="screen"
+          contacts={contacts}
+          payment={payment}
+          structure={structure}
         />
 
         {!accepted && onAccept && (

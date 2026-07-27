@@ -1,6 +1,7 @@
 import type { ReportBrand } from "@/lib/branding/report-brand";
 import type { PreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 import type { ItinerarySnapshot } from "@/types/itinerary-builder";
+import { QuotationReviewWidgets } from "@/components/itinerary-builder/quotation-review-widgets";
 import { formatDate } from "@/lib/utils";
 import { Mail, MapPin, Phone, Printer } from "lucide-react";
 
@@ -34,9 +35,8 @@ function BrandMark({ brand }: { brand: ReportBrand }) {
   );
 }
 
-/** Theme 1 — Legacy of Maharajas (mustard heritage cover) */
+/** Theme 1 — Legacy of Maharajas (brochure cover matching rajasthantouring SenduserviewData) */
 export function Theme1Hero({
-  theme,
   brand,
   clientLabel,
   client,
@@ -46,85 +46,91 @@ export function Theme1Hero({
   contactName,
 }: HeroProps) {
   const travelDateLabel = client.travel_date ? formatDate(client.travel_date) : null;
-  return (
-    <header className="overflow-hidden">
-      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[#E8D48B] bg-[#FFF8E7] px-6 py-4">
-        <div className="flex items-center gap-3">
-          <BrandMark brand={brand} />
-          <div>
-            <p className="text-sm font-bold uppercase tracking-wide text-[#8B6914]">{brand.companyName}</p>
-            {contactName ? (
-              <p className="text-[11px] text-stone-600">Consultant: {contactName}</p>
-            ) : (
-              <p className="text-[11px] text-stone-500">{brand.email}</p>
-            )}
-          </div>
-        </div>
-        <div className="max-w-xs text-right text-[11px] leading-relaxed text-stone-600">
-          {brand.address && (
-            <p className="inline-flex items-start gap-1">
-              <MapPin className="mt-0.5 h-3 w-3 shrink-0 text-[#C9A227]" />
-              {brand.address}
-            </p>
-          )}
-          <p className="mt-1 inline-flex items-center gap-1">
-            <Phone className="h-3 w-3 text-[#C9A227]" />
-            {brand.phone}
-          </p>
-          <p className="mt-0.5 inline-flex items-center gap-1">
-            <Mail className="h-3 w-3 text-[#C9A227]" />
-            {brand.email}
-          </p>
-        </div>
-      </div>
+  const unitLine = "(A Unit of Karni Kripa Holidays)";
+  const address =
+    brand.address ||
+    "74, Deewan Nagar, Daulatpura Road, Khora Bisal Benar Jaipur, Rajasthan India 302012";
+  const website = (brand.websiteUrl || "www.rajasthantouring.com").replace(/^https?:\/\//i, "");
+  const phone = brand.phone || "+919351549292";
+  const email = brand.email || "rajasthantouringjaipur@gmail.com";
 
-      <div className="quotation-hero-cover relative min-h-[280px]">
+  return (
+    <header className="overflow-hidden bg-white">
+      <section className="relative w-full overflow-hidden rounded-lg bg-white shadow-lg">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={theme.heroImage}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
+          src="/theme-assets/legacy/cover-1.svg"
+          alt={brand.companyName || "Rajasthan Touring"}
+          className="block h-auto w-full object-cover md:object-contain"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent" />
-        <div className="relative flex min-h-[280px] flex-col items-center justify-end px-6 pb-8 pt-16 text-center text-white">
-          <p className="font-serif text-sm tracking-[0.35em] text-amber-100">THE LEGACY OF</p>
-          <h1 className="mt-1 font-serif text-4xl font-bold tracking-wide sm:text-5xl">MAHARAJAS</h1>
-          <p className="mt-2 font-serif text-3xl text-amber-50">राजस्थान</p>
+
+        {/* Company contact overlay (top-right), matching reference brochure */}
+        <div className="pointer-events-none absolute inset-0 flex items-start justify-end px-3 py-4 sm:px-6 sm:py-6">
+          <div className="pointer-events-auto w-[58%] max-w-xl text-right text-stone-800 sm:w-[55%]">
+            <p className="text-xs font-extrabold sm:text-lg md:text-2xl lg:text-3xl">{unitLine}</p>
+            <div className="mt-3 space-y-2 text-[10px] font-semibold leading-snug sm:mt-5 sm:space-y-3 sm:text-sm md:text-base lg:text-xl">
+              <p className="inline-flex items-start justify-end gap-2">
+                <span className="max-w-[90%] text-right">{address}</span>
+                <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500 sm:h-4 sm:w-4" />
+              </p>
+              <p className="inline-flex items-center justify-end gap-2">
+                <a href={`tel:${phone.replace(/\s/g, "")}`} className="underline">
+                  {phone}
+                </a>
+                <Phone className="h-3.5 w-3.5 shrink-0 text-orange-500 sm:h-4 sm:w-4" />
+              </p>
+              <p className="inline-flex items-center justify-end gap-2">
+                <a
+                  href={`https://${website}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="break-all hover:underline"
+                >
+                  {website}
+                </a>
+                <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[10px] font-bold text-orange-500 sm:h-4 sm:w-4 sm:text-xs">
+                  www
+                </span>
+              </p>
+              <p className="inline-flex items-center justify-end gap-2">
+                <a href={`mailto:${email}`} className="break-all hover:underline">
+                  {email}
+                </a>
+                <Mail className="h-3.5 w-3.5 shrink-0 text-orange-500 sm:h-4 sm:w-4" />
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div className="bg-[#C9A227] px-6 py-5 text-center text-white">
-        <p className="font-serif text-2xl tracking-wide">पधारो म्हारे देश</p>
-        <p className="mt-2 text-lg font-semibold">{clientLabel || client.client_name}</p>
-        <p className="mt-1 text-sm text-amber-50">
-          {header.duration_label}
-          {client.adults ? ` · ${client.adults} Adults` : ""}
-          {client.rooms ? ` · ${client.rooms} Rooms` : ""}
-        </p>
-        <p className="mt-2 text-xs uppercase tracking-widest text-amber-100">{header.title}</p>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-[#1e293b] px-6 py-2 text-xs text-amber-200">
-        <span>{quoteId}</span>
-        {travelDateLabel && <span>Travel Date: {travelDateLabel}</span>}
-        {destinationsSummary && <span className="truncate">{destinationsSummary}</span>}
-      </div>
-
-      <div
-        className="flex items-center gap-4 px-6 py-4 text-white"
-        style={{ backgroundImage: `linear-gradient(90deg, #8B6914, #C9A227)` }}
-      >
-        <div>
-          <p className="text-xs font-bold uppercase tracking-widest text-amber-100">Explore Royal Rajasthan</p>
-          <p className="font-serif text-xl italic">Your Rajasthan Travel Itinerary</p>
-          <p className="mt-1 text-sm">खम्मा घणी</p>
+        {/* Client + duration over mustard band */}
+        <div className="absolute bottom-[11%] left-1/2 w-[72%] max-w-3xl -translate-x-1/2 text-center sm:bottom-[12%]">
+          <h1 className="text-[clamp(14px,3.2vw,42px)] font-bold leading-tight text-white">
+            {clientLabel || client.client_name || "Guest"}
+            {client.adults && client.adults > 1 ? " & Family" : ""}
+          </h1>
+          <p
+            className="mt-1 text-[clamp(11px,1.8vw,22px)] font-semibold leading-tight text-stone-900"
+            style={{ fontFamily: '"Times New Roman", Times, serif' }}
+          >
+            {header.duration_label || destinationsSummary || quoteId}
+          </p>
+          {contactName && (
+            <p className="mt-1 text-[10px] text-white/90 sm:text-xs">Consultant: {contactName}</p>
+          )}
         </div>
-      </div>
+
+        {travelDateLabel && (
+          <div className="absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-2xl border border-stone-800/20 bg-white/90 px-3 py-1 text-[10px] font-bold text-stone-900 sm:bottom-2 sm:px-4 sm:text-sm md:text-base">
+            Travel Date:—
+            <span className="text-[#C45C26]">{travelDateLabel}</span>
+          </div>
+        )}
+      </section>
     </header>
   );
 }
 
-/** Theme 2 — Royal Circle Heritage (yellow/lime circular hero) */
+/** Theme 2 — Royal Circle Heritage (SenduserviewData3) */
 export function Theme2Hero({
   theme,
   brand,
@@ -134,9 +140,28 @@ export function Theme2Hero({
   destinationsSummary,
   contactName,
 }: HeroProps) {
+  const wa = brand.phone.replace(/\D/g, "");
+  const titleLine = [clientLabel || client.client_name, header.title]
+    .filter(Boolean)
+    .join(" || ")
+    .toUpperCase();
+
   return (
-    <header className="bg-white px-6 py-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <header className="relative overflow-hidden bg-white px-6 py-6">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/theme-assets/reviews/corner-pattern.png"
+        alt=""
+        className="pointer-events-none absolute -left-20 -top-24 w-44 opacity-30 print:hidden"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/theme-assets/reviews/corner-pattern.png"
+        alt=""
+        className="pointer-events-none absolute -bottom-24 -right-20 w-44 opacity-30 print:hidden"
+      />
+
+      <div className="relative flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <BrandMark brand={brand} />
           <div>
@@ -147,17 +172,19 @@ export function Theme2Hero({
           </div>
         </div>
         <a
-          href={`https://wa.me/${brand.phone.replace(/\D/g, "")}`}
-          className="no-print inline-flex items-center gap-2 rounded-full bg-[#56AB2F] px-4 py-2 text-sm font-semibold text-white"
+          href={`https://wa.me/${wa}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="no-print inline-flex items-center gap-2 rounded-lg bg-[#56AB2F] px-4 py-2 text-sm font-semibold text-white shadow-sm print:hidden"
         >
           <Phone className="h-4 w-4" />
-          {brand.phone}
+          {brand.phone.startsWith("+") ? brand.phone : `+${brand.phone}`}
         </a>
       </div>
 
-      <div className="mt-8 grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
+      <div className="relative mt-8 grid items-center gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
-          <h1 className="font-serif text-3xl font-bold text-stone-900 sm:text-4xl">
+          <h1 className="text-3xl font-bold text-stone-900 sm:text-4xl">
             Hi {clientLabel || client.client_name || "there"},
           </h1>
           <p className="mt-2 text-sm text-stone-500">
@@ -169,24 +196,35 @@ export function Theme2Hero({
             </span>
           )}
           <h2 className="mt-4 text-xl font-bold uppercase leading-snug text-stone-900 sm:text-2xl">
-            {header.title}
+            {titleLine || header.title}
           </h2>
           {destinationsSummary && (
-            <p className="mt-3 text-sm text-stone-500">• {destinationsSummary.replace(/ • /g, " • ")}</p>
+            <p className="mt-3 text-sm text-stone-600">• {destinationsSummary}</p>
           )}
-          <div className="mt-5 flex flex-wrap gap-3">
-            <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
-              <p className="text-[10px] font-medium text-stone-500">Customer Reviews</p>
-              <p className="text-sm font-semibold text-stone-800">★ ★ ★ ★ ★ 4.8</p>
-            </div>
-            <div className="rounded-xl border border-stone-200 bg-white px-3 py-2 shadow-sm">
-              <p className="text-[10px] font-medium text-stone-500">TripAdvisor Review</p>
-              <p className="text-sm font-semibold text-stone-800">★ ★ ★ ★ ★ 4.8</p>
-            </div>
+          <QuotationReviewWidgets
+            layout="stack"
+            accentClassName="text-[#8B4513]"
+            className="mt-5"
+          />
+          <div className="no-print mt-6 flex flex-wrap items-center gap-3 print:hidden">
+            <a
+              href="#book"
+              className="inline-flex items-center rounded-lg bg-[#C9A227] px-6 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-[#B8921F]"
+            >
+              Book Now
+            </a>
+            <button
+              type="button"
+              className="inline-flex items-center gap-2 rounded-lg border border-stone-200 bg-white px-4 py-2.5 text-sm font-medium text-[#56AB2F] shadow-sm"
+              onClick={() => window.print()}
+            >
+              <Printer className="h-4 w-4" />
+              Generate PDF
+            </button>
           </div>
         </div>
 
-        <div className="relative mx-auto aspect-square w-full max-w-[320px]">
+        <div className="relative mx-auto aspect-square w-full max-w-[340px]">
           <div className="absolute -left-4 top-6 h-28 w-28 rounded-full bg-gradient-to-br from-[#F5C518] to-[#56AB2F] opacity-80" />
           <div className="absolute -bottom-2 -right-2 h-36 w-36 rounded-full bg-gradient-to-br from-[#A8E063] to-[#F5C518] opacity-70" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -197,21 +235,11 @@ export function Theme2Hero({
           />
         </div>
       </div>
-
-      {/* Screen-only action — never printed / never in downloaded PDF */}
-      <button
-        type="button"
-        className="no-print mt-6 inline-flex items-center gap-2 text-sm font-medium text-[#56AB2F] print:hidden"
-        onClick={() => window.print()}
-      >
-        <Printer className="h-4 w-4" />
-        Generate PDF
-      </button>
     </header>
   );
 }
 
-/** Theme 3 — Parchment Heritage (maroon + circular cluster) */
+/** Theme 3 — Parchment Heritage (SenduserviewData4) */
 export function Theme3Hero({
   theme,
   brand,
@@ -222,20 +250,32 @@ export function Theme3Hero({
   contactName,
 }: HeroProps) {
   const circles = theme.gallery.slice(0, 3);
+  const wa = brand.phone.replace(/\D/g, "");
+  const titleLine = [clientLabel || client.client_name, header.title]
+    .filter(Boolean)
+    .join(" || ")
+    .toUpperCase();
+
   return (
     <header className="relative overflow-hidden bg-[#FBF7F0] px-6 py-6">
       <div
-        className="pointer-events-none absolute inset-y-0 left-0 w-6 opacity-30"
+        className="pointer-events-none absolute inset-y-0 left-0 w-10 opacity-25 sm:w-14"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(180deg, #7B1E2E 0 2px, transparent 2px 10px)",
+            "url(/theme-assets/reviews/corner-pattern.png), repeating-linear-gradient(180deg, #7B1E2E22 0 2px, transparent 2px 12px)",
+          backgroundSize: "140px auto, auto",
+          backgroundRepeat: "repeat-y, repeat",
+          backgroundPosition: "left top, 0 0",
         }}
       />
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 w-6 opacity-30"
+        className="pointer-events-none absolute inset-y-0 right-0 w-10 opacity-25 sm:w-14"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(180deg, #7B1E2E 0 2px, transparent 2px 10px)",
+            "url(/theme-assets/reviews/corner-pattern.png), repeating-linear-gradient(180deg, #7B1E2E22 0 2px, transparent 2px 12px)",
+          backgroundSize: "140px auto, auto",
+          backgroundRepeat: "repeat-y, repeat",
+          backgroundPosition: "right top, 0 0",
         }}
       />
 
@@ -248,11 +288,13 @@ export function Theme3Hero({
           </div>
         </div>
         <a
-          href={`https://wa.me/${brand.phone.replace(/\D/g, "")}`}
-          className="no-print inline-flex items-center gap-2 rounded-full bg-[#7B1E2E] px-4 py-2 text-sm font-semibold text-white"
+          href={`https://wa.me/${wa}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="no-print inline-flex items-center gap-2 rounded-lg bg-[#7B1E2E] px-4 py-2 text-sm font-semibold text-white print:hidden"
         >
           <Phone className="h-4 w-4" />
-          {brand.phone}
+          {wa || brand.phone}
         </a>
       </div>
 
@@ -270,7 +312,7 @@ export function Theme3Hero({
             </span>
           )}
           <h2 className="mt-4 text-xl font-bold uppercase leading-snug text-stone-900">
-            {header.title}
+            {titleLine || header.title}
           </h2>
           {destinationsSummary && (
             <div className="mt-3 flex flex-wrap gap-2 text-sm text-[#7B1E2E]">
@@ -282,14 +324,11 @@ export function Theme3Hero({
               ))}
             </div>
           )}
-          <div className="mt-5 space-y-2">
-            <div className="rounded-xl border border-stone-200 bg-white px-3 py-2">
-              <p className="text-sm font-medium text-stone-800">★ ★ ★ ★ ★ 4.8 · 2542 Google Reviews</p>
-            </div>
-            <div className="rounded-xl border border-stone-200 bg-white px-3 py-2">
-              <p className="text-sm font-medium text-stone-800">★ ★ ★ ★ ★ 4.8 · 481 TripAdvisor Reviews</p>
-            </div>
-          </div>
+          <QuotationReviewWidgets
+            layout="stack"
+            accentClassName="text-[#7B1E2E]"
+            className="mt-5"
+          />
           <button
             type="button"
             className="no-print mt-4 inline-flex items-center gap-2 text-sm font-medium text-[#7B1E2E] print:hidden"
@@ -300,12 +339,12 @@ export function Theme3Hero({
           </button>
         </div>
 
-        <div className="relative mx-auto h-72 w-72">
+        <div className="relative mx-auto h-80 w-80">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={circles[0] ?? theme.heroImage}
             alt=""
-            className="absolute left-8 top-6 h-48 w-48 rounded-full object-cover shadow-lg ring-4 ring-white"
+            className="absolute left-10 top-8 h-52 w-52 rounded-full object-cover shadow-lg ring-4 ring-white"
           />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -317,7 +356,7 @@ export function Theme3Hero({
           <img
             src={circles[2] ?? theme.heroImage}
             alt=""
-            className="absolute bottom-2 right-0 h-32 w-32 rounded-full object-cover shadow-md ring-4 ring-white"
+            className="absolute bottom-4 right-2 h-32 w-36 rounded-[50%] object-cover shadow-md ring-4 ring-white"
           />
         </div>
       </div>

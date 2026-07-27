@@ -16,24 +16,39 @@ import {
   getPreviewTheme,
   type PreviewTheme,
 } from "@/lib/itinerary-builder/preview-themes";
-import { PREVIEW_CONTACTS, contentBlocksToStrings } from "@/lib/itinerary-builder/policy-master";
+import {
+  PREVIEW_CONTACTS,
+  contentBlocksToStrings,
+  type PreviewContact,
+} from "@/lib/itinerary-builder/policy-master";
+import { findSelectedContact } from "@/lib/itinerary-builder/quotation-contacts";
+import {
+  defaultPaymentDetailsFromSeed,
+  type PaymentDetails,
+} from "@/lib/itinerary-builder/payment-details";
+import type { CompanyStructure } from "@/types/company-structure";
 import type { CategoryTotalSummary, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
 import { DocumentBrandFooter } from "@/components/branding/document-brand";
 import { QuotationThemeHero } from "@/components/itinerary-builder/quotation-theme-heroes";
+import { QuotationDayCarousel } from "@/components/itinerary-builder/quotation-day-carousel";
+import { QuotationReviewWidgets } from "@/components/itinerary-builder/quotation-review-widgets";
+import {
+  QuotationLegacyAbout,
+  QuotationLegacyExploreBanner,
+  QuotationLegacyPaymentSection,
+  QuotationLegacyPolicies,
+} from "@/components/itinerary-builder/quotation-legacy-sections";
 
 function brandWithSelectedContact(
   brand: ReportBrand,
-  contactId: string | null | undefined
+  contact: PreviewContact | null
 ): ReportBrand {
-  const contact = contactId
-    ? PREVIEW_CONTACTS.find((c) => c.id === contactId)
-    : undefined;
   if (!contact) return brand;
   return {
     ...brand,
-    phone: contact.phone,
-    email: contact.email,
+    phone: contact.phone || brand.phone,
+    email: contact.email || brand.email,
   };
 }
 
@@ -72,11 +87,13 @@ function ClientDetailsTable({
   client,
   header,
   accent,
+  title = "Client Details",
 }: {
   clientLabel: string;
   client: ItinerarySnapshot["client"];
   header: ItinerarySnapshot["header"];
   accent: string;
+  title?: string;
 }) {
   const rows = [
     ["Name", clientLabel],
@@ -90,7 +107,7 @@ function ClientDetailsTable({
   return (
     <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white p-5">
       <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: accent }}>
-        Client Details
+        {title}
       </h2>
       <table className="mt-3 w-full text-sm">
         <tbody>
@@ -202,6 +219,102 @@ function HotelCard({ stay }: { stay: HotelStay }) {
   );
 }
 
+function dayImagesForCard(day: ItineraryDay, theme: PreviewTheme): string[] {
+  const fromDay = (day.images ?? []).filter(Boolean);
+  if (fromDay.length > 0) return fromDay;
+  const start = (Math.max(1, day.day_number) - 1) % theme.gallery.length;
+  return [0, 1, 2]
+    .map((offset) => theme.gallery[(start + offset) % theme.gallery.length])
+    .filter(Boolean) as string[];
+}
+
+function TimelineDayCard({
+  day,
+  travelDate,
+  theme,
+  isLast,
+  layout,
+}: {
+  day: ItineraryDay;
+  travelDate: string | null;
+  theme: PreviewTheme;
+  isLast: boolean;
+  layout: "theme2" | "theme3";
+}) {
+  const dateLabel = travelDate
+    ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
+    : null;
+  const images = dayImagesForCard(day, theme);
+  const accent = theme.accent;
+
+  return (
+    <div className="relative flex flex-col gap-4 sm:flex-row sm:gap-6">
+      <div className="w-full shrink-0 text-left sm:w-24 sm:text-right">
+        <p className="font-bold" style={{ color: accent }}>
+          Day {day.day_number}
+        </p>
+        {dateLabel && <p className="text-sm text-stone-500">{dateLabel}</p>}
+      </div>
+
+      <div className="relative hidden w-10 shrink-0 flex-col items-center self-stretch sm:flex">
+        {!isLast && (
+          <div className="absolute bottom-0 top-4 w-0.5" style={{ backgroundColor: accent }} />
+        )}
+        <div
+          className="z-10 mt-1 h-4 w-4 rounded-full border-2 bg-white"
+          style={{ borderColor: accent }}
+        />
+      </div>
+
+      {layout === "theme2" ? (
+        <>
+          <div className="w-full sm:w-1/4">
+            <p className="text-lg font-bold text-stone-800">{day.day_title}</p>
+            <QuotationDayCarousel
+              images={images}
+              alt={day.day_title}
+              accent={accent}
+              className="mt-4"
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            {day.day_description && (
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700 sm:text-base">
+                {day.day_description}
+              </p>
+            )}
+            {day.hotel_name && (
+              <p className="mt-3 text-xs font-medium" style={{ color: accent }}>
+                🏨 {day.hotel_name}
+              </p>
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="min-w-0 flex-1">
+          <p className="text-lg font-semibold text-stone-900">{day.day_title}</p>
+          <QuotationDayCarousel
+            images={images}
+            alt={day.day_title}
+            accent={accent}
+            className="mt-4 max-w-xl"
+          />
+          {day.day_description && (
+            <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-stone-700 sm:text-base">
+              {day.day_description}
+            </p>
+          )}
+          {day.hotel_name && (
+            <p className="mt-3 text-xs font-medium" style={{ color: accent }}>
+              🏨 {day.hotel_name}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DayCard({
   day,
   travelDate,
@@ -215,6 +328,7 @@ function DayCard({
     ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
     : null;
   const image = dayGalleryImage(theme, day.day_number);
+  const images = dayImagesForCard(day, theme);
   const isHeritageLayout = theme.id === 1;
 
   if (isHeritageLayout) {
@@ -241,9 +355,15 @@ function DayCard({
           )}
         </div>
         <div className="overflow-hidden rounded-xl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt="" className="h-44 w-full object-cover sm:h-full" />
-          <div className="px-3 py-1.5 text-center text-[10px] font-medium text-white" style={{ backgroundColor: theme.accent }}>
+          <QuotationDayCarousel
+            images={images.length ? images : [image]}
+            alt={day.day_title}
+            accent={theme.accent}
+          />
+          <div
+            className="px-3 py-1.5 text-center text-[10px] font-medium text-white"
+            style={{ backgroundColor: theme.accent }}
+          >
             Days Rajasthan Studio
           </div>
         </div>
@@ -253,13 +373,23 @@ function DayCard({
 
   return (
     <div className="break-inside-avoid overflow-hidden rounded-2xl border border-stone-200 bg-white">
-      <div className="grid sm:grid-cols-[140px_1fr]">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={image} alt="" className="h-36 w-full object-cover sm:h-full" />
+      <div className="grid sm:grid-cols-[180px_1fr]">
+        <QuotationDayCarousel
+          images={images.length ? images : [image]}
+          alt={day.day_title}
+          accent={theme.accent}
+          heightClassName="h-36 min-h-[144px] sm:h-full"
+          className="rounded-none"
+        />
         <div>
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-white" style={{ backgroundColor: theme.accent }}>
+          <div
+            className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-white"
+            style={{ backgroundColor: theme.accent }}
+          >
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide opacity-90">Day {day.day_number}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide opacity-90">
+                Day {day.day_number}
+              </p>
               <h3 className="text-base font-bold">{day.day_title}</h3>
             </div>
             {dateLabel && <p className="text-sm font-medium">{dateLabel}</p>}
@@ -271,13 +401,19 @@ function DayCard({
               </p>
             )}
             {day.day_description && (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
+                {day.day_description}
+              </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {day.hotel_name && (
                 <span
                   className="rounded-full px-2.5 py-1 font-medium ring-1"
-                  style={{ backgroundColor: theme.accentSoft, color: theme.heading, borderColor: `${theme.accent}33` }}
+                  style={{
+                    backgroundColor: theme.accentSoft,
+                    color: theme.heading,
+                    borderColor: `${theme.accent}33`,
+                  }}
                 >
                   🏨 {day.hotel_name}
                 </span>
@@ -362,6 +498,9 @@ export function QuotationDocument({
   brand,
   categoryTotals = [],
   mode = "screen",
+  contacts = PREVIEW_CONTACTS,
+  payment,
+  structure = null,
 }: {
   quoteId: string;
   versionNumber: number;
@@ -370,14 +509,34 @@ export function QuotationDocument({
   brand: ReportBrand;
   categoryTotals?: CategoryTotalSummary[];
   mode?: "screen" | "print";
+  contacts?: PreviewContact[];
+  payment?: PaymentDetails;
+  structure?: CompanyStructure | null;
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
   const { inclusions, exclusions } = policyLinesFromSnapshot(snapshot);
   const theme = getPreviewTheme(snapshot.preview_theme);
-  const displayBrand = brandWithSelectedContact(brand, snapshot.selected_contact_id);
-  const selectedContact = snapshot.selected_contact_id
-    ? PREVIEW_CONTACTS.find((c) => c.id === snapshot.selected_contact_id) ?? null
-    : null;
+  const isLegacyTheme = theme.id === 1;
+  const selectedContact = findSelectedContact(contacts, snapshot.selected_contact_id);
+  // Cover uses company brand; agent appears in payment footer.
+  const coverBrand: ReportBrand = {
+    ...brand,
+    companyName: brand.companyName || "Rajasthan Touring",
+    phone: brand.phone || "+919351549292",
+    email: brand.email || "rajasthantouringjaipur@gmail.com",
+    address:
+      brand.address ||
+      "74, Deewan Nagar, Daulatpura Road, Khora Bisal, Benar Jaipur, Rajasthan India 302012",
+    websiteUrl: brand.websiteUrl || "www.rajasthantouring.com",
+  };
+  const displayBrand = isLegacyTheme
+    ? coverBrand
+    : brandWithSelectedContact(coverBrand, selectedContact);
+  const payDetails = payment ?? defaultPaymentDetailsFromSeed();
+  const website =
+    structure?.social_links?.website?.replace(/^https?:\/\//i, "") ||
+    coverBrand.websiteUrl.replace(/^https?:\/\//i, "") ||
+    "www.rajasthantouring.com";
   const clientLabel = [client.title, client.client_name].filter(Boolean).join(" ");
   const nightSegments = buildNightSegments(days, client.travel_date);
   const destinationsSummary = formatDestinationsSummary(nightSegments);
@@ -393,7 +552,7 @@ export function QuotationDocument({
       }`}
       style={{
         backgroundColor:
-          theme.id === 3 ? "#FBF7F0" : theme.id === 1 ? "#FFFDF6" : theme.id === 5 ? "#F8FAFC" : "#ffffff",
+          theme.id === 3 ? "#FBF7F0" : theme.id === 1 ? "#ffffff" : theme.id === 5 ? "#F8FAFC" : "#ffffff",
         WebkitPrintColorAdjust: "exact",
         printColorAdjust: "exact",
       }}
@@ -411,49 +570,65 @@ export function QuotationDocument({
         contactName={selectedContact?.name ?? null}
       />
 
-      <div className="space-y-8 px-6 py-8">
-        <div className="grid gap-6 lg:grid-cols-2">
+      {isLegacyTheme && <QuotationLegacyExploreBanner />}
+
+      <div className={`space-y-8 ${isLegacyTheme ? "px-4 py-6 sm:px-6" : "px-6 py-8"}`}>
+        {!isLegacyTheme && theme.id !== 2 && theme.id !== 3 && (
+          <div className="grid gap-6 lg:grid-cols-2">
+            <ClientDetailsTable
+              clientLabel={clientLabel}
+              client={client}
+              header={header}
+              accent={theme.accent}
+            />
+
+            <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white/80 p-5">
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+                Travel Itinerary
+              </h2>
+              <p className="mt-2 text-sm text-stone-600">
+                Covering Destinations:{" "}
+                <span className="font-medium text-stone-900">{destinationsSummary}</span>
+              </p>
+              {header.tour_code && (
+                <p className="mt-1 text-sm" style={{ color: theme.accent }}>
+                  Tour Code:{" "}
+                  <span className="font-semibold underline underline-offset-2">{header.tour_code}</span>
+                </p>
+              )}
+              {!hasTiers && (
+                <div
+                  className="mt-4 rounded-xl border p-4"
+                  style={{ borderColor: `${theme.accent}55`, backgroundColor: theme.accentSoft }}
+                >
+                  <p className="text-xs uppercase text-stone-500">Package Total</p>
+                  <p className="text-2xl font-bold tabular-nums" style={{ color: theme.heading }}>
+                    {formatInr(cost_sheet.grand_total)}
+                  </p>
+                  <p className="mt-1 text-sm text-emerald-800">
+                    Booking Amount ({advancePercent}%):{" "}
+                    <span className="font-bold">
+                      {formatInr(bookingAmount(cost_sheet.grand_total, advanceRate))}
+                    </span>
+                  </p>
+                </div>
+              )}
+              <div className="mt-4">
+                <QuotationReviewWidgets layout="row" accentClassName="text-[#7B1E2E]" />
+              </div>
+            </section>
+          </div>
+        )}
+
+        {(theme.id === 2 || theme.id === 3) && (
           <ClientDetailsTable
             clientLabel={clientLabel}
             client={client}
             header={header}
             accent={theme.accent}
+            title={theme.id === 3 ? "Your Information" : "Client Details"}
           />
-
-          <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white/80 p-5">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-              Travel Itinerary
-            </h2>
-            <p className="mt-2 text-sm text-stone-600">
-              Covering Destinations: <span className="font-medium text-stone-900">{destinationsSummary}</span>
-            </p>
-            {!hasTiers && (
-              <div
-                className="mt-4 rounded-xl border p-4"
-                style={{ borderColor: `${theme.accent}55`, backgroundColor: theme.accentSoft }}
-              >
-                <p className="text-xs uppercase text-stone-500">Package Total</p>
-                <p className="text-2xl font-bold tabular-nums" style={{ color: theme.heading }}>
-                  {formatInr(cost_sheet.grand_total)}
-                </p>
-                <p className="mt-1 text-sm text-emerald-800">
-                  Booking Amount ({advancePercent}%):{" "}
-                  <span className="font-bold">
-                    {formatInr(bookingAmount(cost_sheet.grand_total, advanceRate))}
-                  </span>
-                </p>
-              </div>
-            )}
-            <div className="mt-4 flex flex-wrap gap-3 text-xs text-stone-500">
-              <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-stone-200">
-                ★ ★ ★ ★ ★ 4.8 TripAdvisor
-              </span>
-              <span className="rounded-full bg-white px-2.5 py-1 ring-1 ring-stone-200">
-                ★ ★ ★ ★ ★ 4.8 Google Reviews
-              </span>
-            </div>
-          </section>
-        </div>
+        )}
 
         {hasTiers && (
           <section className="break-inside-avoid">
@@ -481,13 +656,49 @@ export function QuotationDocument({
         )}
 
         <section>
-          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-            Day-wise Itinerary
-          </h2>
-          <div className={theme.id === 1 ? "mt-2" : "mt-4 space-y-4"}>
-            {days.map((day) => (
-              <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
-            ))}
+          {!isLegacyTheme && theme.id !== 2 && theme.id !== 3 && (
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Day-wise Itinerary
+            </h2>
+          )}
+          {(theme.id === 2 || theme.id === 3) && (
+            <div className="mb-6">
+              <h2 className="text-2xl font-bold" style={{ color: theme.accent }}>
+                Travel Itinerary
+              </h2>
+              <p className="mt-1 text-sm text-stone-500">
+                Covering Destinations • {destinationsSummary}
+              </p>
+              {header.tour_code && (
+                <p className="mt-1 text-sm font-medium underline" style={{ color: theme.accent }}>
+                  Tour Code: {header.tour_code}
+                </p>
+              )}
+            </div>
+          )}
+          <div
+            className={
+              theme.id === 1
+                ? "mt-2"
+                : theme.id === 2 || theme.id === 3
+                  ? "mt-2 space-y-8 sm:space-y-10"
+                  : "mt-4 space-y-4"
+            }
+          >
+            {days.map((day, index) =>
+              theme.id === 2 || theme.id === 3 ? (
+                <TimelineDayCard
+                  key={day.day_uuid}
+                  day={day}
+                  travelDate={client.travel_date}
+                  theme={theme}
+                  isLast={index === days.length - 1}
+                  layout={theme.id === 2 ? "theme2" : "theme3"}
+                />
+              ) : (
+                <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
+              )
+            )}
           </div>
         </section>
 
@@ -517,14 +728,16 @@ export function QuotationDocument({
           </section>
         )}
 
-        <PolicyGrid
-          inclusions={inclusions ?? []}
-          exclusions={exclusions ?? []}
-          terms={terms}
-          accent={theme.accent}
-        />
+        {!isLegacyTheme && (
+          <PolicyGrid
+            inclusions={inclusions ?? []}
+            exclusions={exclusions ?? []}
+            terms={terms}
+            accent={theme.accent}
+          />
+        )}
 
-        {!hasTiers && cost_sheet.line_items.length > 0 && (
+        {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && (
           <section className="break-inside-avoid">
             <h2 className="text-sm font-bold uppercase text-stone-800">Pricing Summary</h2>
             <table className="mt-3 w-full text-sm">
@@ -560,25 +773,58 @@ export function QuotationDocument({
           </section>
         )}
 
-        <section
-          className="break-inside-avoid rounded-2xl border p-5"
-          style={{ borderColor: `${theme.accent}33`, backgroundColor: theme.accentSoft }}
-        >
-          <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-            About {brand.companyName}
-          </h2>
-          <p className="mt-3 text-sm leading-relaxed text-stone-700">
-            {brand.siteDescription ??
-              `${brand.companyName} crafts curated travel experiences with verified partners, transparent pricing, and dedicated on-ground support. Every itinerary is tailor-made to match your pace, preferences, and budget.`}
-          </p>
-        </section>
+        {!isLegacyTheme && (
+          <>
+            <section
+              className="break-inside-avoid rounded-2xl border p-5"
+              style={{ borderColor: `${theme.accent}33`, backgroundColor: theme.accentSoft }}
+            >
+              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+                About {brand.companyName}
+              </h2>
+              <p className="mt-3 text-sm leading-relaxed text-stone-700">
+                {brand.siteDescription ??
+                  `${brand.companyName} crafts curated travel experiences with verified partners, transparent pricing, and dedicated on-ground support. Every itinerary is tailor-made to match your pace, preferences, and budget.`}
+              </p>
+            </section>
 
-        <DocumentBrandFooter brand={displayBrand} />
-        <p className="text-center text-[10px] text-stone-400">
-          This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme {theme.id}{" "}
-          {theme.styleName}
-        </p>
+            <DocumentBrandFooter brand={displayBrand} />
+            <p className="text-center text-[10px] text-stone-400">
+              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme {theme.id}{" "}
+              {theme.styleName}
+            </p>
+          </>
+        )}
       </div>
+
+      {isLegacyTheme && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/theme-assets/legacy/banner-6.svg"
+            alt=""
+            className="block h-auto w-full object-cover md:object-contain"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/theme-assets/legacy/banner-0.svg"
+            alt={coverBrand.companyName}
+            className="block h-auto w-full object-cover"
+          />
+          <QuotationLegacyPolicies
+            inclusions={inclusions ?? []}
+            exclusions={exclusions ?? []}
+            companyName={coverBrand.companyName || "Rajasthan Touring"}
+          />
+          <QuotationLegacyAbout structure={structure} brand={coverBrand} />
+          <QuotationLegacyPaymentSection
+            payment={payDetails}
+            agent={selectedContact}
+            website={website}
+            brandLogo={structure?.logo_url || coverBrand.logoUrl}
+          />
+        </>
+      )}
     </article>
   );
 }

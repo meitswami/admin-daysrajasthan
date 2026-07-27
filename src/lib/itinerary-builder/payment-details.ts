@@ -12,6 +12,8 @@ export const DUMMY_PAYMENT_DETAILS = {
   },
   upi_ids: ["sales.welcomerajasthantours@okicici"] as string[],
   qr_image_src: "/structure-upi-qr.png",
+  upi_mobile: "+91 9588911614",
+  upi_receiver_name: "Welcome Rajasthan",
 };
 
 export type PaymentDetails = {
@@ -24,6 +26,8 @@ export type PaymentDetails = {
   };
   upi_ids: readonly string[];
   qr_image_src: string;
+  upi_mobile?: string;
+  upi_receiver_name?: string;
 };
 
 export type AdvancePercent = 20 | 30;
@@ -50,6 +54,8 @@ export function paymentDetailsFromStructure(
     },
     upi_ids: upi?.upi_id ? [upi.upi_id] : [...DUMMY_PAYMENT_DETAILS.upi_ids],
     qr_image_src: upi?.qr_image_url || DUMMY_PAYMENT_DETAILS.qr_image_src,
+    upi_mobile: upi?.mobile_number || DUMMY_PAYMENT_DETAILS.upi_mobile,
+    upi_receiver_name: upi?.receiver_name || DUMMY_PAYMENT_DETAILS.upi_receiver_name,
   };
 }
 

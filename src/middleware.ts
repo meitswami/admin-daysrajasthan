@@ -47,11 +47,14 @@ export async function middleware(request: NextRequest) {
   const isPasswordRecoveryPage =
     request.nextUrl.pathname.startsWith("/login/forgot-password") ||
     request.nextUrl.pathname.startsWith("/login/update-password");
+  const isPublicQuotation =
+    /^\/itinerary-builder\/[^/]+\/quotation\/?$/.test(request.nextUrl.pathname);
   const isPublicPath =
     request.nextUrl.pathname.startsWith("/proposal") ||
     request.nextUrl.pathname.startsWith("/embed") ||
     request.nextUrl.pathname.startsWith("/api/public") ||
-    request.nextUrl.pathname.startsWith("/api/itinerary-builder/share");
+    request.nextUrl.pathname.startsWith("/api/itinerary-builder/share") ||
+    isPublicQuotation;
   const isProtected = !isAuthPage && !isPublicPath && !request.nextUrl.pathname.startsWith("/api");
 
   // Skip auth redirect in demo mode (no Supabase connected)

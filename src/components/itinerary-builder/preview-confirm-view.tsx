@@ -20,7 +20,10 @@ import {
   PREVIEW_CONTACTS,
   type ContentBlockItem,
   type PolicyLine,
+  type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
+import { contactsFromStructure } from "@/lib/itinerary-builder/quotation-contacts";
+import { getCompanyStructure } from "@/lib/master-data/structure-store";
 import {
   PREVIEW_THEMES,
   themeCardLabel,
@@ -39,6 +42,8 @@ import {
   ChevronRight,
   ChevronUp,
   Download,
+  ExternalLink,
+  Eye,
   Info,
   Mail,
   MapPin,
@@ -340,6 +345,11 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
   const { show } = useToast();
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
   const [snapshot, setSnapshot] = useState<ItinerarySnapshot | null>(null);
+  const [contacts, setContacts] = useState<PreviewContact[]>(PREVIEW_CONTACTS);
+
+  useEffect(() => {
+    void getCompanyStructure().then((s) => setContacts(contactsFromStructure(s)));
+  }, []);
 
   useEffect(() => {
     const r = getClientItinerary(itineraryId);
@@ -393,6 +403,22 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
       return result;
     }
     show("Saved");
+    try {
+      await fetch(`/api/public/quotation/${itineraryId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quote_id: result.record.quote_id,
+          version_number: result.revision.version_number,
+          revision_id: result.revision.id,
+          client_name: result.record.client_name,
+          snapshot: result.revision.snapshot,
+          category_totals: result.record.category_totals ?? [],
+        }),
+      });
+    } catch {
+      // Public publish is best-effort
+    }
     return result;
   }
 
@@ -402,9 +428,63 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     router.push(`/itinerary-builder/${itineraryId}/payment`);
   }
 
-  function handleDownloadPdf() {
-    void handleSave();
+  async function handleDownloadPdf() {
+    const result = await handleSave();
+    if (result) {
+      try {
+        await fetch(`/api/public/quotation/${itineraryId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            quote_id: result.record.quote_id,
+            version_number: result.revision.version_number,
+            revision_id: result.revision.id,
+            client_name: result.record.client_name,
+            snapshot: result.revision.snapshot,
+            category_totals: result.record.category_totals ?? [],
+          }),
+        });
+      } catch {
+        // Local open still works even if publish fails
+      }
+    }
     window.open(`/itinerary-builder/${itineraryId}/quotation`, "_blank");
+  }
+
+  /** Publish selected theme snapshot and open the public quotation URL. */
+  async function handlePreviewPublic() {
+    const result = await handleSave();
+    if (!result) return;
+
+    let publicUrl = `${window.location.origin}/itinerary-builder/${itineraryId}/quotation`;
+    try {
+      const res = await fetch(`/api/public/quotation/${itineraryId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          quote_id: result.record.quote_id,
+          version_number: result.revision.version_number,
+          revision_id: result.revision.id,
+          client_name: result.record.client_name,
+          snapshot: result.revision.snapshot,
+          category_totals: result.record.category_totals ?? [],
+        }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as { url?: string };
+        if (json.url) publicUrl = json.url;
+      }
+    } catch {
+      // Still open local/public path
+    }
+
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      show("Public preview link copied — opening…");
+    } catch {
+      show("Opening public theme preview…");
+    }
+    window.open(publicUrl, "_blank", "noopener,noreferrer");
   }
 
   const primaryTier = snapshot.category_pricing;
@@ -443,9 +523,26 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
               <Save className="h-4 w-4" />
               Save to Draft
             </Button>
-            <Button type="button" size="sm" className="bg-sky-500 hover:bg-sky-600" onClick={handleDownloadPdf}>
+            <Button
+              type="button"
+              size="sm"
+              className="bg-sky-500 hover:bg-sky-600"
+              onClick={() => void handleDownloadPdf()}
+            >
               <Download className="h-4 w-4" />
               Download PDF
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="border-teal-700 text-teal-800 hover:bg-teal-50"
+              onClick={() => void handlePreviewPublic()}
+              title="Open public URL with the selected theme"
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+              <ExternalLink className="h-3.5 w-3.5 opacity-70" />
             </Button>
             <Button
               type="button"
@@ -710,7 +807,11 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             <Palette className="h-5 w-5 text-[#7B1E2E]" />
             Select a Theme
           </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <p className="mt-1 text-xs text-stone-500">
+            After selecting a theme, use <span className="font-semibold text-teal-800">Preview</span> to
+            open the public itinerary URL before continuing to payment.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {THEMES.map((theme) => {
               const selected = (snapshot.preview_theme ?? 1) === theme.id;
               const label = themeCardLabel(theme, {
@@ -768,11 +869,11 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-semibold text-stone-900">Select Contact</h2>
             <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
-              Admin - All Contacts
+              From Structure Master
             </span>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {PREVIEW_CONTACTS.map((c) => {
+            {contacts.map((c) => {
               const selected = snapshot.selected_contact_id === c.id;
               return (
                 <button
@@ -819,9 +920,20 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
               <Save className="h-4 w-4" />
               Save to Draft
             </Button>
-            <Button type="button" className="bg-sky-500 hover:bg-sky-600" onClick={handleDownloadPdf}>
+            <Button type="button" className="bg-sky-500 hover:bg-sky-600" onClick={() => void handleDownloadPdf()}>
               <Download className="h-4 w-4" />
               Download PDF
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-teal-700 text-teal-800 hover:bg-teal-50"
+              onClick={() => void handlePreviewPublic()}
+              title="Open public URL with the selected theme"
+            >
+              <Eye className="h-4 w-4" />
+              Preview
+              <ExternalLink className="h-3.5 w-3.5 opacity-70" />
             </Button>
             <Button type="button" className="bg-[#7B1E2E] hover:bg-[#5C0F1A]" onClick={handleNext}>
               Continue Payment Details
