@@ -61,7 +61,7 @@ export function NewItineraryWizard() {
     void listMasterItineraries()
       .then((items) => {
         if (cancelled) return;
-        const fromMaster = catalogFromMasterItineraries(items, { includeInactive: true });
+        const fromMaster = catalogFromMasterItineraries(items);
         // Prefer Master Data packages so day Locations (and hotels) carry into the builder.
         // Fall back to seeded demo catalog when master is empty.
         setCatalog(fromMaster.length > 0 ? fromMaster : PACKAGE_CATALOG);
