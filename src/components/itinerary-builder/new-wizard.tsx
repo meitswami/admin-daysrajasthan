@@ -1,16 +1,20 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { CLIENT_TITLES, type ClientDetails, type ItinerarySnapshot } from "@/types/itinerary-builder";
 import {
+  PACKAGE_CATALOG,
+  catalogFromMasterItineraries,
   filterPackages,
   getPackageById,
   uniqueDurations,
   buildCategoryPricing,
+  type PackageCatalogEntry,
 } from "@/lib/itinerary-builder/package-catalog";
+import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
 import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import { emptySnapshot } from "@/lib/itinerary-builder/defaults";
@@ -48,21 +52,54 @@ export function NewItineraryWizard() {
   });
   const [packageId, setPackageId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItinerarySnapshot | null>(null);
+  const [catalog, setCatalog] = useState<PackageCatalogEntry[]>(PACKAGE_CATALOG);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setCatalogLoading(true);
+    void listMasterItineraries()
+      .then((items) => {
+        if (cancelled) return;
+        const fromMaster = catalogFromMasterItineraries(items, { includeInactive: true });
+        // Prefer Master Data packages so day Locations (and hotels) carry into the builder.
+        // Fall back to seeded demo catalog when master is empty.
+        setCatalog(fromMaster.length > 0 ? fromMaster : PACKAGE_CATALOG);
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog(PACKAGE_CATALOG);
+      })
+      .finally(() => {
+        if (!cancelled) setCatalogLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (packageId && !getPackageById(packageId, catalog)) {
+      setPackageId(null);
+    }
+  }, [catalog, packageId]);
 
   const packages = useMemo(
     () =>
-      filterPackages({
-        search,
-        durationNights: durationFilter,
-        tourCode: tourCodeFilter,
-      }),
-    [search, durationFilter, tourCodeFilter]
+      filterPackages(
+        {
+          search,
+          durationNights: durationFilter,
+          tourCode: tourCodeFilter,
+        },
+        catalog
+      ),
+    [search, durationFilter, tourCodeFilter, catalog]
   );
 
-  const selectedPackage = packageId ? getPackageById(packageId) : null;
+  const selectedPackage = packageId ? getPackageById(packageId, catalog) : null;
 
   function buildDraftFromPackage(pkgId: string | null): ItinerarySnapshot {
-    const pkg = pkgId ? getPackageById(pkgId) : null;
+    const pkg = pkgId ? getPackageById(pkgId, catalog) : null;
     const base = pkg ? pkg.buildTemplate() : emptySnapshot();
     const category_pricing = buildCategoryPricing(base, ["deluxe_hotels"], {}, {});
     const defaultAdvance = clampAdvancePercent(
@@ -76,7 +113,9 @@ export function NewItineraryWizard() {
         title: pkg?.title || base.header.title || `Quote for ${client.client_name}`,
         tour_code: pkg?.tour_code ?? base.header.tour_code,
         duration_label: durationLabelFromDays(base.days),
-        alternate_titles: [],
+        alternate_titles: base.header.alternate_titles?.length
+          ? base.header.alternate_titles
+          : [],
       },
       category_pricing,
       source_package_id: pkgId,
@@ -362,7 +401,7 @@ export function NewItineraryWizard() {
               className="w-44"
             >
               <option value="all">All Durations</option>
-              {uniqueDurations().map((n) => (
+              {uniqueDurations(catalog).map((n) => (
                 <option key={n} value={n}>
                   {n} Night{n !== 1 ? "s" : ""}
                 </option>
@@ -383,7 +422,11 @@ export function NewItineraryWizard() {
             </Button>
           </div>
 
-          {selectedPackage ? (
+          {catalogLoading ? (
+            <div className="rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-600">
+              Loading packages from Master Data…
+            </div>
+          ) : selectedPackage ? (
             <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <Check className="h-4 w-4 shrink-0" />
               <span className="font-medium">{selectedPackage.title}</span>
@@ -416,41 +459,54 @@ export function NewItineraryWizard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100">
-                  {packages.map((pkg) => (
-                    <tr
-                      key={pkg.id}
-                      className={cn(
-                        "hover:bg-blue-50/40",
-                        packageId === pkg.id && "bg-blue-50/60"
-                      )}
-                    >
-                      <td className="px-4 py-3 font-mono font-medium">{pkg.tour_code}</td>
-                      <td className="px-4 py-3 font-medium text-emerald-700">{pkg.duration_label}</td>
-                      <td className="px-4 py-3">{pkg.title}</td>
-                      <td className="hidden px-4 py-3 md:table-cell">
-                        <div className="flex flex-wrap gap-1">
-                          {pkg.locations.map((loc) => (
-                            <span
-                              key={loc.name}
-                              className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
-                            >
-                              {loc.name} - {loc.nights}N
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant={packageId === pkg.id ? "default" : "outline"}
-                          onClick={() => selectPackage(pkg.id)}
-                        >
-                          {packageId === pkg.id ? "Selected" : "Select"}
-                        </Button>
+                  {!catalogLoading && packages.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
+                        No packages found. Add active itineraries in Master Data → Itineraries,
+                        or use Create Custom Itinerary.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    packages.map((pkg) => (
+                      <tr
+                        key={pkg.id}
+                        className={cn(
+                          "hover:bg-blue-50/40",
+                          packageId === pkg.id && "bg-blue-50/60"
+                        )}
+                      >
+                        <td className="px-4 py-3 font-mono font-medium">{pkg.tour_code}</td>
+                        <td className="px-4 py-3 font-medium text-emerald-700">{pkg.duration_label}</td>
+                        <td className="px-4 py-3">{pkg.title}</td>
+                        <td className="hidden px-4 py-3 md:table-cell">
+                          <div className="flex flex-wrap gap-1">
+                            {pkg.locations.length ? (
+                              pkg.locations.map((loc) => (
+                                <span
+                                  key={loc.name}
+                                  className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-800"
+                                >
+                                  {loc.name} - {loc.nights}N
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-stone-400">No location set</span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={packageId === pkg.id ? "default" : "outline"}
+                            onClick={() => selectPackage(pkg.id)}
+                          >
+                            {packageId === pkg.id ? "Selected" : "Select"}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

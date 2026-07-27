@@ -29,11 +29,12 @@ import {
   hotelsForLocation,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
-import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
+import { listMasterContent, updateMasterContent, createMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 import { PLACEHOLDER_IMAGES } from "@/lib/constants/placeholder-images";
 import { cities, destinations, vehicles as masterVehicles } from "@/lib/data/website-content";
+import { useSystem } from "@/components/providers/system-provider";
 import {
   HOTEL_CATEGORY_OPTIONS,
   type HotelCategoryKey,
@@ -61,7 +62,8 @@ import {
   Loader2,
 } from "lucide-react";
 
-const MAX_DAY_IMAGES = 4;
+const MAX_DAY_IMAGES = 6;
+const MAX_LOCATION_IMAGES = 6;
 
 const FALLBACK_LOCATIONS = [
   "Jaipur",
@@ -83,12 +85,12 @@ type LocationCatalogEntry = {
 function buildFallbackCatalog(): LocationCatalogEntry[] {
   const byName = new Map<string, string[]>();
   for (const d of destinations) {
-    byName.set(d.name, collectDisplayImages(d.image_url, d.gallery_urls, MAX_DAY_IMAGES));
+    byName.set(d.name, collectDisplayImages(d.image_url, d.gallery_urls, MAX_LOCATION_IMAGES));
   }
   for (const c of cities) {
     const name = c.name.replace(/ City$/, "");
     if (!byName.has(name)) {
-      byName.set(name, collectDisplayImages(c.image_url, c.gallery_urls, MAX_DAY_IMAGES));
+      byName.set(name, collectDisplayImages(c.image_url, c.gallery_urls, MAX_LOCATION_IMAGES));
     }
   }
   for (const name of [...hotelLocations(), ...FALLBACK_LOCATIONS]) {
@@ -490,6 +492,7 @@ export function V1BuilderForm({
   saveLabel?: string;
 }) {
   const { show } = useToast();
+  const { currentMember } = useSystem();
   const s = normalizeSnapshot(snapshot);
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
     buildFallbackCatalog()
@@ -536,7 +539,7 @@ export function V1BuilderForm({
         byName.set(name, {
           id: item.id,
           name,
-          photos: collectDisplayImages(item.image_url, item.gallery_urls, MAX_DAY_IMAGES),
+          photos: collectDisplayImages(item.image_url, item.gallery_urls, MAX_LOCATION_IMAGES),
         });
       }
       setLocationCatalog(
@@ -712,16 +715,69 @@ export function V1BuilderForm({
   async function syncImagesToLocation(location: string | null | undefined, urls: string[]) {
     if (!location?.trim()) return;
     const q = location.trim().toLowerCase();
-    const entry = locationCatalog.find((e) => e.name.toLowerCase() === q);
+    let entry = locationCatalog.find((e) => e.name.toLowerCase() === q);
+
+    // Resolve / create a real Master Data → Locations row so uploads persist.
+    if (!entry?.id) {
+      try {
+        const items = await listMasterContent("destinations");
+        const existing = items.find((i) => i.name.trim().toLowerCase() === q);
+        if (existing) {
+          entry = {
+            id: existing.id,
+            name: existing.name,
+            photos: collectDisplayImages(
+              existing.image_url,
+              existing.gallery_urls,
+              MAX_LOCATION_IMAGES
+            ),
+          };
+          setLocationCatalog((prev) => {
+            const without = prev.filter((e) => e.name.toLowerCase() !== q);
+            return [...without, entry!].sort((a, b) => a.name.localeCompare(b.name));
+          });
+        } else if (currentMember) {
+          const created = await createMasterContent(
+            "destinations",
+            {
+              name: location.trim(),
+              gallery_urls: urls.filter(Boolean).slice(0, MAX_LOCATION_IMAGES),
+              image_url: urls.find(Boolean) ?? null,
+              show_on_website: false,
+            },
+            currentMember
+          );
+          entry = {
+            id: created.id,
+            name: created.name,
+            photos: collectDisplayImages(
+              created.image_url,
+              created.gallery_urls,
+              MAX_LOCATION_IMAGES
+            ),
+          };
+          setLocationCatalog((prev) => {
+            const without = prev.filter((e) => e.name.toLowerCase() !== q);
+            return [...without, entry!].sort((a, b) => a.name.localeCompare(b.name));
+          });
+          show(`Added photos to Location master “${created.name}”`);
+          return;
+        } else {
+          return;
+        }
+      } catch {
+        return;
+      }
+    }
+
     if (!entry?.id) return;
 
-    const existing = entry.photos.slice(0, 6);
-    const merged = [...existing];
-    for (const url of urls.filter(Boolean)) {
-      if (!merged.includes(url)) merged.push(url);
-      if (merged.length >= 6) break;
-    }
-    if (merged.length === existing.length && merged.every((u, i) => u === existing[i])) return;
+    const existing = entry.photos.slice(0, MAX_LOCATION_IMAGES);
+    const incoming = urls.filter(Boolean).filter((url) => !existing.includes(url));
+    if (!incoming.length) return;
+
+    // Append new photos; if over capacity, drop oldest so new uploads are kept.
+    const merged = [...existing, ...incoming].slice(-MAX_LOCATION_IMAGES);
 
     try {
       const updated = await updateMasterContent("destinations", entry.id, {
@@ -738,12 +794,13 @@ export function V1BuilderForm({
                   photos: collectDisplayImages(
                     updated.image_url,
                     updated.gallery_urls,
-                    MAX_DAY_IMAGES
+                    MAX_LOCATION_IMAGES
                   ),
                 }
               : e
           )
         );
+        show(`Saved to Location master “${updated.name}”`);
       }
     } catch {
       // non-blocking — day images still stay on the itinerary
@@ -753,15 +810,22 @@ export function V1BuilderForm({
   async function addImageFromFile(dayIndex: number, file: File) {
     setUploadingDayImage(dayIndex);
     try {
-      const url = await uploadMasterImage(file, "itineraries");
+      const url = await uploadMasterImage(file, "destinations");
       let nextImages: string[] = [];
       let location: string | null = null;
+      let previousCount = 0;
       updateDay(dayIndex, (d) => {
+        previousCount = d.images.length;
         nextImages = [...d.images, url].slice(0, MAX_DAY_IMAGES);
         location = d.location;
         return { ...d, images: nextImages };
       });
-      void syncImagesToLocation(location, nextImages);
+      if (nextImages.length === previousCount) {
+        show(`Day already has ${MAX_DAY_IMAGES} images — remove one to add another`);
+        return;
+      }
+      // Always push new uploads back to Location master when a location is set.
+      void syncImagesToLocation(location, [url]);
     } catch (err) {
       show(err instanceof Error ? err.message : "Image upload failed");
     } finally {
@@ -996,10 +1060,24 @@ export function V1BuilderForm({
                       Locations
                     </p>
                     <Select
-                      value={day.location ?? ""}
+                      value={
+                        day.location
+                          ? locs.find(
+                              (loc) =>
+                                loc.toLowerCase() === day.location!.trim().toLowerCase()
+                            ) ?? day.location
+                          : ""
+                      }
                       onChange={(e) => setDayLocation(dayIndex, e.target.value)}
                     >
                       <option value="">Select location</option>
+                      {day.location &&
+                        !locs.some(
+                          (loc) =>
+                            loc.toLowerCase() === day.location!.trim().toLowerCase()
+                        ) && (
+                          <option value={day.location}>{day.location}</option>
+                        )}
                       {locs.map((loc) => (
                         <option key={loc} value={loc}>
                           {loc}
@@ -1012,7 +1090,7 @@ export function V1BuilderForm({
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
                       Day Images
                       <span className="ml-1 font-normal normal-case text-stone-400">
-                        (up to {MAX_DAY_IMAGES} from Locations)
+                        (up to {MAX_DAY_IMAGES} — saved to Locations)
                       </span>
                     </p>
                     <div className="flex flex-wrap gap-2">
@@ -1064,10 +1142,15 @@ export function V1BuilderForm({
                         </label>
                       )}
                     </div>
-                    {day.location && photosForLocation(locationCatalog, day.location).length === 0 && (
+                    {day.location ? (
                       <p className="mt-1.5 text-xs text-stone-400">
-                        No photos on this Location yet — add them here to save back under Master
-                        Data → Locations.
+                        {day.images.length < MAX_DAY_IMAGES
+                          ? "New images are also saved under Master Data → Locations."
+                          : `Maximum ${MAX_DAY_IMAGES} images — remove one to add another (also updates Location master).`}
+                      </p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-stone-400">
+                        Select a location first so uploaded images can be saved to Location master.
                       </p>
                     )}
                   </div>

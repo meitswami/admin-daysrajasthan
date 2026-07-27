@@ -1,4 +1,10 @@
-import type { CategoryPricingTier, HotelCategoryKey, ItinerarySnapshot } from "@/types/itinerary-builder";
+import type { Itinerary, ItineraryDayPlan } from "@/types/database";
+import type {
+  CategoryPricingTier,
+  HotelCategoryKey,
+  ItineraryDay,
+  ItinerarySnapshot,
+} from "@/types/itinerary-builder";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 import {
   applyCostToSnapshot,
@@ -25,6 +31,115 @@ export type PackageCatalogEntry = {
   buildTemplate: () => ItinerarySnapshot;
 };
 
+/** Parse "3 Days 2 Nights" / "02 Nights / 03 Days" style labels */
+export function parseDurationParts(label: string | null | undefined): {
+  days: number | null;
+  nights: number | null;
+} {
+  if (!label?.trim()) return { days: null, nights: null };
+  const daysMatch = label.match(/(\d+)\s*Days?/i);
+  const nightsMatch = label.match(/(\d+)\s*Nights?/i);
+  return {
+    days: daysMatch ? Number(daysMatch[1]) : null,
+    nights: nightsMatch ? Number(nightsMatch[1]) : null,
+  };
+}
+
+/** Collapse consecutive day locations into name + night chips for the package table */
+export function locationsFromDayPlans(days: ItineraryDayPlan[]): PackageCatalogLocation[] {
+  const segments: PackageCatalogLocation[] = [];
+  for (const day of days) {
+    const name = (day.location ?? "").trim();
+    if (!name) continue;
+    const last = segments[segments.length - 1];
+    if (last && last.name.toLowerCase() === name.toLowerCase()) last.nights += 1;
+    else segments.push({ name, nights: 1 });
+  }
+  return segments;
+}
+
+/** Map a master-data day plan into a builder day, preserving Location for hotel filtering */
+export function masterDayToBuilderDay(plan: ItineraryDayPlan, index: number): ItineraryDay {
+  const day = emptyDay(plan.day_number || index + 1);
+  const location = (plan.location ?? "").trim() || null;
+  day.day_title = plan.title?.trim() || day.day_title;
+  day.alternate_day_titles = (plan.alternate_titles ?? []).map((t) => t.trim()).filter(Boolean);
+  day.day_description = plan.description?.trim() || "";
+  day.location = location;
+  day.pickup_location = location;
+  day.images = (plan.image_urls ?? []).filter(Boolean).slice(0, 4);
+  return day;
+}
+
+/** Convert a Master Data itinerary into a selectable wizard package (with day locations) */
+export function masterItineraryToCatalogEntry(item: Itinerary): PackageCatalogEntry {
+  const days = item.days ?? [];
+  const parsed = parseDurationParts(item.package_duration);
+  const duration_days =
+    days.length > 0 ? days.length : parsed.days ?? Math.max(1, (parsed.nights ?? 0) + 1);
+  const duration_nights =
+    parsed.nights ?? Math.max(0, duration_days - 1);
+  const duration_label =
+    item.package_duration?.trim() ||
+    `${String(duration_nights).padStart(2, "0")} Night${duration_nights !== 1 ? "s" : ""} / ${String(duration_days).padStart(2, "0")} Day${duration_days !== 1 ? "s" : ""}`;
+
+  const tourCode =
+    item.tour_code?.trim().toUpperCase() ||
+    (() => {
+      const slug = item.slug?.trim();
+      if (!slug) return "CUSTOM";
+      const match = slug.match(/^([a-zA-Z]+\d+)/);
+      return (match?.[1] ?? slug.split("-")[0] ?? "CUSTOM").toUpperCase();
+    })();
+
+  const locations = locationsFromDayPlans(days);
+  if (!locations.length && item.destination?.trim()) {
+    locations.push({ name: item.destination.trim(), nights: duration_nights || 1 });
+  }
+
+  return {
+    id: item.id,
+    tour_code: tourCode,
+    title: item.package_name,
+    duration_label,
+    duration_nights,
+    duration_days,
+    locations,
+    updated_at: (item.updated_at || item.created_at || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+    buildTemplate: () => {
+      const builderDays =
+        days.length > 0
+          ? days.map((d, i) => masterDayToBuilderDay(d, i))
+          : [emptyDay(1)];
+      return applyCostToSnapshot(
+        emptySnapshot({
+          header: {
+            title: item.package_name,
+            subtitle: item.destination,
+            tour_code: tourCode,
+            duration_label,
+            alternate_titles: item.alternate_titles ?? [],
+          },
+          days: builderDays,
+          ...(item.inclusions?.length ? { inclusions: item.inclusions } : {}),
+          ...(item.exclusions?.length ? { exclusions: item.exclusions } : {}),
+          source_package_id: item.id,
+        })
+      );
+    },
+  };
+}
+
+export function catalogFromMasterItineraries(
+  items: Itinerary[],
+  opts?: { includeInactive?: boolean }
+): PackageCatalogEntry[] {
+  const list = opts?.includeInactive
+    ? items
+    : items.filter((i) => i.status !== "inactive");
+  return list.map(masterItineraryToCatalogEntry);
+}
+
 function cloneDaysWithRoomCategory(
   baseDays: ReturnType<typeof emptyDay>[],
   roomCategory: string
@@ -43,6 +158,7 @@ function jaipurDays() {
   day1.day_theme = "Heritage";
   day1.day_description =
     "Received at airport/railway station and transferred to hotel. Evening visit to Statue Circle, Birla Mandir and local markets.";
+  day1.location = "Jaipur";
   day1.hotel_name = "ITC Rajputana — Jaipur";
   day1.room_category = "Deluxe";
   day1.vehicle_type = "SUV";
@@ -52,6 +168,7 @@ function jaipurDays() {
   day2.day_title = "Jaipur Sightseeing";
   day2.day_subtitle = "Amber Fort & Hawa Mahal";
   day2.day_theme = "Heritage";
+  day2.location = "Jaipur";
   day2.hotel_name = "ITC Rajputana — Jaipur";
   day2.room_category = "Deluxe";
   day2.vehicle_type = "SUV";
@@ -60,6 +177,7 @@ function jaipurDays() {
   day3.day_title = "Departure from Jaipur";
   day3.day_theme = "Transit";
   day3.day_description = "Breakfast at hotel. Transfer to airport/railway station.";
+  day3.location = "Jaipur";
   day3.vehicle_type = "SUV";
   day3.drop_location = "Jaipur Airport";
   day3.breakfast = true;
@@ -76,6 +194,7 @@ function udaipurDays() {
   return titles.map((title, i) => {
     const d = emptyDay(i + 1);
     d.day_title = title;
+    d.location = "Udaipur";
     d.hotel_name = i < 2 ? "The Oberoi Udaivilas — Udaipur" : null;
     d.room_category = d.hotel_name ? "Deluxe" : null;
     d.vehicle_type = "Sedan";
@@ -86,22 +205,26 @@ function udaipurDays() {
 function pushkarJaipurDays() {
   const day1 = emptyDay(1);
   day1.day_title = "Jaipur arrival";
+  day1.location = "Jaipur";
   day1.hotel_name = "ITC Rajputana — Jaipur";
   day1.room_category = "Deluxe";
   day1.vehicle_type = "SUV";
 
   const day2 = emptyDay(2);
   day2.day_title = "Jaipur to Pushkar";
+  day2.location = "Pushkar";
   day2.hotel_name = "Pushkar Palace";
   day2.room_category = "Deluxe";
   day2.vehicle_type = "SUV";
 
   const day3 = emptyDay(3);
   day3.day_title = "Pushkar sightseeing & return";
+  day3.location = "Pushkar";
   day3.vehicle_type = "SUV";
 
   const day4 = emptyDay(4);
   day4.day_title = "Departure from Jaipur";
+  day4.location = "Jaipur";
   day4.vehicle_type = "SUV";
 
   return [day1, day2, day3, day4];
@@ -172,6 +295,7 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
       const days = udaipurDays();
       const day4 = emptyDay(4);
       day4.day_title = "Nathdwara & Haldi Ghati";
+      day4.location = "Nathdwara";
       day4.hotel_name = "Nathdwara Guest House";
       day4.room_category = "Deluxe";
       day4.vehicle_type = "SUV";
@@ -231,10 +355,12 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
     ],
     updated_at: "2025-11-24",
     buildTemplate: () => {
+      const cityByDay = ["Delhi", "Delhi", "Agra", "Jaipur", "Delhi"];
       const days = ["Delhi arrival", "Delhi sightseeing", "Delhi → Agra", "Agra → Jaipur", "Jaipur → Delhi"].map(
         (title, i) => {
           const d = emptyDay(i + 1);
           d.day_title = title;
+          d.location = cityByDay[i] ?? null;
           d.hotel_name = i < 4 ? "ITC Rajputana — Jaipur" : null;
           d.room_category = d.hotel_name ? "Deluxe" : null;
           d.vehicle_type = "Innova Crysta";
@@ -258,24 +384,33 @@ export const PACKAGE_CATALOG: PackageCatalogEntry[] = [
   },
 ];
 
-export function listPackageCatalog() {
-  return [...PACKAGE_CATALOG];
+export function listPackageCatalog(catalog: PackageCatalogEntry[] = PACKAGE_CATALOG) {
+  return [...catalog];
 }
 
-export function getPackageByTourCode(code: string) {
-  return PACKAGE_CATALOG.find((p) => p.tour_code.toLowerCase() === code.toLowerCase()) ?? null;
+export function getPackageByTourCode(
+  code: string,
+  catalog: PackageCatalogEntry[] = PACKAGE_CATALOG
+) {
+  return catalog.find((p) => p.tour_code.toLowerCase() === code.toLowerCase()) ?? null;
 }
 
-export function getPackageById(id: string) {
-  return PACKAGE_CATALOG.find((p) => p.id === id) ?? null;
+export function getPackageById(
+  id: string,
+  catalog: PackageCatalogEntry[] = PACKAGE_CATALOG
+) {
+  return catalog.find((p) => p.id === id) ?? null;
 }
 
-export function filterPackages(opts: {
-  search?: string;
-  durationNights?: number | "all";
-  tourCode?: string;
-}) {
-  let list = listPackageCatalog();
+export function filterPackages(
+  opts: {
+    search?: string;
+    durationNights?: number | "all";
+    tourCode?: string;
+  },
+  catalog: PackageCatalogEntry[] = PACKAGE_CATALOG
+) {
+  let list = listPackageCatalog(catalog);
   if (opts.durationNights && opts.durationNights !== "all") {
     list = list.filter((p) => p.duration_nights === opts.durationNights);
   }
@@ -295,8 +430,8 @@ export function filterPackages(opts: {
   return list;
 }
 
-export function uniqueDurations() {
-  const nights = new Set(PACKAGE_CATALOG.map((p) => p.duration_nights));
+export function uniqueDurations(catalog: PackageCatalogEntry[] = PACKAGE_CATALOG) {
+  const nights = new Set(catalog.map((p) => p.duration_nights));
   return [...nights].sort((a, b) => a - b);
 }
 
