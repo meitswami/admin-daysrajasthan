@@ -20,6 +20,9 @@ import {
 import type { PreviewContact } from "@/lib/itinerary-builder/policy-master";
 import type { CompanyStructure } from "@/types/company-structure";
 import type { CategoryTotalSummary, ClientItineraryRecord, ItinerarySnapshot } from "@/types/itinerary-builder";
+import {
+  getPreviewTheme,
+} from "@/lib/itinerary-builder/preview-themes";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useReportBrand } from "@/hooks/use-report-brand";
 
@@ -201,6 +204,9 @@ export function QuotationPrintView({
     );
   }
 
+  const theme = getPreviewTheme(snapshot.preview_theme);
+  const bookAccent = theme.id === 2 ? "#56AB2F" : theme.id === 3 ? "#7B1E2E" : "#D97706";
+
   return (
     <div className="min-h-screen bg-stone-100 print:bg-transparent">
       <div className="no-print sticky top-0 z-10 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
@@ -222,7 +228,8 @@ export function QuotationPrintView({
             <Button
               type="button"
               size="sm"
-              className="no-print bg-amber-600 hover:bg-amber-700"
+              className="no-print text-white hover:opacity-90"
+              style={{ backgroundColor: bookAccent }}
               onClick={() => {
                 const el = document.getElementById("book");
                 el?.scrollIntoView({ behavior: "smooth" });
@@ -233,7 +240,9 @@ export function QuotationPrintView({
             <Button
               type="button"
               size="sm"
+              variant="outline"
               className="no-print"
+              style={{ borderColor: bookAccent, color: bookAccent }}
               disabled={printing}
               onClick={() => void handlePrint()}
             >

@@ -17,8 +17,12 @@ import {
   type PreviewTheme,
 } from "@/lib/itinerary-builder/preview-themes";
 import {
+  DEFAULT_EXCLUSION_ITEMS,
+  DEFAULT_INCLUSION_ITEMS,
   PREVIEW_CONTACTS,
   contentBlocksToStrings,
+  stringsToContentBlocks,
+  type ContentBlockItem,
   type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
 import { findSelectedContact } from "@/lib/itinerary-builder/quotation-contacts";
@@ -33,6 +37,11 @@ import { DocumentBrandFooter } from "@/components/branding/document-brand";
 import { QuotationThemeHero } from "@/components/itinerary-builder/quotation-theme-heroes";
 import { QuotationDayCarousel } from "@/components/itinerary-builder/quotation-day-carousel";
 import { QuotationReviewWidgets } from "@/components/itinerary-builder/quotation-review-widgets";
+import {
+  Theme2About,
+  Theme2Contact,
+  Theme2TourPolicies,
+} from "@/components/itinerary-builder/quotation-theme2-sections";
 import {
   QuotationLegacyAbout,
   QuotationLegacyExploreBanner,
@@ -65,6 +74,20 @@ function policyLinesFromSnapshot(snapshot: ItinerarySnapshot): {
       ? snapshot.exclusions
       : contentBlocksToStrings(snapshot.exclusion_items ?? []);
   return { inclusions, exclusions };
+}
+
+function richPolicyItems(
+  items: ContentBlockItem[] | undefined,
+  fallbackLines: string[],
+  defaults: ContentBlockItem[]
+): ContentBlockItem[] {
+  if (items && items.length > 0) {
+    return items.filter((i) => i.title.trim());
+  }
+  if (fallbackLines.length > 0) {
+    return stringsToContentBlocks(fallbackLines);
+  }
+  return defaults.map((i) => ({ ...i }));
 }
 
 function StarRating({ rating }: { rating: number }) {
@@ -515,8 +538,20 @@ export function QuotationDocument({
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
   const { inclusions, exclusions } = policyLinesFromSnapshot(snapshot);
+  const inclusionItems = richPolicyItems(
+    snapshot.inclusion_items,
+    inclusions,
+    DEFAULT_INCLUSION_ITEMS
+  );
+  const exclusionItems = richPolicyItems(
+    snapshot.exclusion_items,
+    exclusions,
+    DEFAULT_EXCLUSION_ITEMS
+  );
   const theme = getPreviewTheme(snapshot.preview_theme);
   const isLegacyTheme = theme.id === 1;
+  const isTheme2 = theme.id === 2;
+  const usesTimelineDays = theme.id === 2 || theme.id === 3 || theme.id === 4 || theme.id === 5;
   const selectedContact = findSelectedContact(contacts, snapshot.selected_contact_id);
   // Cover uses company brand; agent appears in payment footer.
   const coverBrand: ReportBrand = {
@@ -656,12 +691,12 @@ export function QuotationDocument({
         )}
 
         <section>
-          {!isLegacyTheme && theme.id !== 2 && theme.id !== 3 && (
+          {!isLegacyTheme && !usesTimelineDays && (
             <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
               Day-wise Itinerary
             </h2>
           )}
-          {(theme.id === 2 || theme.id === 3) && (
+          {usesTimelineDays && (
             <div className="mb-6">
               <h2 className="text-2xl font-bold" style={{ color: theme.accent }}>
                 Travel Itinerary
@@ -680,20 +715,20 @@ export function QuotationDocument({
             className={
               theme.id === 1
                 ? "mt-2"
-                : theme.id === 2 || theme.id === 3
+                : usesTimelineDays
                   ? "mt-2 space-y-8 sm:space-y-10"
                   : "mt-4 space-y-4"
             }
           >
             {days.map((day, index) =>
-              theme.id === 2 || theme.id === 3 ? (
+              usesTimelineDays ? (
                 <TimelineDayCard
                   key={day.day_uuid}
                   day={day}
                   travelDate={client.travel_date}
                   theme={theme}
                   isLast={index === days.length - 1}
-                  layout={theme.id === 2 ? "theme2" : "theme3"}
+                  layout={theme.id === 3 ? "theme3" : "theme2"}
                 />
               ) : (
                 <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
@@ -728,16 +763,23 @@ export function QuotationDocument({
           </section>
         )}
 
-        {!isLegacyTheme && (
-          <PolicyGrid
-            inclusions={inclusions ?? []}
-            exclusions={exclusions ?? []}
-            terms={terms}
-            accent={theme.accent}
+        {isTheme2 ? (
+          <Theme2TourPolicies
+            inclusionItems={inclusionItems}
+            exclusionItems={exclusionItems}
           />
+        ) : (
+          !isLegacyTheme && (
+            <PolicyGrid
+              inclusions={inclusions ?? []}
+              exclusions={exclusions ?? []}
+              terms={terms}
+              accent={theme.accent}
+            />
+          )
         )}
 
-        {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && (
+        {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && !isTheme2 && (
           <section className="break-inside-avoid">
             <h2 className="text-sm font-bold uppercase text-stone-800">Pricing Summary</h2>
             <table className="mt-3 w-full text-sm">
@@ -773,27 +815,42 @@ export function QuotationDocument({
           </section>
         )}
 
-        {!isLegacyTheme && (
+        {isTheme2 ? (
           <>
-            <section
-              className="break-inside-avoid rounded-2xl border p-5"
-              style={{ borderColor: `${theme.accent}33`, backgroundColor: theme.accentSoft }}
-            >
-              <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-                About {brand.companyName}
-              </h2>
-              <p className="mt-3 text-sm leading-relaxed text-stone-700">
-                {brand.siteDescription ??
-                  `${brand.companyName} crafts curated travel experiences with verified partners, transparent pricing, and dedicated on-ground support. Every itinerary is tailor-made to match your pace, preferences, and budget.`}
-              </p>
-            </section>
-
-            <DocumentBrandFooter brand={displayBrand} />
-            <p className="text-center text-[10px] text-stone-400">
-              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme {theme.id}{" "}
-              {theme.styleName}
+            <Theme2About structure={structure} brand={displayBrand} />
+            <Theme2Contact
+              brand={displayBrand}
+              contact={selectedContact}
+              structure={structure}
+            />
+            <p className="pt-4 text-center text-[10px] text-stone-400">
+              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
+              {theme.id} {theme.styleName}
             </p>
           </>
+        ) : (
+          !isLegacyTheme && (
+            <>
+              <section
+                className="break-inside-avoid rounded-2xl border p-5"
+                style={{ borderColor: `${theme.accent}33`, backgroundColor: theme.accentSoft }}
+              >
+                <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+                  About {brand.companyName}
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-stone-700">
+                  {brand.siteDescription ??
+                    `${brand.companyName} crafts curated travel experiences with verified partners, transparent pricing, and dedicated on-ground support. Every itinerary is tailor-made to match your pace, preferences, and budget.`}
+                </p>
+              </section>
+
+              <DocumentBrandFooter brand={displayBrand} />
+              <p className="text-center text-[10px] text-stone-400">
+                This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
+                {theme.id} {theme.styleName}
+              </p>
+            </>
+          )
         )}
       </div>
 

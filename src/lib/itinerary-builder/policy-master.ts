@@ -156,8 +156,20 @@ export const DEFAULT_INCLUSION_ITEMS: ContentBlockItem[] = [
   },
   {
     id: "inc-5",
+    title: "English Speaking Guide",
+    description: "Professional English-speaking guide for major sightseeing as per itinerary (where applicable).",
+    images: [],
+  },
+  {
+    id: "inc-6",
     title: "All applicable taxes",
     description: "GST and applicable taxes as per government rules at the time of booking.",
+    images: [],
+  },
+  {
+    id: "inc-7",
+    title: "Complimentary child stay",
+    description: "Complimentary stay for child below 5 years sharing parents' room (without extra bed).",
     images: [],
   },
 ];
