@@ -3,13 +3,17 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSiteSettings } from "@/components/providers/site-settings-provider";
+import { useSystem } from "@/components/providers/system-provider";
 import { getBrandInitials } from "@/lib/data/default-site-settings";
+import { ROLE_LABELS } from "@/types/rbac";
 
 export function Brand() {
   const { settings } = useSiteSettings();
+  const { currentMember } = useSystem();
   const { site_name, site_short_name } = settings.webGeneral;
   const logo = settings.adminGeneral.admin_logo_url || settings.webGeneral.site_logo_url;
   const initials = getBrandInitials(site_short_name);
+  const roleLabel = ROLE_LABELS[currentMember.role] ?? "Panel";
 
   return (
     <Link href="/dashboard" className="flex items-center gap-3">
@@ -24,7 +28,7 @@ export function Brand() {
       )}
       <div className="min-w-0">
         <p className="truncate text-sm font-semibold leading-tight text-white">{site_short_name}</p>
-        <p className="truncate text-xs text-stone-400">Admin Panel</p>
+        <p className="truncate text-xs text-stone-400">{roleLabel}</p>
       </div>
     </Link>
   );

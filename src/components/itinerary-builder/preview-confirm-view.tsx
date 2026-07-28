@@ -22,9 +22,14 @@ import {
   type PolicyLine,
   type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
-import { contactsFromStructure } from "@/lib/itinerary-builder/quotation-contacts";
+import {
+  canSelectAnyQuotationContact,
+  contactsFromStructure,
+  contactsVisibleToMember,
+} from "@/lib/itinerary-builder/quotation-contacts";
 import { getCompanyStructure } from "@/lib/master-data/structure-store";
 import { publicQuotationUrl } from "@/lib/admin-public-url";
+import { useSystem } from "@/components/providers/system-provider";
 import {
   PREVIEW_THEMES,
   themeCardLabel,
@@ -344,12 +349,19 @@ const THEMES = PREVIEW_THEMES;
 export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
   const router = useRouter();
   const { show } = useToast();
+  const { currentMember } = useSystem();
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
   const [snapshot, setSnapshot] = useState<ItinerarySnapshot | null>(null);
-  const [contacts, setContacts] = useState<PreviewContact[]>(PREVIEW_CONTACTS);
+  const [allContacts, setAllContacts] = useState<PreviewContact[]>(PREVIEW_CONTACTS);
+
+  const contacts = useMemo(
+    () => contactsVisibleToMember(allContacts, currentMember),
+    [allContacts, currentMember]
+  );
+  const canPickAnyContact = canSelectAnyQuotationContact(currentMember.role);
 
   useEffect(() => {
-    void getCompanyStructure().then((s) => setContacts(contactsFromStructure(s)));
+    void getCompanyStructure().then((s) => setAllContacts(contactsFromStructure(s)));
   }, []);
 
   useEffect(() => {
@@ -361,6 +373,16 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
       setSnapshot(normalizeSnapshot(current.snapshot));
     }
   }, [itineraryId]);
+
+  // Non-admins: lock selection to their own Structure contact.
+  useEffect(() => {
+    if (!snapshot || canPickAnyContact || contacts.length === 0) return;
+    const lockedId = contacts[0].id;
+    if (snapshot.selected_contact_id === lockedId) return;
+    setSnapshot((prev) =>
+      prev ? normalizeSnapshot({ ...prev, selected_contact_id: lockedId }) : prev
+    );
+  }, [snapshot, canPickAnyContact, contacts]);
 
   const themeShell = useMemo(
     () => themeShellClass(snapshot?.preview_theme),
@@ -873,7 +895,9 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         {/* Contacts */}
         <section className="no-print rounded-2xl border border-stone-200 bg-white p-4 sm:p-5 print:hidden">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold text-stone-900">Select Contact</h2>
+            <h2 className="text-lg font-semibold text-stone-900">
+              {canPickAnyContact ? "Select Contact" : "Your Contact"}
+            </h2>
             <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold uppercase text-white">
               From Structure Master
             </span>
@@ -885,12 +909,17 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                 <button
                   key={c.id}
                   type="button"
-                  onClick={() => patch({ selected_contact_id: c.id })}
+                  disabled={!canPickAnyContact}
+                  onClick={() => {
+                    if (!canPickAnyContact) return;
+                    patch({ selected_contact_id: c.id });
+                  }}
                   className={cn(
                     "relative rounded-xl border p-3 text-left transition",
                     selected
                       ? "border-blue-600 bg-blue-50/40 ring-1 ring-blue-600"
-                      : "border-stone-200 hover:border-stone-300"
+                      : "border-stone-200 hover:border-stone-300",
+                    !canPickAnyContact && "cursor-default"
                   )}
                 >
                   {selected && (

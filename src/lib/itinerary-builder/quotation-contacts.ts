@@ -1,6 +1,7 @@
 import type { PreviewContact } from "@/lib/itinerary-builder/policy-master";
 import { PREVIEW_CONTACTS } from "@/lib/itinerary-builder/policy-master";
 import type { CompanyStructure, StaffContact } from "@/types/company-structure";
+import type { TeamMember, TeamRole } from "@/types/rbac";
 
 /** Stable ids aligned with Structure defaults / preview seed. */
 export const STRUCTURE_CONTACT_SEED_IDS = [
@@ -38,6 +39,56 @@ export function contactsFromStructure(
   const staff = structure?.staff_contacts?.filter((c) => c.name.trim()) ?? [];
   if (staff.length === 0) return PREVIEW_CONTACTS;
   return staff.map((c, i) => staffToPreviewContact(c, i));
+}
+
+/** Admin / Super Admin may pick any Structure contact on quotations. */
+export function canSelectAnyQuotationContact(role: TeamRole): boolean {
+  return role === "superadmin" || role === "admin";
+}
+
+/** Match Structure contact to the signed-in team member (name, then email). */
+export function findContactForMember(
+  contacts: PreviewContact[],
+  member: Pick<TeamMember, "name" | "email">
+): PreviewContact | null {
+  const name = member.name.trim().toLowerCase();
+  const email = member.email.trim().toLowerCase();
+  if (name) {
+    const byName = contacts.find((c) => c.name.trim().toLowerCase() === name);
+    if (byName) return byName;
+  }
+  if (email) {
+    const byEmail = contacts.find((c) =>
+      c.email
+        .toLowerCase()
+        .split(/[,;/|]/)
+        .map((e) => e.trim())
+        .includes(email)
+    );
+    if (byEmail) return byEmail;
+  }
+  return null;
+}
+
+/**
+ * Sales / Sales Admin (and other non-admin roles) only see their own contact.
+ * Admin / Super Admin see the full Structure list.
+ */
+export function contactsVisibleToMember(
+  contacts: PreviewContact[],
+  member: TeamMember
+): PreviewContact[] {
+  if (canSelectAnyQuotationContact(member.role)) return contacts;
+  const matched = findContactForMember(contacts, member);
+  if (matched) return [matched];
+  return [
+    {
+      id: `ct-member-${member.id}`,
+      name: member.name.trim() || "My contact",
+      phone: "",
+      email: member.email.trim(),
+    },
+  ];
 }
 
 export function findSelectedContact(
