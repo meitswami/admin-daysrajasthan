@@ -1355,7 +1355,7 @@ export function QuotationDocument({
 
   return (
     <div
-      className="relative w-full overflow-hidden text-stone-900"
+      className="relative w-full overflow-hidden bg-[#FBF7F0] text-stone-900"
       style={{
         WebkitPrintColorAdjust: "exact",
         printColorAdjust: "exact",
