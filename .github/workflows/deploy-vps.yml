@@ -22,4 +22,11 @@ jobs:
           port: ${{ secrets.VPS_SSH_PORT }}
           script_stop: true
           script: |
-            bash /opt/daysrajasthan/scripts/deploy-admin.sh master
+            set -euo pipefail
+            ADMIN_DIR=/var/www/daysrajasthan-admin
+            cd "$ADMIN_DIR"
+            git fetch --all --prune
+            git reset --hard origin/master
+            # Always run the script from the repo (keeps VPS /opt copy from going stale).
+            # deploy-admin.sh wipes node_modules before npm ci to avoid ENOTEMPTY/rmdir.
+            bash "$ADMIN_DIR/deploy/deploy-admin.sh" master

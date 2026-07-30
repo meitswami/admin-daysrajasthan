@@ -31,6 +31,8 @@ if [[ -f /opt/daysrajasthan/env/admin.env ]]; then
   cp /opt/daysrajasthan/env/admin.env "$ADMIN_DIR/.env.local"
 fi
 
+# Fresh install avoids intermittent npm ENOTEMPTY/rmdir failures on stale trees.
+rm -rf node_modules
 npm ci || npm install
 
 # Keep previous build until the new one succeeds (failed builds must not wipe production).
