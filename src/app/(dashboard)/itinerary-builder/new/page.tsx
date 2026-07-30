@@ -5,7 +5,7 @@ export default function NewItineraryPage() {
   return (
     <>
       <Header
-        title="Regular Itinerary"
+        title="New Itinerary"
         description="Step 1 — Client details · Step 2 — Select package · Step 3 — Category pricing"
       />
       <div className="px-4 pb-8 sm:px-6">

@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
   return (
     <>
-      <Header title="Dashboard" description="Live Supabase activity — bookings, inquiries & leads" />
+      <Header title="Dashboard" description="Live activity — bookings, inquiries & leads" />
       <PageMain>
         <DashboardStats />
 

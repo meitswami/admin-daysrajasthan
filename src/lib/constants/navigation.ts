@@ -50,13 +50,13 @@ export const bookingNav: NavGroup = {
   label: "Booking",
   items: [
     {
-      label: "Regular Itinerary",
+      label: "New Itinerary",
       href: "/itinerary-builder/new",
       icon: PlusCircle,
       description: "3-step wizard — client, package, pricing",
     },
     {
-      label: "Regular Itinerary List",
+      label: "Itinerary List",
       href: "/itinerary-builder",
       icon: List,
       description: "All pending & active quotes",

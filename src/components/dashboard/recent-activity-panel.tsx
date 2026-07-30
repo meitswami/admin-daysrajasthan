@@ -104,7 +104,7 @@ export function RecentActivityPanel() {
           <TrendingUp className="h-5 w-5 text-amber-600" />
           Recent Activity
         </CardTitle>
-        <CardDescription>Live from Supabase — inquiries, downloads & WhatsApp</CardDescription>
+        <CardDescription>Live — inquiries, downloads & WhatsApp</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {loading ? (

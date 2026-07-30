@@ -12,7 +12,9 @@ export type InclusionExclusionKind = "inclusion" | "exclusion";
 export type InclusionExclusionItem = {
   id: string;
   kind: InclusionExclusionKind;
+  /** Display title (stored as `text` in the DB). */
   text: string;
+  description: string;
   /** Optional image — used for inclusions; exclusions usually leave this null. */
   image_url: string | null;
   created_at: string;
@@ -27,6 +29,7 @@ function mapRow(row: Record<string, unknown>): InclusionExclusionItem {
     id: String(row.id),
     kind: row.kind as InclusionExclusionKind,
     text: String(row.text ?? ""),
+    description: String(row.description ?? ""),
     image_url: (row.image_url as string | null) ?? null,
     created_at: String(row.created_at ?? new Date().toISOString()),
     created_by_id: (row.created_by as string | null) ?? null,
@@ -41,6 +44,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "inclusion",
       text: "Accommodation as per plan",
+      description: "",
       image_url: null,
       created_at: now,
       created_by_id: "tm-info",
@@ -50,6 +54,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "inclusion",
       text: "Private AC vehicle for sightseeing",
+      description: "",
       image_url: null,
       created_at: now,
       created_by_id: "tm-info",
@@ -59,6 +64,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "exclusion",
       text: "Air fare / train fare",
+      description: "",
       image_url: null,
       created_at: now,
       created_by_id: "tm-info",
@@ -68,6 +74,7 @@ function seed(): InclusionExclusionItem[] {
       id: crypto.randomUUID(),
       kind: "exclusion",
       text: "Personal expenses",
+      description: "",
       image_url: null,
       created_at: now,
       created_by_id: "tm-info",
@@ -88,6 +95,7 @@ function readLocal(): InclusionExclusionItem[] {
     const parsed = JSON.parse(raw) as InclusionExclusionItem[];
     return parsed.map((item) => ({
       ...item,
+      description: item.description ?? "",
       image_url: item.image_url ?? null,
     }));
   } catch {
@@ -123,7 +131,8 @@ export async function createInclusionExclusion(
   kind: InclusionExclusionKind,
   text: string,
   actor: TeamMember,
-  imageUrl?: string | null
+  imageUrl?: string | null,
+  description?: string
 ): Promise<InclusionExclusionItem> {
   const resolvedImages =
     kind === "inclusion" && imageUrl
@@ -133,6 +142,7 @@ export async function createInclusionExclusion(
     id: crypto.randomUUID(),
     kind,
     text: text.trim(),
+    description: (description ?? "").trim(),
     image_url: kind === "inclusion" ? resolvedImages[0] ?? null : null,
     created_at: new Date().toISOString(),
     created_by_id: actor.id,
@@ -148,6 +158,7 @@ export async function createInclusionExclusion(
         id: item.id,
         kind: item.kind,
         text: item.text,
+        description: item.description,
         image_url: item.image_url,
         created_by: actor.id,
         created_by_name: actor.name,
@@ -178,7 +189,12 @@ export async function createInclusionExclusion(
 
 export async function updateInclusionExclusion(
   id: string,
-  patch: { text: string; image_url?: string | null; kind?: InclusionExclusionKind },
+  patch: {
+    text: string;
+    description?: string;
+    image_url?: string | null;
+    kind?: InclusionExclusionKind;
+  },
   actor?: TeamMember
 ): Promise<InclusionExclusionItem | null> {
   const beforeList = await listInclusionExclusions();
@@ -198,6 +214,8 @@ export async function updateInclusionExclusion(
       : [];
   const nextImage = kind === "inclusion" ? resolvedImages[0] ?? null : null;
   const nextText = patch.text.trim();
+  const nextDescription =
+    patch.description !== undefined ? patch.description.trim() : before.description;
 
   if (useSupabaseMaster()) {
     try {
@@ -205,7 +223,7 @@ export async function updateInclusionExclusion(
       const supabase = createClient();
       const { data, error } = await supabase
         .from("td_master_inclusions_exclusions")
-        .update({ text: nextText, image_url: nextImage })
+        .update({ text: nextText, description: nextDescription, image_url: nextImage })
         .eq("id", id)
         .select("*")
         .maybeSingle();
@@ -233,6 +251,7 @@ export async function updateInclusionExclusion(
   list[idx] = {
     ...list[idx],
     text: nextText,
+    description: nextDescription,
     image_url: nextImage,
   };
   writeLocal(list);

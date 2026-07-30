@@ -32,7 +32,7 @@ export default function ForgotPasswordPage() {
     show(
       result.mode === "supabase"
         ? "Reset link sent — check your inbox"
-        : "Demo mode — reset link simulated (configure Supabase Auth for real email)"
+        : "Demo mode — reset link simulated (configure auth for real email)"
     );
 
     void import("@/lib/system/activity-log").then(({ logActivity }) =>
@@ -54,7 +54,7 @@ export default function ForgotPasswordPage() {
           </Link>
           <CardTitle>Reset password</CardTitle>
           <CardDescription>
-            Enter your admin email — we&apos;ll send a Supabase Auth reset link
+            Enter your admin email — we&apos;ll send a password reset link
           </CardDescription>
         </CardHeader>
         <CardContent>

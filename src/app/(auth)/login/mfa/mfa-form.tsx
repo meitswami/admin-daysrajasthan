@@ -71,7 +71,7 @@ export default function MfaLoginForm() {
               Verify & continue
             </Button>
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-center text-xs text-amber-800">
-              Demo mode — any 6-digit code is accepted. Production will verify TOTP via Supabase Auth.
+              Demo mode — any 6-digit code is accepted. Production will verify TOTP via authenticator app.
             </p>
             <p className="text-center text-sm">
               <Link href="/login" className="text-amber-700 hover:underline">

@@ -128,7 +128,7 @@ export function BlogEditorModal({
       open={open}
       onClose={onClose}
       title={blog ? "Edit blog" : "Create blog"}
-      description="Content, SEO & preview — saved locally until Supabase connects"
+      description="Content, SEO & preview — saved locally until the live database connects"
       className="sm:max-w-2xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4">

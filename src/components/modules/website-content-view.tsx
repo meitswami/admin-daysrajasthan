@@ -21,7 +21,7 @@ import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 import { Grid3X3, List, Plus, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystem } from "@/components/providers/system-provider";
-import { canCreateMasterData } from "@/lib/rbac/ownership";
+import { canCreateMasterData, isOwnCreatedRecord } from "@/lib/rbac/ownership";
 import {
   createMasterContent,
   deleteMasterContent,
@@ -55,6 +55,12 @@ function getImageCategory(tab: MasterContentEntity): PlaceholderCategory {
   if (tab === "destinations") return "destination";
   if (tab === "hotels") return "hotel";
   return "vehicle";
+}
+
+function formatInrAmount(value?: string | null): string {
+  const v = value?.trim();
+  if (!v) return "—";
+  return /^₹/.test(v) ? v : `₹${v}`;
 }
 
 function normalizeEntity(entity?: MasterDataEntity): MasterContentEntity {
@@ -92,6 +98,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [providerCompanyName, setProviderCompanyName] = useState("");
+  const [contactPersonName, setContactPersonName] = useState("");
+  const [contactPhone1, setContactPhone1] = useState("");
+  const [contactPhone2, setContactPhone2] = useState("");
+  const [pricePerKm, setPricePerKm] = useState("");
+  const [pricePerDay, setPricePerDay] = useState("");
   const [hotelCategory, setHotelCategory] = useState("");
   const [hotelLocation, setHotelLocation] = useState("");
   const [priceDescription, setPriceDescription] = useState("");
@@ -150,6 +162,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         (i.price_description?.toLowerCase().includes(q) ?? false) ||
         (i.vehicle_type?.toLowerCase().includes(q) ?? false) ||
         (i.capacity?.toLowerCase().includes(q) ?? false) ||
+        (i.provider_company_name?.toLowerCase().includes(q) ?? false) ||
+        (i.contact_person_name?.toLowerCase().includes(q) ?? false) ||
+        (i.contact_phone_1?.toLowerCase().includes(q) ?? false) ||
+        (i.contact_phone_2?.toLowerCase().includes(q) ?? false) ||
+        (i.price_per_km?.toLowerCase().includes(q) ?? false) ||
+        (i.price_per_day?.toLowerCase().includes(q) ?? false) ||
         (i.google_maps_url?.toLowerCase().includes(q) ?? false)
       );
     });
@@ -164,6 +182,17 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setGoogleMapsUrl("");
   }
 
+  function resetVehicleFields() {
+    setVehicleType("");
+    setCapacity("");
+    setProviderCompanyName("");
+    setContactPersonName("");
+    setContactPhone1("");
+    setContactPhone2("");
+    setPricePerKm("");
+    setPricePerDay("");
+  }
+
   function openAdd() {
     if (!canCreate) {
       show("You do not have permission to add master data");
@@ -173,8 +202,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setName("");
     setGalleryUrls([]);
     setGoogleMapsUrl("");
-    setVehicleType("");
-    setCapacity("");
+    resetVehicleFields();
     resetHotelFields();
     setModalOpen(true);
   }
@@ -186,6 +214,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setGoogleMapsUrl(item.google_maps_url ?? "");
     setVehicleType(item.vehicle_type ?? "");
     setCapacity(item.capacity ?? "");
+    setProviderCompanyName(item.provider_company_name ?? "");
+    setContactPersonName(item.contact_person_name ?? "");
+    setContactPhone1(item.contact_phone_1 ?? "");
+    setContactPhone2(item.contact_phone_2 ?? "");
+    setPricePerKm(item.price_per_km ?? "");
+    setPricePerDay(item.price_per_day ?? "");
     setHotelCategory(item.category ?? "");
     setHotelLocation(item.location ?? "");
     setPriceDescription(item.price_description ?? "");
@@ -235,6 +269,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         ? {
             vehicle_type: vehicleType.trim() || null,
             capacity: capacity.trim() || null,
+            provider_company_name: providerCompanyName.trim() || null,
+            contact_person_name: contactPersonName.trim() || null,
+            contact_phone_1: contactPhone1.trim() || null,
+            contact_phone_2: contactPhone2.trim() || null,
+            price_per_km: pricePerKm.trim() || null,
+            price_per_day: pricePerDay.trim() || null,
           }
         : {}),
     };
@@ -423,7 +463,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
           <p className="text-sm text-stone-500">Loading…</p>
         ) : tab === "hotels" || viewMode === "list" ? (
           <div className="w-0 min-w-full max-w-full overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[1100px] text-sm">
               <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 {tab === "hotels" ? (
                   <tr>
@@ -436,6 +476,18 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     <th className="px-3 py-2">Rating</th>
                     <th className="px-3 py-2">Reviews</th>
                     <th className="px-3 py-2">Google Reviews</th>
+                    <th className="whitespace-nowrap px-3 py-2">Actions</th>
+                  </tr>
+                ) : tab === "vehicles" ? (
+                  <tr>
+                    <th className="px-3 py-2 w-12">S.No.</th>
+                    <th className="px-3 py-2">Images</th>
+                    <th className="px-3 py-2">Vehicle name</th>
+                    <th className="px-3 py-2">Provider</th>
+                    <th className="px-3 py-2">Contact</th>
+                    <th className="px-3 py-2">Phones</th>
+                    <th className="px-3 py-2">Per km</th>
+                    <th className="px-3 py-2">Per day</th>
                     <th className="whitespace-nowrap px-3 py-2">Actions</th>
                   </tr>
                 ) : (
@@ -455,7 +507,13 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                       <tr key={item.id}>
                         <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                         <td className="px-3 py-3">
-                          <ImageThumbRow urls={images.slice(0, 2)} size={40} max={2} />
+                          <ImageThumbRow
+                            urls={images.slice(0, 2)}
+                            width={88}
+                            height={56}
+                            max={2}
+                            lightboxTitle={item.name}
+                          />
                         </td>
                         <td className="px-3 py-3 font-semibold text-stone-900">{item.name}</td>
                         <td className="px-3 py-3 text-stone-700">{item.category || "—"}</td>
@@ -511,26 +569,94 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                       </tr>
                     );
                   }
-                  return (
-                    <tr key={item.id}>
-                      <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
-                      <td className="px-3 py-3">
-                        <ImageThumbRow urls={images} size={48} max={4} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <p className="font-semibold text-stone-900">{item.name}</p>
-                        {tab === "vehicles" ? (
+                  if (tab === "vehicles") {
+                    const phones = [item.contact_phone_1, item.contact_phone_2]
+                      .filter(Boolean)
+                      .join(" · ");
+                    return (
+                      <tr key={item.id}>
+                        <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
+                        <td className="px-3 py-3">
+                          <ImageThumbRow
+                            urls={images}
+                            width={112}
+                            height={72}
+                            max={4}
+                            lightboxTitle={item.name}
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="font-semibold text-stone-900">{item.name}</p>
                           <p className="text-sm text-stone-500">
                             {[item.vehicle_type, item.capacity ? `${item.capacity} seater` : null]
                               .filter(Boolean)
                               .join(" · ") || "—"}
                           </p>
-                        ) : item.subtitle ? (
+                          {!isOwnCreatedRecord(currentMember, item) ? (
+                            <p className="text-xs text-stone-400">
+                              Created by {item.created_by_name ?? "Unknown"}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-3 text-stone-700">
+                          {item.provider_company_name?.trim() || "—"}
+                        </td>
+                        <td className="px-3 py-3 text-stone-700">
+                          {item.contact_person_name?.trim() || "—"}
+                        </td>
+                        <td className="px-3 py-3 text-stone-700">{phones || "—"}</td>
+                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                          {formatInrAmount(item.price_per_km)}
+                        </td>
+                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                          {formatInrAmount(item.price_per_day)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-3">
+                          <TableRowActions>
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
+                              onClick={() => openEdit(item)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              className="shrink-0"
+                              onClick={() => void remove(item)}
+                            >
+                              Delete
+                            </Button>
+                          </TableRowActions>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  return (
+                    <tr key={item.id}>
+                      <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
+                      <td className="px-3 py-3">
+                        <ImageThumbRow
+                          urls={images}
+                          width={96}
+                          height={64}
+                          max={4}
+                          lightboxTitle={item.name}
+                        />
+                      </td>
+                      <td className="px-3 py-3">
+                        <p className="font-semibold text-stone-900">{item.name}</p>
+                        {item.subtitle ? (
                           <p className="text-sm text-stone-500">{item.subtitle}</p>
                         ) : null}
-                        <p className="text-xs text-stone-400">
-                          Created by {item.created_by_name ?? "Unknown"}
-                        </p>
+                        {!isOwnCreatedRecord(currentMember, item) ? (
+                          <p className="text-xs text-stone-400">
+                            Created by {item.created_by_name ?? "Unknown"}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="whitespace-nowrap px-3 py-3">
                         <TableRowActions>
@@ -559,7 +685,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 {!filtered.length && (
                   <tr>
                     <td
-                      colSpan={tab === "hotels" ? 10 : 4}
+                      colSpan={tab === "hotels" ? 10 : tab === "vehicles" ? 9 : 4}
                       className="px-3 py-8 text-center text-stone-500"
                     >
                       No {heading.title.toLowerCase()} yet.
@@ -577,6 +703,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 item={item}
                 imageCategory={getImageCategory(tab)}
                 showStatus={false}
+                hideOwnCreator={isOwnCreatedRecord(currentMember, item)}
                 onToggleStatus={toggleStatus}
                 onEdit={openEdit}
                 onDelete={remove}
@@ -601,7 +728,9 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         description={
           editing ? `Created by ${editing.created_by_name ?? "Unknown"}` : undefined
         }
-        className={tab === "hotels" ? "sm:max-w-2xl" : "sm:max-w-lg"}
+        className={
+          tab === "hotels" || tab === "vehicles" ? "sm:max-w-2xl" : "sm:max-w-lg"
+        }
       >
         <div className="space-y-4">
           {tab === "vehicles" ? (
@@ -617,25 +746,95 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   required
                 />
               </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="md-type">Type</Label>
+                  <Input
+                    id="md-type"
+                    className="mt-1.5"
+                    value={vehicleType}
+                    onChange={(e) => setVehicleType(e.target.value)}
+                    placeholder="e.g., Sedan"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="md-capacity">Capacity</Label>
+                  <Input
+                    id="md-capacity"
+                    className="mt-1.5"
+                    value={capacity}
+                    onChange={(e) => setCapacity(e.target.value)}
+                    placeholder="e.g., 5"
+                  />
+                </div>
+              </div>
               <div>
-                <Label htmlFor="md-type">Type</Label>
+                <Label htmlFor="md-provider">Vehicle Provider Company Name</Label>
                 <Input
-                  id="md-type"
+                  id="md-provider"
                   className="mt-1.5"
-                  value={vehicleType}
-                  onChange={(e) => setVehicleType(e.target.value)}
-                  placeholder="e.g., Sedan"
+                  value={providerCompanyName}
+                  onChange={(e) => setProviderCompanyName(e.target.value)}
+                  placeholder="Optional"
                 />
               </div>
               <div>
-                <Label htmlFor="md-capacity">Capacity</Label>
+                <Label htmlFor="md-contact-name">Contact Person Name</Label>
                 <Input
-                  id="md-capacity"
+                  id="md-contact-name"
                   className="mt-1.5"
-                  value={capacity}
-                  onChange={(e) => setCapacity(e.target.value)}
-                  placeholder="e.g., 5"
+                  value={contactPersonName}
+                  onChange={(e) => setContactPersonName(e.target.value)}
+                  placeholder="Optional"
                 />
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="md-phone-1">Contact Person Phone Number 1</Label>
+                  <Input
+                    id="md-phone-1"
+                    className="mt-1.5"
+                    type="tel"
+                    value={contactPhone1}
+                    onChange={(e) => setContactPhone1(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="md-phone-2">Contact Person Phone Number 2</Label>
+                  <Input
+                    id="md-phone-2"
+                    className="mt-1.5"
+                    type="tel"
+                    value={contactPhone2}
+                    onChange={(e) => setContactPhone2(e.target.value)}
+                    placeholder="Optional"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="md-price-km">Price — per km cost</Label>
+                  <Input
+                    id="md-price-km"
+                    className="mt-1.5"
+                    value={pricePerKm}
+                    onChange={(e) => setPricePerKm(e.target.value)}
+                    placeholder="e.g., 18"
+                  />
+                  <p className="mt-1 text-xs text-stone-500">Optional · shown as ₹ on the list</p>
+                </div>
+                <div>
+                  <Label htmlFor="md-price-day">Price — per day running cost</Label>
+                  <Input
+                    id="md-price-day"
+                    className="mt-1.5"
+                    value={pricePerDay}
+                    onChange={(e) => setPricePerDay(e.target.value)}
+                    placeholder="e.g., 4500"
+                  />
+                  <p className="mt-1 text-xs text-stone-500">Optional · shown as ₹ on the list</p>
+                </div>
               </div>
               <GalleryImagesField
                 label="Vehicle images (up to 6)"
@@ -817,6 +1016,7 @@ function ContentCard({
   item,
   imageCategory,
   showStatus,
+  hideOwnCreator,
   onToggleStatus,
   onEdit,
   onDelete,
@@ -824,6 +1024,7 @@ function ContentCard({
   item: WebsiteContentItem;
   imageCategory: PlaceholderCategory;
   showStatus: boolean;
+  hideOwnCreator?: boolean;
   onToggleStatus: (item: WebsiteContentItem, v: boolean) => void;
   onEdit: (item: WebsiteContentItem) => void;
   onDelete: (item: WebsiteContentItem) => void;
@@ -845,7 +1046,13 @@ function ContentCard({
       )}
       {images.length > 1 && (
         <div className="mt-2">
-          <ImageThumbRow urls={images} size={36} max={4} />
+          <ImageThumbRow
+            urls={images}
+            width={72}
+            height={48}
+            max={4}
+            lightboxTitle={item.name}
+          />
         </div>
       )}
       <div className="mt-auto space-y-3 pt-6">
@@ -860,7 +1067,26 @@ function ContentCard({
           ) : item.subtitle ? (
             <p className="text-sm text-white/90">{item.subtitle}</p>
           ) : null}
-          <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
+          {item.provider_company_name ? (
+            <p className="text-xs text-white/75">{item.provider_company_name}</p>
+          ) : null}
+          {(item.price_per_km || item.price_per_day) && (
+            <p className="text-xs text-white/75">
+              {[
+                item.price_per_km?.trim()
+                  ? `${formatInrAmount(item.price_per_km)}/km`
+                  : null,
+                item.price_per_day?.trim()
+                  ? `${formatInrAmount(item.price_per_day)}/day`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
+          {!hideOwnCreator ? (
+            <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <Button

@@ -85,7 +85,7 @@ export function AiInsightsPanel() {
             Live
           </Badge>
         </CardTitle>
-        <CardDescription>Suggested actions from Supabase lead data</CardDescription>
+        <CardDescription>Suggested actions from lead data</CardDescription>
       </CardHeader>
       <CardContent className="space-y-2">
         {loading ? (

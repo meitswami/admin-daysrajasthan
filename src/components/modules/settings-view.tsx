@@ -96,8 +96,8 @@ export function SettingsView() {
               </p>
               <p className="text-sm text-stone-600">
                 {!supabaseConfigured
-                  ? `${settings.webGeneral.site_name} (${settings.webGeneral.site_short_name}) — changes apply across admin until Supabase connects.`
-                  : "Switch to Real (production) under System & RBAC to load Master Data from Supabase."}
+                  ? `${settings.webGeneral.site_name} (${settings.webGeneral.site_short_name}) — changes apply across admin until the live database connects.`
+                  : "Switch to Real (production) under System & RBAC to load Master Data from the live database."}
               </p>
             </div>
             <Badge variant="warning">{!supabaseConfigured ? "Mock data" : "DUMMY"}</Badge>
@@ -109,7 +109,7 @@ export function SettingsView() {
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:p-5">
             <Database className="h-8 w-8 shrink-0 text-emerald-700" />
             <div className="flex-1">
-              <p className="font-semibold text-stone-900">Connected to Supabase</p>
+              <p className="font-semibold text-stone-900">Connected to live database</p>
               <p className="text-sm text-stone-600">
                 {settings.webGeneral.site_name} — Master Data and settings use the live database.
               </p>
@@ -279,7 +279,7 @@ export function SettingsView() {
           <CardHeader>
             <CardTitle className="text-base">SMTP Settings</CardTitle>
             <CardDescription>
-              Outbound email for inquiries & notifications. Saved here and synced to Supabase for server delivery.
+              Outbound email for inquiries & notifications. Saved here and synced for server delivery.
               You can also set SMTP_HOST, SMTP_USER, and SMTP_PASSWORD in .env.local.
             </CardDescription>
           </CardHeader>

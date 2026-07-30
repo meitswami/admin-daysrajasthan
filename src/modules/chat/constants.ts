@@ -52,7 +52,7 @@ export const DEFAULT_KNOWLEDGE_SCOPE: KnowledgeScopeConfig = {
   includeFaqs: true,
   includeBlogs: false,
   regionCodes: [],
-  notes: "Packages load live from Supabase itineraries for AI answers.",
+  notes: "Packages load live from catalog itineraries for AI answers.",
 };
 
 export const DEFAULT_PROVIDERS: AiProviderSlot[] = [

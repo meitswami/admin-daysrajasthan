@@ -48,7 +48,7 @@ export async function insertOrMock<T extends Record<string, unknown>>(table: str
         mode: result.mode,
         message:
           result.mode === "demo"
-            ? "Accepted — will persist when Supabase connects"
+            ? "Accepted — will persist when the live database connects"
             : "Created",
         data: result.data,
         id: result.id,

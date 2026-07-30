@@ -72,7 +72,7 @@ export function Header({ title, description }: { title?: string; description?: s
   const unreadChat = chatNotifs.length;
 
   return (
-    <header className="sticky top-0 z-40 w-full min-w-0 max-w-full isolate overflow-x-hidden border-b border-stone-200/80 bg-white">
+    <header className="sticky top-0 z-50 w-full min-w-0 max-w-full border-b border-stone-200/80 bg-white">
       <div className="flex w-full min-w-0 flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <div className="flex min-w-0 items-start gap-3">
           <button
@@ -94,7 +94,7 @@ export function Header({ title, description }: { title?: string; description?: s
             </div>
           )}
         </div>
-        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <div className="relative z-50 flex shrink-0 items-center gap-2 sm:gap-3">
           <div className="relative" ref={notifRef}>
             <button
               type="button"
@@ -117,8 +117,8 @@ export function Header({ title, description }: { title?: string; description?: s
             </button>
             {notifOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                <div className="absolute right-0 z-50 mt-2 w-[min(100vw-2rem,340px)] rounded-xl border border-stone-200 bg-white shadow-xl">
+                <div className="fixed inset-0 z-[60]" onClick={() => setNotifOpen(false)} />
+                <div className="absolute right-0 z-[70] mt-2 w-[min(100vw-2rem,340px)] rounded-xl border border-stone-200 bg-white shadow-xl">
                   <div className="border-b border-stone-100 px-4 py-3">
                     <p className="font-semibold text-stone-900">Notifications</p>
                     <p className="text-xs text-stone-500">
@@ -189,8 +189,8 @@ export function Header({ title, description }: { title?: string; description?: s
             </button>
             {userOpen && (
               <>
-                <div className="fixed inset-0 z-40" onClick={() => setUserOpen(false)} />
-                <div className="absolute right-0 z-50 mt-2 w-48 rounded-xl border border-stone-200 bg-white py-1 shadow-xl">
+                <div className="fixed inset-0 z-[60]" onClick={() => setUserOpen(false)} />
+                <div className="absolute right-0 z-[70] mt-2 w-48 rounded-xl border border-stone-200 bg-white py-1 shadow-xl">
                   <div className="border-b border-stone-100 px-4 py-2.5">
                     <p className="text-sm font-semibold">{me.name}</p>
                     <p className="text-xs text-stone-500">{me.email}</p>

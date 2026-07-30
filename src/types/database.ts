@@ -93,6 +93,15 @@ export interface WebsiteContentItem {
   vehicle_type?: string | null;
   /** Vehicles: seating capacity */
   capacity?: string | null;
+  /** Vehicles: provider company */
+  provider_company_name?: string | null;
+  /** Vehicles: contact person */
+  contact_person_name?: string | null;
+  contact_phone_1?: string | null;
+  contact_phone_2?: string | null;
+  /** Vehicles: pricing */
+  price_per_km?: string | null;
+  price_per_day?: string | null;
   created_at: string;
   created_by_id?: string | null;
   created_by_name?: string | null;

@@ -296,7 +296,7 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
             AI & Chat · Website Platform
           </p>
           <p className="mt-1 text-sm text-stone-600">
-            Configure the live AI travel assistant — packages load from Supabase, providers run online.
+            Configure the live AI travel assistant — packages load from the live catalog, providers run online.
           </p>
         </div>
         <div className="w-full max-w-xs">

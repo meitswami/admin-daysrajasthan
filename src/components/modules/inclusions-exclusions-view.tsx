@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select } from "@/components/ui/input";
+import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { FileUploadField } from "@/components/ui/file-upload-field";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
@@ -28,6 +28,7 @@ export function InclusionsExclusionsView() {
   const [editing, setEditing] = useState<InclusionExclusionItem | null>(null);
   const [kind, setKind] = useState<InclusionExclusionKind>("inclusion");
   const [text, setText] = useState("");
+  const [description, setDescription] = useState("");
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   const canCreate = canCreateMasterData(currentMember);
@@ -48,6 +49,7 @@ export function InclusionsExclusionsView() {
     setEditing(null);
     setKind(defaultKind);
     setText("");
+    setDescription("");
     setImageUrl(null);
     setModalOpen(true);
   }
@@ -56,25 +58,26 @@ export function InclusionsExclusionsView() {
     setEditing(item);
     setKind(item.kind);
     setText(item.text);
+    setDescription(item.description ?? "");
     setImageUrl(item.kind === "inclusion" ? item.image_url : null);
     setModalOpen(true);
   }
 
   async function save() {
     if (!text.trim()) {
-      show("Text is required");
+      show("Title is required");
       return;
     }
     const image = kind === "inclusion" ? imageUrl : null;
     if (editing) {
       await updateInclusionExclusion(
         editing.id,
-        { text, image_url: image, kind },
+        { text, description, image_url: image, kind },
         currentMember
       );
       show("Updated");
     } else {
-      await createInclusionExclusion(kind, text, currentMember, image);
+      await createInclusionExclusion(kind, text, currentMember, image, description);
       show("Created");
     }
     setModalOpen(false);
@@ -117,6 +120,9 @@ export function InclusionsExclusionsView() {
                 ) : null}
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-stone-800">{item.text}</p>
+                  {item.description ? (
+                    <p className="mt-0.5 text-sm text-stone-500">{item.description}</p>
+                  ) : null}
                   <p className="mt-1 text-xs text-stone-400">
                     Created by {item.created_by_name ?? "Unknown"}
                   </p>
@@ -193,11 +199,21 @@ export function InclusionsExclusionsView() {
             </div>
           )}
           <div>
-            <Label>Text *</Label>
+            <Label>Title *</Label>
             <Input
               className="mt-1.5"
               value={text}
               onChange={(e) => setText(e.target.value)}
+            />
+          </div>
+          <div>
+            <Label>Description</Label>
+            <Textarea
+              className="mt-1.5"
+              rows={3}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Optional details…"
             />
           </div>
           {kind === "inclusion" && (

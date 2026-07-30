@@ -31,7 +31,7 @@ const KANBAN_COLUMNS: WorkflowStatus[] = [
 
 export function ItineraryBuilderPipelineView({
   initialRecords,
-  title = "Regular Booking",
+  title = "Itinerary List",
 }: {
   initialRecords: ClientItineraryRecord[];
   title?: string;

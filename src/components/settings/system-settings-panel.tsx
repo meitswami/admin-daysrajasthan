@@ -87,7 +87,7 @@ export function SystemSettingsPanel() {
       return;
     }
     if (!supabaseConfigured && mode === "real") {
-      show("Supabase env is not configured — cannot use Real mode");
+      show("Live database env is not configured — cannot use Real mode");
       return;
     }
     await setDataModeAndPersist(mode);
@@ -138,7 +138,7 @@ export function SystemSettingsPanel() {
               Data Mode
             </CardTitle>
             <CardDescription>
-              Dummy shows mock/local data site-wide. Real uses Supabase only (no seed QRT rows).
+              Dummy shows mock/local data site-wide. Real uses the live database only (no seed QRT rows).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -147,7 +147,7 @@ export function SystemSettingsPanel() {
                 {dataMode === "real" ? "REAL" : "DUMMY"}
               </Badge>
               {!supabaseConfigured && (
-                <span className="text-xs text-red-600">Supabase env not configured — Real mode limited</span>
+                <span className="text-xs text-red-600">Live database env not configured — Real mode limited</span>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -167,7 +167,7 @@ export function SystemSettingsPanel() {
               </Button>
             </div>
             {confirmReal && (
-              <p className="text-xs text-amber-800">Confirm: click Real again to switch to Supabase data.</p>
+              <p className="text-xs text-amber-800">Confirm: click Real again to switch to live database data.</p>
             )}
           </CardContent>
         </Card>
@@ -212,7 +212,7 @@ export function SystemSettingsPanel() {
             RBAC — Team & Permissions
           </CardTitle>
           <CardDescription>
-            Real DB team members load from Supabase. Use Acting as to preview another role.
+            Real DB team members load from the live database. Use Acting as to preview another role.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

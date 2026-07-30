@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       persisted,
       note: persisted
         ? "SMTP saved for server-side delivery"
-        : "Saved locally only — Supabase unavailable",
+        : "Saved locally only — live database unavailable",
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed";

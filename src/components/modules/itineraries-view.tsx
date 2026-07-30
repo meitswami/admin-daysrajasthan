@@ -112,7 +112,7 @@ function ItineraryFormFields({
         <p className="text-sm font-semibold text-amber-900">Upload files</p>
         <PdfUploadField
           label="Upload PDF"
-          hint="Accept PDF only — stored until Supabase storage connects"
+          hint="Accept PDF only — stored until cloud storage connects"
           value={pdfUrl || null}
           onChange={(v) => setPdfUrl(v ?? "")}
           required
@@ -259,7 +259,9 @@ export function ItinerariesView({
       cell: (row) => (
         <ImageThumbRow
           urls={collectDisplayImages(row.cover_image_url, row.gallery_urls)}
-          size={44}
+          width={96}
+          height={64}
+          lightboxTitle={row.package_name}
         />
       ),
       hideOnMobile: true,
@@ -405,7 +407,7 @@ export function ItinerariesView({
     setItems((prev) => [created, ...prev]);
     setAddOpen(false);
     setCloneFrom("");
-    show(cloneSource ? "Itinerary cloned & saved to Supabase" : "Itinerary uploaded to Supabase");
+    show(cloneSource ? "Itinerary cloned & saved" : "Itinerary uploaded");
   }
 
   async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
@@ -443,7 +445,7 @@ export function ItinerariesView({
       setItems((prev) => prev.map((i) => (i.id === editItem.id ? updated : i)));
     }
     setEditItem(null);
-    show("Itinerary updated in Supabase");
+    show("Itinerary updated");
   }
 
   const profile = detailEmail ? getCustomerByEmail(detailEmail) : null;
@@ -541,7 +543,9 @@ export function ItinerariesView({
               <div className="flex gap-3">
                 <ImageThumbRow
                   urls={collectDisplayImages(row.cover_image_url, row.gallery_urls)}
-                  size={48}
+                  width={96}
+                  height={64}
+                  lightboxTitle={row.package_name}
                 />
                 <div className="flex-1">
                   <p className="font-semibold">{row.package_name}</p>

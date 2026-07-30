@@ -43,7 +43,7 @@ export function BulkCrmSync() {
 
   async function handleSyncAll() {
     if (!isSupabaseConfigured() || !isRealDataMode()) {
-      show("CRM sync requires Real mode + Supabase");
+      show("CRM sync requires Real (production) mode");
       return;
     }
     setSyncing(true);

@@ -111,6 +111,18 @@ function mapRow(entity: MasterContentEntity, row: Record<string, unknown>): Webs
     vehicle_type:
       entity === "vehicles" ? ((row.vehicle_type as string | null) ?? null) : undefined,
     capacity: entity === "vehicles" ? ((row.capacity as string | null) ?? null) : undefined,
+    provider_company_name:
+      entity === "vehicles" ? ((row.provider_company_name as string | null) ?? null) : undefined,
+    contact_person_name:
+      entity === "vehicles" ? ((row.contact_person_name as string | null) ?? null) : undefined,
+    contact_phone_1:
+      entity === "vehicles" ? ((row.contact_phone_1 as string | null) ?? null) : undefined,
+    contact_phone_2:
+      entity === "vehicles" ? ((row.contact_phone_2 as string | null) ?? null) : undefined,
+    price_per_km:
+      entity === "vehicles" ? ((row.price_per_km as string | null) ?? null) : undefined,
+    price_per_day:
+      entity === "vehicles" ? ((row.price_per_day as string | null) ?? null) : undefined,
     created_at: String(row.created_at ?? new Date().toISOString()),
     created_by_id: (row.created_by as string | null) ?? null,
     created_by_name: (row.created_by_name as string | null) ?? null,
@@ -158,6 +170,12 @@ export type MasterContentInput = {
   reviews_count?: number | null;
   vehicle_type?: string | null;
   capacity?: string | null;
+  provider_company_name?: string | null;
+  contact_person_name?: string | null;
+  contact_phone_1?: string | null;
+  contact_phone_2?: string | null;
+  price_per_km?: string | null;
+  price_per_day?: string | null;
 };
 
 export async function createMasterContent(
@@ -199,6 +217,14 @@ export async function createMasterContent(
     reviews_count: entity === "hotels" ? (input.reviews_count ?? 0) : undefined,
     vehicle_type: entity === "vehicles" ? input.vehicle_type?.trim() || null : undefined,
     capacity: entity === "vehicles" ? input.capacity?.trim() || null : undefined,
+    provider_company_name:
+      entity === "vehicles" ? input.provider_company_name?.trim() || null : undefined,
+    contact_person_name:
+      entity === "vehicles" ? input.contact_person_name?.trim() || null : undefined,
+    contact_phone_1: entity === "vehicles" ? input.contact_phone_1?.trim() || null : undefined,
+    contact_phone_2: entity === "vehicles" ? input.contact_phone_2?.trim() || null : undefined,
+    price_per_km: entity === "vehicles" ? input.price_per_km?.trim() || null : undefined,
+    price_per_day: entity === "vehicles" ? input.price_per_day?.trim() || null : undefined,
     created_at: now,
     updated_at: now,
     created_by_id: actor.id,
@@ -235,6 +261,12 @@ export async function createMasterContent(
       if (entity === "vehicles") {
         payload.vehicle_type = item.vehicle_type ?? null;
         payload.capacity = item.capacity ?? null;
+        payload.provider_company_name = item.provider_company_name ?? null;
+        payload.contact_person_name = item.contact_person_name ?? null;
+        payload.contact_phone_1 = item.contact_phone_1 ?? null;
+        payload.contact_phone_2 = item.contact_phone_2 ?? null;
+        payload.price_per_km = item.price_per_km ?? null;
+        payload.price_per_day = item.price_per_day ?? null;
       }
 
       const { error } = await supabase.from(TABLE_MAP[entity]).insert(payload);
@@ -321,6 +353,16 @@ export async function updateMasterContent(
       if (entity === "vehicles") {
         if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
         if (patch.capacity !== undefined) payload.capacity = patch.capacity;
+        if (patch.provider_company_name !== undefined) {
+          payload.provider_company_name = patch.provider_company_name;
+        }
+        if (patch.contact_person_name !== undefined) {
+          payload.contact_person_name = patch.contact_person_name;
+        }
+        if (patch.contact_phone_1 !== undefined) payload.contact_phone_1 = patch.contact_phone_1;
+        if (patch.contact_phone_2 !== undefined) payload.contact_phone_2 = patch.contact_phone_2;
+        if (patch.price_per_km !== undefined) payload.price_per_km = patch.price_per_km;
+        if (patch.price_per_day !== undefined) payload.price_per_day = patch.price_per_day;
       }
 
       const { data, error } = await supabase

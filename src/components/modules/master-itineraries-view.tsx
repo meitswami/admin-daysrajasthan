@@ -444,7 +444,9 @@ export function MasterItinerariesView() {
                     <td className="px-3 py-3">
                       <ImageThumbRow
                         urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
-                        size={44}
+                        width={96}
+                        height={64}
+                        lightboxTitle={item.package_name}
                       />
                     </td>
                     <td className="px-3 py-3">

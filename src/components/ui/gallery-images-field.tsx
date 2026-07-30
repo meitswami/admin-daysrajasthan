@@ -7,6 +7,7 @@ import { Loader2, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
+import { ImageLightbox } from "@/components/ui/image-lightbox";
 
 export const MAX_GALLERY_IMAGES = 6;
 
@@ -46,47 +47,175 @@ export function collectDisplayImages(
   return out;
 }
 
-/** Horizontal strip of thumbnails (list / table rows). */
+function thumbNeedsUnoptimized(src: string): boolean {
+  return src.startsWith("data:") || src.startsWith("blob:");
+}
+
+/** Prefer a compact remote URL when the host supports resize (Unsplash / Supabase). */
+export function thumbnailSrc(
+  src: string,
+  edgePx: number,
+  fit: "cover" | "contain" = "contain"
+): string {
+  if (!src || thumbNeedsUnoptimized(src)) return src;
+  try {
+    const url = new URL(src);
+    if (url.hostname === "images.unsplash.com") {
+      url.searchParams.set("w", String(edgePx));
+      url.searchParams.set("h", String(edgePx));
+      url.searchParams.set("fit", fit === "cover" ? "crop" : "max");
+      url.searchParams.set("q", "60");
+      url.searchParams.set("auto", "format");
+      return url.toString();
+    }
+    if (url.pathname.includes("/storage/v1/object/public/")) {
+      url.pathname = url.pathname.replace(
+        "/storage/v1/object/public/",
+        "/storage/v1/render/image/public/"
+      );
+      url.searchParams.set("width", String(edgePx));
+      url.searchParams.set("height", String(edgePx));
+      url.searchParams.set("resize", fit === "cover" ? "cover" : "contain");
+      url.searchParams.set("quality", "60");
+      return url.toString();
+    }
+  } catch {
+    /* keep original */
+  }
+  return src;
+}
+
+function ThumbImage({
+  src,
+  width,
+  height,
+  requestEdge,
+  objectFit,
+  onOpen,
+}: {
+  src: string;
+  width: number;
+  height: number;
+  requestEdge: number;
+  objectFit: "cover" | "contain";
+  onOpen?: () => void;
+}) {
+  const preferred = thumbnailSrc(src, requestEdge, objectFit);
+  const [current, setCurrent] = useState(preferred);
+  const unoptimized =
+    thumbNeedsUnoptimized(current) ||
+    current !== src; /* already resized at the CDN */
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      disabled={!onOpen}
+      className={cn(
+        "relative shrink-0 overflow-hidden rounded border border-stone-200 bg-stone-100",
+        onOpen && "cursor-zoom-in transition hover:border-stone-300 hover:ring-1 hover:ring-amber-300/60"
+      )}
+      style={{ width, height }}
+      aria-label={onOpen ? "View image" : undefined}
+    >
+      <Image
+        src={current}
+        alt=""
+        width={width}
+        height={height}
+        sizes={`${Math.max(width, height)}px`}
+        loading="lazy"
+        decoding="async"
+        quality={65}
+        unoptimized={unoptimized}
+        className={cn(
+          "h-full w-full",
+          objectFit === "contain" ? "object-contain" : "object-cover"
+        )}
+        onError={() => {
+          if (current !== src) setCurrent(src);
+        }}
+      />
+    </button>
+  );
+}
+
+/** Horizontal strip of thumbnails (list / table rows). Click opens lightbox. */
 export function ImageThumbRow({
   urls,
   className,
-  size = 44,
+  size = 56,
+  width,
+  height,
   max = MAX_GALLERY_IMAGES,
+  objectFit = "contain",
+  enableLightbox = true,
+  lightboxTitle = "Images",
 }: {
   urls: string[];
   className?: string;
+  /** Square edge when width/height not set */
   size?: number;
+  width?: number;
+  height?: number;
   max?: number;
+  objectFit?: "cover" | "contain";
+  enableLightbox?: boolean;
+  lightboxTitle?: string;
 }) {
   const list = urls.slice(0, max);
+  const w = width ?? Math.round(size * 1.55);
+  const h = height ?? size;
+  const requestEdge = Math.min(320, Math.max(96, Math.max(w, h) * 2));
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
   if (list.length === 0) {
     return (
       <div
-        className={cn("flex items-center gap-1", className)}
-        style={{ minHeight: size }}
+        className={cn("flex items-center gap-1.5", className)}
+        style={{ minHeight: h }}
       >
         <div
           className="rounded border border-dashed border-stone-200 bg-stone-50"
-          style={{ width: size, height: size }}
+          style={{ width: w, height: h }}
         />
       </div>
     );
   }
+
   return (
-    <div className={cn("flex items-center gap-1", className)}>
-      {list.map((src) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={src}
-          src={src}
-          alt=""
-          width={size}
-          height={size}
-          className="rounded object-cover"
-          style={{ width: size, height: size }}
+    <>
+      <div className={cn("flex items-center gap-1.5", className)}>
+        {list.map((src, i) => (
+          <ThumbImage
+            key={src}
+            src={src}
+            width={w}
+            height={h}
+            requestEdge={requestEdge}
+            objectFit={objectFit}
+            onOpen={
+              enableLightbox
+                ? () => {
+                    setLightboxIndex(i);
+                    setLightboxOpen(true);
+                  }
+                : undefined
+            }
+          />
+        ))}
+      </div>
+      {enableLightbox ? (
+        <ImageLightbox
+          open={lightboxOpen}
+          urls={urls}
+          startIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          title={lightboxTitle}
         />
-      ))}
-    </div>
+      ) : null}
+    </>
   );
 }
 

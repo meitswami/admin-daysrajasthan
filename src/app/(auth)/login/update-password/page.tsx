@@ -107,7 +107,7 @@ export default function UpdatePasswordPage() {
             {error && <p className="text-sm text-red-600">{error}</p>}
             {!ready && (
               <p className="text-xs text-amber-800">
-                Open this page from the email reset link so Supabase can restore your recovery session.
+                Open this page from the email reset link so your recovery session can be restored.
               </p>
             )}
             <Button type="submit" className="w-full" disabled={loading}>

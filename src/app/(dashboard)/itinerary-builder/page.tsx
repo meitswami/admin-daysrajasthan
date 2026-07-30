@@ -6,7 +6,7 @@ export default function ItineraryBuilderPage() {
   return (
     <>
       <Header
-        title="Regular Booking"
+        title="Itinerary List"
         description="Pending quotes, multi-tier pricing, WhatsApp & email actions — V1 parity list"
       />
       <ItineraryBuilderPipelineView initialRecords={SEED_ITINERARY_RECORDS} />
