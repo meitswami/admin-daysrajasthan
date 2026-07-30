@@ -24,6 +24,7 @@ import {
 } from "@/lib/itinerary-builder/storage";
 import type {
   ClientItineraryRecord,
+  HotelCategoryKey,
   ItineraryRevision,
   ItinerarySnapshot,
 } from "@/types/itinerary-builder";
@@ -100,7 +101,9 @@ export function ItineraryBuilderWorkspace({
     const prevOverrides = Object.fromEntries(
       snapshot.category_pricing.map((c) => [c.category_key, c.manual_override])
     );
-    const keys = (prevKeys.length ? prevKeys : ["deluxe_hotels"]).slice(0, 2);
+    const keys: HotelCategoryKey[] = (
+      prevKeys.length ? prevKeys : (["deluxe_hotels"] as HotelCategoryKey[])
+    ).slice(0, 2);
     const merged = normalizeSnapshot({
       ...template,
       client: snapshot.client,

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
-import { CLIENT_TITLES, type ClientDetails, type ItinerarySnapshot } from "@/types/itinerary-builder";
+import { CLIENT_TITLES, type ClientDetails, type HotelCategoryKey, type ItinerarySnapshot } from "@/types/itinerary-builder";
 import {
   catalogFromMasterItineraries,
   filterPackages,
@@ -163,7 +163,9 @@ export function NewItineraryWizard() {
     const next = buildDraftFromPackage(nextPackageId, {
       preserveClient: draft.client,
     });
-    const keys = (prevKeys.length ? prevKeys : ["deluxe_hotels"]).slice(0, 2);
+    const keys: HotelCategoryKey[] = (
+      prevKeys.length ? prevKeys : (["deluxe_hotels"] as HotelCategoryKey[])
+    ).slice(0, 2);
     const category_pricing = buildCategoryPricing(next, keys, prevDiscounts, prevOverrides);
     setDraft(
       normalizeSnapshot({
