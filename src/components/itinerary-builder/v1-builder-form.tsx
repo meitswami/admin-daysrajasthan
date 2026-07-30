@@ -1,6 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
@@ -16,6 +33,7 @@ import {
   formatInr,
   hotelBlockDaysFromItinerary,
   isDepartureLocation,
+  lastDayDepartureError,
   normalizeVehicleType,
   parseDayCountFromDurationInput,
   resizeDaysPreservingCache,
@@ -58,6 +76,7 @@ import {
   Check,
   Coffee,
   FileText,
+  GripVertical,
   IndianRupee,
   Info,
   Lightbulb,
@@ -102,6 +121,42 @@ function ensureDepartureInCatalog(entries: LocationCatalogEntry[]): LocationCata
   }
   return [...entries, { name: DEPARTURE_LOCATION, photos: [] }].sort((a, b) =>
     a.name.localeCompare(b.name)
+  );
+}
+
+function SortableDayCard({
+  id,
+  children,
+}: {
+  id: string;
+  children: (dragHandle: ReactNode) => ReactNode;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.88 : 1,
+    zIndex: isDragging ? 20 : undefined,
+    position: "relative",
+  };
+  const dragHandle = (
+    <button
+      type="button"
+      className="inline-flex cursor-grab touch-none items-center justify-center rounded-md p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-600 active:cursor-grabbing"
+      aria-label="Drag to reorder day"
+      title="Drag to reorder"
+      {...attributes}
+      {...listeners}
+    >
+      <GripVertical className="h-5 w-5" />
+    </button>
+  );
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children(dragHandle)}
+    </div>
   );
 }
 
@@ -811,6 +866,12 @@ export function V1BuilderForm({
     [locationCatalog]
   );
   const vehicles = useMemo(() => vehicleOptions(vehicleCatalog), [vehicleCatalog]);
+  const dayIds = useMemo(() => s.days.map((d) => d.day_uuid), [s.days]);
+  const lastDayMissingDeparture = Boolean(lastDayDepartureError(s.days));
+  const daySensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
   const selectedKeys = s.category_pricing.map((c) => c.category_key) as HotelCategoryKey[];
   /** Night cards match days; last day omitted only when location is Departure. */
   const hotelBlockDays = hotelBlockDaysFromItinerary(s.days);
@@ -1034,6 +1095,54 @@ export function V1BuilderForm({
       header: next.header,
       ...pricingFrom(next),
     });
+  }
+
+  function reorderDays(fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return;
+    const days = arrayMove(s.days, fromIndex, toIndex).map((d, i) => ({
+      ...d,
+      day_number: i + 1,
+    }));
+    days.forEach((d, i) => {
+      dayCacheRef.current[i] = d;
+    });
+    const next = {
+      ...s,
+      days,
+      header: { ...s.header, duration_label: durationLabelFromDays(days) },
+    };
+    patch({
+      days,
+      header: next.header,
+      ...pricingFrom(next),
+    });
+  }
+
+  function onDayDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const fromIndex = s.days.findIndex((d) => d.day_uuid === active.id);
+    const toIndex = s.days.findIndex((d) => d.day_uuid === over.id);
+    reorderDays(fromIndex, toIndex);
+  }
+
+  function requireLastDayDeparture(): boolean {
+    const err = lastDayDepartureError(s.days);
+    if (err) {
+      show(err);
+      return false;
+    }
+    return true;
+  }
+
+  function handleSaveClick() {
+    if (!requireLastDayDeparture()) return;
+    onSave();
+  }
+
+  function handlePreviewClick() {
+    if (!requireLastDayDeparture()) return;
+    onPreview();
   }
 
   function toggleCategory(key: HotelCategoryKey) {
@@ -1388,8 +1497,8 @@ export function V1BuilderForm({
                   onChange={(e) => onDurationInputChange(e.target.value)}
                 />
                 <p className="mt-1.5 text-xs text-stone-500">
-                  Type days (e.g. 03). Day and night cards stay equal; set the last day location to
-                  Departure to drop one night (03 Days / 02 Nights).
+                  Type days (e.g. 03). Drag day cards to reorder — numbers update automatically. The
+                  last day location must be Departure (drops one night, e.g. 03 Days / 02 Nights).
                   {durationFocused &&
                     (() => {
                       const preview = parseDayCountFromDurationInput(durationDraft);
@@ -1418,13 +1527,36 @@ export function V1BuilderForm({
               </Button>
             </div>
 
-            {s.days.map((day, dayIndex) => (
+            {lastDayMissingDeparture && (
+              <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                The last day must have Location set to <strong>Departure</strong> before saving.
+              </p>
+            )}
+
+            <DndContext
+              sensors={daySensors}
+              collisionDetection={closestCenter}
+              onDragEnd={onDayDragEnd}
+            >
+              <SortableContext items={dayIds} strategy={verticalListSortingStrategy}>
+                {s.days.map((day, dayIndex) => {
+                  const isLastDay = dayIndex === s.days.length - 1;
+                  return (
+                    <SortableDayCard key={day.day_uuid} id={day.day_uuid}>
+                      {(dragHandle) => (
               <div
-                key={day.day_uuid}
-                className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5"
+                className={cn(
+                  "rounded-2xl border bg-white p-4 sm:p-5",
+                  isLastDay && lastDayMissingDeparture
+                    ? "border-amber-300"
+                    : "border-stone-200"
+                )}
               >
                 <div className="mb-4 flex items-center justify-between gap-2">
-                  <h3 className="text-lg font-semibold text-blue-700">Day {day.day_number}</h3>
+                  <div className="flex items-center gap-1.5">
+                    {dragHandle}
+                    <h3 className="text-lg font-semibold text-blue-700">Day {day.day_number}</h3>
+                  </div>
                   <button
                     type="button"
                     onClick={() => removeDay(dayIndex)}
@@ -1501,6 +1633,11 @@ export function V1BuilderForm({
                   <div>
                     <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500">
                       Locations
+                      {isLastDay ? (
+                        <span className="ml-1 font-normal normal-case text-amber-700">
+                          (required: Departure)
+                        </span>
+                      ) : null}
                     </p>
                     <Select
                       value={
@@ -1512,6 +1649,9 @@ export function V1BuilderForm({
                           : ""
                       }
                       onChange={(e) => setDayLocation(dayIndex, e.target.value)}
+                      className={cn(
+                        isLastDay && lastDayMissingDeparture && "border-amber-400"
+                      )}
                     >
                       <option value="">Select location</option>
                       {day.location &&
@@ -1527,6 +1667,11 @@ export function V1BuilderForm({
                         </option>
                       ))}
                     </Select>
+                    {isLastDay && lastDayMissingDeparture ? (
+                      <p className="mt-1.5 text-xs text-amber-700">
+                        Set this to Departure for the final day.
+                      </p>
+                    ) : null}
                   </div>
 
                   <div>
@@ -1599,7 +1744,12 @@ export function V1BuilderForm({
                   </div>
                 </div>
               </div>
-            ))}
+                      )}
+                    </SortableDayCard>
+                  );
+                })}
+              </SortableContext>
+            </DndContext>
           </section>
         </div>
 
@@ -1790,10 +1940,14 @@ export function V1BuilderForm({
               />
             );
           })}
-          {isDepartureLocation(s.days[s.days.length - 1]?.location) && (
+          {isDepartureLocation(s.days[s.days.length - 1]?.location) ? (
               <p className="text-xs text-stone-500">
                 Last day is Departure — Night {String(s.days.length).padStart(2, "0")} is omitted.
                 Hotel data is kept if you change the location back.
+              </p>
+            ) : (
+              <p className="text-xs text-amber-700">
+                Set the last day&apos;s location to Departure to omit the final night hotel block.
               </p>
             )}
         </div>
@@ -1801,7 +1955,7 @@ export function V1BuilderForm({
 
       {hasItineraryEdits ? (
         <div className="flex justify-start pb-2">
-          <Button type="button" onClick={onSave} className="bg-emerald-600 hover:bg-emerald-700">
+          <Button type="button" onClick={handleSaveClick} className="bg-emerald-600 hover:bg-emerald-700">
             <Save className="h-4 w-4" />
             {saveLabel}
           </Button>
@@ -1844,7 +1998,7 @@ export function V1BuilderForm({
           <StickyNote className="h-4 w-4" />
           Add Note
         </Button>
-        <Button type="button" onClick={onPreview} className="bg-slate-800 hover:bg-slate-900">
+        <Button type="button" onClick={handlePreviewClick} className="bg-slate-800 hover:bg-slate-900">
           <Eye className="h-4 w-4" />
           Preview & Confirm
         </Button>

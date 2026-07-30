@@ -8,7 +8,7 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { WorkflowStatusBadge } from "@/components/itinerary-builder/workflow-status-badge";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
-import { applyCostToSnapshot, durationLabelFromDays } from "@/lib/itinerary-builder/cost-engine";
+import { applyCostToSnapshot, durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   buildCategoryPricing,
@@ -135,6 +135,11 @@ export function ItineraryBuilderWorkspace({
   }
 
   function handleSave(milestone?: string): ClientItineraryRecord | null {
+    const departureErr = lastDayDepartureError(snapshot.days);
+    if (departureErr) {
+      show(departureErr);
+      return null;
+    }
     try {
       const result = saveSnapshotRevision(itineraryId, snapshot, {
         save_type: "manual",

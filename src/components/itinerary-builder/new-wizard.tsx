@@ -18,7 +18,7 @@ import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
 import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import { emptySnapshot } from "@/lib/itinerary-builder/defaults";
-import { durationLabelFromDays } from "@/lib/itinerary-builder/cost-engine";
+import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
@@ -241,6 +241,11 @@ export function NewItineraryWizard() {
     }
     if (draft.category_pricing.length === 0) {
       show("Select at least one hotel category");
+      return;
+    }
+    const departureErr = lastDayDepartureError(draft.days);
+    if (departureErr) {
+      show(departureErr);
       return;
     }
 

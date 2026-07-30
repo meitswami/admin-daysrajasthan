@@ -419,8 +419,11 @@ export function Theme2About({
       </div>
 
       <div
-        className="relative overflow-hidden rounded-xl px-4 py-10 text-center"
-        style={{ backgroundColor: tone }}
+        className={cn(
+          "relative overflow-hidden rounded-xl px-4 py-10 text-center",
+          variant === "theme3" && "bg-[#9F0712]"
+        )}
+        style={variant === "theme3" ? undefined : { backgroundColor: tone }}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img

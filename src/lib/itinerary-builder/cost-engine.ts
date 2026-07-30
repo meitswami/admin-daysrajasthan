@@ -332,6 +332,13 @@ export function isDepartureLocation(location: string | null | undefined): boolea
   return (location ?? "").trim().toLowerCase() === "departure";
 }
 
+/** Last itinerary day must be Departure (drops the final overnight). */
+export function lastDayDepartureError(days: ItineraryDay[]): string | null {
+  if (!days?.length) return null;
+  if (isDepartureLocation(days[days.length - 1]?.location)) return null;
+  return 'The last day must have Location set to "Departure"';
+}
+
 /** Hotel nights: one per day, minus the last day when it is Departure. */
 export function nightCountFromDays(days: ItineraryDay[]): number {
   const n = days?.length ?? 0;
