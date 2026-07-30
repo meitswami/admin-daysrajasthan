@@ -15,7 +15,7 @@ import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-tab
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
 import type { Itinerary, ItineraryDayPlan } from "@/types/database";
-import { canCreateMasterData } from "@/lib/rbac/ownership";
+import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
 import {
   createMasterItinerary,
   deleteMasterItinerary,
@@ -513,7 +513,8 @@ export function MasterItinerariesView() {
         title={editing ? "Manage Itinerary" : "Manage Itinerary"}
         description={
           editing
-            ? `Created by ${editing.created_by_name ?? "Unknown"}`
+            ? createdByAttribution(currentMember, editing) ??
+              "Titles, duration, tour code & day-wise plan"
             : "Titles, duration, tour code & day-wise plan"
         }
         className="sm:max-w-3xl"

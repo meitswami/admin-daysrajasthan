@@ -9,7 +9,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import { canCreateMasterData } from "@/lib/rbac/ownership";
+import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
 import {
   createMasterCategory,
   deleteMasterCategory,
@@ -110,7 +110,7 @@ export function MasterDataCategoriesView() {
                   <td className="px-4 py-3 font-medium text-stone-900">{item.label}</td>
                   <td className="px-4 py-3 text-stone-700">{item.room_category}</td>
                   <td className="px-4 py-3 text-xs text-stone-500">
-                    {item.created_by_name ?? "Unknown"}
+                    {createdByAttribution(currentMember, item) ?? ""}
                   </td>
                   <td className="px-4 py-3">
                     <div>

@@ -8,7 +8,7 @@ import { Modal } from "@/components/ui/modal";
 import { PageMain } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import { canCreateMasterData } from "@/lib/rbac/ownership";
+import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
 import {
   createMasterPolicy,
   deleteMasterPolicy,
@@ -106,7 +106,9 @@ export function PoliciesMasterView() {
                   )}
                 </div>
                 <ul className="space-y-2">
-                  {lines.map((item, idx) => (
+                  {lines.map((item, idx) => {
+                    const createdBy = createdByAttribution(currentMember, item);
+                    return (
                     <li
                       key={item.id}
                       className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm"
@@ -116,9 +118,9 @@ export function PoliciesMasterView() {
                           <span className="mr-2 text-stone-400">{idx + 1}.</span>
                           {item.title}
                         </p>
-                        <p className="mt-1 text-xs text-stone-400">
-                          Created by {item.created_by_name ?? "Unknown"}
-                        </p>
+                        {createdBy ? (
+                          <p className="mt-1 text-xs text-stone-400">{createdBy}</p>
+                        ) : null}
                       </div>
                       <div className="flex shrink-0 flex-wrap gap-2">
                         <Button
@@ -139,7 +141,8 @@ export function PoliciesMasterView() {
                         </Button>
                       </div>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </section>
             );

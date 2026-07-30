@@ -8,8 +8,15 @@ import { Input, Label, Select } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { WorkflowStatusBadge } from "@/components/itinerary-builder/workflow-status-badge";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
-import { applyCostToSnapshot } from "@/lib/itinerary-builder/cost-engine";
+import { applyCostToSnapshot, durationLabelFromDays } from "@/lib/itinerary-builder/cost-engine";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
+import {
+  buildCategoryPricing,
+  catalogFromMasterItineraries,
+  getPackageById,
+  type PackageCatalogEntry,
+} from "@/lib/itinerary-builder/package-catalog";
+import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
 import {
   getClientItinerary,
   getRevisions,
@@ -44,6 +51,7 @@ export function ItineraryBuilderWorkspace({
   );
   const [clientPanelOpen, setClientPanelOpen] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [packageCatalog, setPackageCatalog] = useState<PackageCatalogEntry[]>([]);
 
   const refresh = useCallback(() => {
     const r = getClientItinerary(itineraryId);
@@ -57,9 +65,70 @@ export function ItineraryBuilderWorkspace({
     refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterItineraries()
+      .then((items) => {
+        if (!cancelled) {
+          setPackageCatalog(catalogFromMasterItineraries(items, { includeInactive: true }));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setPackageCatalog([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function updateSnapshot(next: ItinerarySnapshot) {
     setSnapshot(applyCostToSnapshot(normalizeSnapshot(next)));
     setDirty(true);
+  }
+
+  /** Tour code updates only when a different pre-existing package is selected. */
+  function applyPackageSelection(nextPackageId: string) {
+    const pkg = getPackageById(nextPackageId, packageCatalog);
+    if (!pkg) return;
+    if (snapshot.source_package_id === nextPackageId) return;
+
+    const template = pkg.buildTemplate();
+    const prevKeys = snapshot.category_pricing.map((c) => c.category_key);
+    const prevDiscounts = Object.fromEntries(
+      snapshot.category_pricing.map((c) => [c.category_key, c.discount_price])
+    );
+    const prevOverrides = Object.fromEntries(
+      snapshot.category_pricing.map((c) => [c.category_key, c.manual_override])
+    );
+    const keys = (prevKeys.length ? prevKeys : ["deluxe_hotels"]).slice(0, 2);
+    const merged = normalizeSnapshot({
+      ...template,
+      client: snapshot.client,
+      header: {
+        ...template.header,
+        title: pkg.title,
+        tour_code: pkg.tour_code,
+        duration_label: durationLabelFromDays(template.days),
+        alternate_titles: template.header.alternate_titles ?? [],
+      },
+      source_package_id: nextPackageId,
+      vehicle_type: snapshot.vehicle_type,
+      vehicle_types: snapshot.vehicle_types,
+      price_basis: snapshot.price_basis,
+      optional_inclusion_keys: snapshot.optional_inclusion_keys,
+      advance_percent: snapshot.advance_percent,
+    });
+    const category_pricing = buildCategoryPricing(
+      merged,
+      keys,
+      prevDiscounts,
+      prevOverrides
+    );
+    updateSnapshot({
+      ...merged,
+      category_pricing,
+      final_price: category_pricing[0]?.grand_total ?? null,
+    });
   }
 
   function handleSave(milestone?: string): ClientItineraryRecord | null {
@@ -129,6 +198,8 @@ export function ItineraryBuilderWorkspace({
         <V1BuilderForm
           snapshot={snapshot}
           onChange={updateSnapshot}
+          packageCatalog={packageCatalog}
+          onSelectPackage={applyPackageSelection}
           onSave={() => {
             handleSave();
             router.push("/itinerary-builder");

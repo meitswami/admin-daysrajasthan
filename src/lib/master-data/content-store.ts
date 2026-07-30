@@ -1,4 +1,4 @@
-import type { DisplayMode, WebsiteContentItem } from "@/types/database";
+import type { DisplayMode, VehicleProvider, WebsiteContentItem } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
 import {
   destinations as seedDestinations,
@@ -7,6 +7,11 @@ import {
 } from "@/lib/data/website-content";
 import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logMasterDataChange } from "@/lib/master-data/audit";
+import {
+  flatFieldsFromProviders,
+  normalizeVehicleProviders,
+  parseProvidersColumn,
+} from "@/lib/master-data/vehicle-providers";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 /** Real mode + configured env → Supabase. Dummy → local mock/seed. */
@@ -111,18 +116,30 @@ function mapRow(entity: MasterContentEntity, row: Record<string, unknown>): Webs
     vehicle_type:
       entity === "vehicles" ? ((row.vehicle_type as string | null) ?? null) : undefined,
     capacity: entity === "vehicles" ? ((row.capacity as string | null) ?? null) : undefined,
-    provider_company_name:
-      entity === "vehicles" ? ((row.provider_company_name as string | null) ?? null) : undefined,
-    contact_person_name:
-      entity === "vehicles" ? ((row.contact_person_name as string | null) ?? null) : undefined,
-    contact_phone_1:
-      entity === "vehicles" ? ((row.contact_phone_1 as string | null) ?? null) : undefined,
-    contact_phone_2:
-      entity === "vehicles" ? ((row.contact_phone_2 as string | null) ?? null) : undefined,
-    price_per_km:
-      entity === "vehicles" ? ((row.price_per_km as string | null) ?? null) : undefined,
-    price_per_day:
-      entity === "vehicles" ? ((row.price_per_day as string | null) ?? null) : undefined,
+    ...(entity === "vehicles"
+      ? (() => {
+          const flat = {
+            provider_company_name: (row.provider_company_name as string | null) ?? null,
+            contact_person_name: (row.contact_person_name as string | null) ?? null,
+            contact_phone_1: (row.contact_phone_1 as string | null) ?? null,
+            contact_phone_2: (row.contact_phone_2 as string | null) ?? null,
+            price_per_km: (row.price_per_km as string | null) ?? null,
+            price_per_day: (row.price_per_day as string | null) ?? null,
+            providers: parseProvidersColumn(row.providers),
+          };
+          const providers = normalizeVehicleProviders(flat);
+          const synced = flatFieldsFromProviders(providers);
+          return {
+            providers: synced.providers,
+            provider_company_name: synced.provider_company_name,
+            contact_person_name: synced.contact_person_name,
+            contact_phone_1: synced.contact_phone_1,
+            contact_phone_2: synced.contact_phone_2,
+            price_per_km: synced.price_per_km,
+            price_per_day: synced.price_per_day,
+          };
+        })()
+      : {}),
     created_at: String(row.created_at ?? new Date().toISOString()),
     created_by_id: (row.created_by as string | null) ?? null,
     created_by_name: (row.created_by_name as string | null) ?? null,
@@ -170,6 +187,7 @@ export type MasterContentInput = {
   reviews_count?: number | null;
   vehicle_type?: string | null;
   capacity?: string | null;
+  providers?: VehicleProvider[];
   provider_company_name?: string | null;
   contact_person_name?: string | null;
   contact_phone_1?: string | null;
@@ -217,14 +235,20 @@ export async function createMasterContent(
     reviews_count: entity === "hotels" ? (input.reviews_count ?? 0) : undefined,
     vehicle_type: entity === "vehicles" ? input.vehicle_type?.trim() || null : undefined,
     capacity: entity === "vehicles" ? input.capacity?.trim() || null : undefined,
-    provider_company_name:
-      entity === "vehicles" ? input.provider_company_name?.trim() || null : undefined,
-    contact_person_name:
-      entity === "vehicles" ? input.contact_person_name?.trim() || null : undefined,
-    contact_phone_1: entity === "vehicles" ? input.contact_phone_1?.trim() || null : undefined,
-    contact_phone_2: entity === "vehicles" ? input.contact_phone_2?.trim() || null : undefined,
-    price_per_km: entity === "vehicles" ? input.price_per_km?.trim() || null : undefined,
-    price_per_day: entity === "vehicles" ? input.price_per_day?.trim() || null : undefined,
+    ...(entity === "vehicles"
+      ? flatFieldsFromProviders(
+          input.providers ??
+            normalizeVehicleProviders({
+              providers: undefined,
+              provider_company_name: input.provider_company_name,
+              contact_person_name: input.contact_person_name,
+              contact_phone_1: input.contact_phone_1,
+              contact_phone_2: input.contact_phone_2,
+              price_per_km: input.price_per_km,
+              price_per_day: input.price_per_day,
+            })
+        )
+      : {}),
     created_at: now,
     updated_at: now,
     created_by_id: actor.id,
@@ -261,6 +285,7 @@ export async function createMasterContent(
       if (entity === "vehicles") {
         payload.vehicle_type = item.vehicle_type ?? null;
         payload.capacity = item.capacity ?? null;
+        payload.providers = item.providers ?? [];
         payload.provider_company_name = item.provider_company_name ?? null;
         payload.contact_person_name = item.contact_person_name ?? null;
         payload.contact_phone_1 = item.contact_phone_1 ?? null;
@@ -353,16 +378,49 @@ export async function updateMasterContent(
       if (entity === "vehicles") {
         if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
         if (patch.capacity !== undefined) payload.capacity = patch.capacity;
-        if (patch.provider_company_name !== undefined) {
-          payload.provider_company_name = patch.provider_company_name;
+        if (
+          patch.providers !== undefined ||
+          patch.provider_company_name !== undefined ||
+          patch.contact_person_name !== undefined ||
+          patch.contact_phone_1 !== undefined ||
+          patch.contact_phone_2 !== undefined ||
+          patch.price_per_km !== undefined ||
+          patch.price_per_day !== undefined
+        ) {
+          const synced = flatFieldsFromProviders(
+            patch.providers ??
+              normalizeVehicleProviders({
+                providers: before?.providers,
+                provider_company_name:
+                  patch.provider_company_name !== undefined
+                    ? patch.provider_company_name
+                    : before?.provider_company_name,
+                contact_person_name:
+                  patch.contact_person_name !== undefined
+                    ? patch.contact_person_name
+                    : before?.contact_person_name,
+                contact_phone_1:
+                  patch.contact_phone_1 !== undefined
+                    ? patch.contact_phone_1
+                    : before?.contact_phone_1,
+                contact_phone_2:
+                  patch.contact_phone_2 !== undefined
+                    ? patch.contact_phone_2
+                    : before?.contact_phone_2,
+                price_per_km:
+                  patch.price_per_km !== undefined ? patch.price_per_km : before?.price_per_km,
+                price_per_day:
+                  patch.price_per_day !== undefined ? patch.price_per_day : before?.price_per_day,
+              })
+          );
+          payload.providers = synced.providers;
+          payload.provider_company_name = synced.provider_company_name;
+          payload.contact_person_name = synced.contact_person_name;
+          payload.contact_phone_1 = synced.contact_phone_1;
+          payload.contact_phone_2 = synced.contact_phone_2;
+          payload.price_per_km = synced.price_per_km;
+          payload.price_per_day = synced.price_per_day;
         }
-        if (patch.contact_person_name !== undefined) {
-          payload.contact_person_name = patch.contact_person_name;
-        }
-        if (patch.contact_phone_1 !== undefined) payload.contact_phone_1 = patch.contact_phone_1;
-        if (patch.contact_phone_2 !== undefined) payload.contact_phone_2 = patch.contact_phone_2;
-        if (patch.price_per_km !== undefined) payload.price_per_km = patch.price_per_km;
-        if (patch.price_per_day !== undefined) payload.price_per_day = patch.price_per_day;
       }
 
       const { data, error } = await supabase
@@ -410,6 +468,41 @@ export async function updateMasterContent(
     gallery_urls: gallery,
     image_url: cover,
     updated_at: now,
+    ...(entity === "vehicles" &&
+    (patch.providers !== undefined ||
+      patch.provider_company_name !== undefined ||
+      patch.contact_person_name !== undefined ||
+      patch.contact_phone_1 !== undefined ||
+      patch.contact_phone_2 !== undefined ||
+      patch.price_per_km !== undefined ||
+      patch.price_per_day !== undefined)
+      ? flatFieldsFromProviders(
+          patch.providers ??
+            normalizeVehicleProviders({
+              providers: patch.providers ?? list[idx].providers,
+              provider_company_name:
+                patch.provider_company_name !== undefined
+                  ? patch.provider_company_name
+                  : list[idx].provider_company_name,
+              contact_person_name:
+                patch.contact_person_name !== undefined
+                  ? patch.contact_person_name
+                  : list[idx].contact_person_name,
+              contact_phone_1:
+                patch.contact_phone_1 !== undefined
+                  ? patch.contact_phone_1
+                  : list[idx].contact_phone_1,
+              contact_phone_2:
+                patch.contact_phone_2 !== undefined
+                  ? patch.contact_phone_2
+                  : list[idx].contact_phone_2,
+              price_per_km:
+                patch.price_per_km !== undefined ? patch.price_per_km : list[idx].price_per_km,
+              price_per_day:
+                patch.price_per_day !== undefined ? patch.price_per_day : list[idx].price_per_day,
+            })
+        )
+      : {}),
   };
   writeLocal(entity, list);
   logMasterDataChange({

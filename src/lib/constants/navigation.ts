@@ -59,23 +59,21 @@ export const bookingNav: NavGroup = {
       label: "Itinerary List",
       href: "/itinerary-builder",
       icon: List,
-      description: "All pending & active quotes",
+      description: "Pending quotes (no advance payment yet)",
     },
     {
       label: "All Confirm Booking",
       href: "/itinerary-builder/confirmed",
       icon: CheckCircle2,
-      description: "Confirmed bookings only",
+      description: "Bookings with advance payment received",
     },
   ],
 };
 
+/** Hidden for all users — kept empty so CRM / Email Details stay out of the sidebar & search. */
 export const crmNav: NavGroup = {
   label: "CRM",
-  items: [
-    { label: "Customer", href: "/customers", icon: MessageSquare, description: "Customer database" },
-    { label: "Email Details", href: "/itinerary-builder/emails", icon: MessageCircle, description: "Booking email log" },
-  ],
+  items: [],
 };
 
 /** Post-booking operations — transport, cost sheets, P&L, invoices */
@@ -213,7 +211,6 @@ export const secondaryNav: NavItem[] = [
 export const allNavItems: NavItem[] = [
   ...homeNav,
   ...bookingNav.items,
-  ...crmNav.items,
   ...operationsNav.items,
   ...masterDataNav.items,
   ...reportsNav,

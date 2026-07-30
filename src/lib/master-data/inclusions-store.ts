@@ -15,7 +15,7 @@ export type InclusionExclusionItem = {
   /** Display title (stored as `text` in the DB). */
   text: string;
   description: string;
-  /** Optional image — used for inclusions; exclusions usually leave this null. */
+  /** Optional image shown on itinerary inclusion / exclusion cards. */
   image_url: string | null;
   created_at: string;
   created_by_id?: string | null;
@@ -134,16 +134,16 @@ export async function createInclusionExclusion(
   imageUrl?: string | null,
   description?: string
 ): Promise<InclusionExclusionItem> {
-  const resolvedImages =
-    kind === "inclusion" && imageUrl
-      ? await ensureStoredImageUrls([imageUrl], "inclusions")
-      : [];
+  const folder = kind === "inclusion" ? "inclusions" : "exclusions";
+  const resolvedImages = imageUrl
+    ? await ensureStoredImageUrls([imageUrl], folder)
+    : [];
   const item: InclusionExclusionItem = {
     id: crypto.randomUUID(),
     kind,
     text: text.trim(),
     description: (description ?? "").trim(),
-    image_url: kind === "inclusion" ? resolvedImages[0] ?? null : null,
+    image_url: resolvedImages[0] ?? null,
     created_at: new Date().toISOString(),
     created_by_id: actor.id,
     created_by_name: actor.name,
@@ -203,16 +203,12 @@ export async function updateInclusionExclusion(
 
   const kind = patch.kind ?? before.kind;
   const nextImageRaw =
-    kind === "inclusion"
-      ? patch.image_url !== undefined
-        ? patch.image_url
-        : before.image_url
-      : null;
-  const resolvedImages =
-    kind === "inclusion" && nextImageRaw
-      ? await ensureStoredImageUrls([nextImageRaw], "inclusions")
-      : [];
-  const nextImage = kind === "inclusion" ? resolvedImages[0] ?? null : null;
+    patch.image_url !== undefined ? patch.image_url : before.image_url;
+  const folder = kind === "inclusion" ? "inclusions" : "exclusions";
+  const resolvedImages = nextImageRaw
+    ? await ensureStoredImageUrls([nextImageRaw], folder)
+    : [];
+  const nextImage = resolvedImages[0] ?? null;
   const nextText = patch.text.trim();
   const nextDescription =
     patch.description !== undefined ? patch.description.trim() : before.description;

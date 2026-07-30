@@ -71,6 +71,8 @@ export async function repoCreateDraft(input: CreateDraftInput): Promise<Quotatio
     packageId: input.knowledgePackageId ?? null,
     categoryKeys: [],
     title: input.title ?? `Quote for ${input.clientName}`,
+    created_by: input.createdBy,
+    owner_name: input.createdBy,
   });
 
   const mapped = mapRecordToQuotation(record, {

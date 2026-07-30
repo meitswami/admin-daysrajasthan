@@ -13,6 +13,20 @@ export function isOwnCreatedRecord(actor: TeamMember, record: OwnedRecord): bool
   return false;
 }
 
+/**
+ * "Created by {name}" for records made by someone else.
+ * Hidden for the viewer's own records and when no creator name is stored.
+ */
+export function createdByAttribution(
+  actor: TeamMember,
+  record: OwnedRecord
+): string | null {
+  if (isOwnCreatedRecord(actor, record)) return null;
+  const name = record.created_by_name?.trim();
+  if (!name) return null;
+  return `Created by ${name}`;
+}
+
 /** Edit is available to every staff member who can open master data (creator ignored). */
 export function canEditMasterRecord(_actor: TeamMember, _record: OwnedRecord): boolean {
   return true;

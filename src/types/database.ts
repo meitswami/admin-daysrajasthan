@@ -65,6 +65,17 @@ export interface Itinerary {
 
 export type CountryRegion = "indian" | "international";
 
+/** One transport agency / company that can supply a vehicle model. */
+export interface VehicleProvider {
+  id: string;
+  provider_company_name: string;
+  contact_person_name?: string | null;
+  contact_phone_1?: string | null;
+  contact_phone_2?: string | null;
+  price_per_km?: string | null;
+  price_per_day?: string | null;
+}
+
 export interface WebsiteContentItem {
   id: string;
   name: string;
@@ -93,13 +104,18 @@ export interface WebsiteContentItem {
   vehicle_type?: string | null;
   /** Vehicles: seating capacity */
   capacity?: string | null;
-  /** Vehicles: provider company */
+  /**
+   * Vehicles: transport agencies (one vehicle can have many providers).
+   * Flat provider_* / price_* fields mirror the first entry for legacy UIs.
+   */
+  providers?: VehicleProvider[];
+  /** Vehicles: provider company (legacy / first provider) */
   provider_company_name?: string | null;
-  /** Vehicles: contact person */
+  /** Vehicles: contact person (legacy / first provider) */
   contact_person_name?: string | null;
   contact_phone_1?: string | null;
   contact_phone_2?: string | null;
-  /** Vehicles: pricing */
+  /** Vehicles: pricing (legacy / first provider) */
   price_per_km?: string | null;
   price_per_day?: string | null;
   created_at: string;

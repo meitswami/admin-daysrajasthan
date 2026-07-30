@@ -6,12 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
 import { CLIENT_TITLES, type ClientDetails, type ItinerarySnapshot } from "@/types/itinerary-builder";
 import {
-  PACKAGE_CATALOG,
   catalogFromMasterItineraries,
   filterPackages,
   getPackageById,
   uniqueDurations,
   buildCategoryPricing,
+  nextTourCode,
   type PackageCatalogEntry,
 } from "@/lib/itinerary-builder/package-catalog";
 import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
@@ -25,12 +25,14 @@ import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { cn } from "@/lib/utils";
 import { Check, ChevronLeft, ChevronRight, Search, Wand2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
+import { useSystem } from "@/components/providers/system-provider";
 
 const STEPS = ["Client Details", "Select Itinerary", "Itinerary Builder"] as const;
 
 export function NewItineraryWizard() {
   const router = useRouter();
   const { show } = useToast();
+  const { currentMember } = useSystem();
   const [step, setStep] = useState(0);
   const [durationFilter, setDurationFilter] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
@@ -52,7 +54,7 @@ export function NewItineraryWizard() {
   });
   const [packageId, setPackageId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItinerarySnapshot | null>(null);
-  const [catalog, setCatalog] = useState<PackageCatalogEntry[]>(PACKAGE_CATALOG);
+  const [catalog, setCatalog] = useState<PackageCatalogEntry[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
 
   useEffect(() => {
@@ -61,13 +63,10 @@ export function NewItineraryWizard() {
     void listMasterItineraries()
       .then((items) => {
         if (cancelled) return;
-        const fromMaster = catalogFromMasterItineraries(items);
-        // Prefer Master Data packages so day Locations (and hotels) carry into the builder.
-        // Fall back to seeded demo catalog when master is empty.
-        setCatalog(fromMaster.length > 0 ? fromMaster : PACKAGE_CATALOG);
+        setCatalog(catalogFromMasterItineraries(items, { includeInactive: true }));
       })
       .catch(() => {
-        if (!cancelled) setCatalog(PACKAGE_CATALOG);
+        if (!cancelled) setCatalog([]);
       })
       .finally(() => {
         if (!cancelled) setCatalogLoading(false);
@@ -98,20 +97,34 @@ export function NewItineraryWizard() {
 
   const selectedPackage = packageId ? getPackageById(packageId, catalog) : null;
 
-  function buildDraftFromPackage(pkgId: string | null): ItinerarySnapshot {
+  function buildDraftFromPackage(
+    pkgId: string | null,
+    opts?: { preserveClient?: ClientDetails; preserveTourCode?: string | null }
+  ): ItinerarySnapshot {
     const pkg = pkgId ? getPackageById(pkgId, catalog) : null;
     const base = pkg ? pkg.buildTemplate() : emptySnapshot();
     const category_pricing = buildCategoryPricing(base, ["deluxe_hotels"], {}, {});
     const defaultAdvance = clampAdvancePercent(
       loadSiteSettings().adminGeneral.default_advance_percent
     );
+    const clientDetails = opts?.preserveClient ?? client;
+    // Package pick → that package's tour code. Custom → next free code once.
+    // Never bump the number unless the selected package itself changed.
+    const tourCode =
+      opts?.preserveTourCode !== undefined
+        ? opts.preserveTourCode
+        : pkg?.tour_code ??
+          nextTourCode(
+            catalog.map((p) => p.tour_code),
+            "DR"
+          );
     return normalizeSnapshot({
       ...base,
-      client: { ...base.client, ...client },
+      client: { ...base.client, ...clientDetails },
       header: {
         ...base.header,
-        title: pkg?.title || base.header.title || `Quote for ${client.client_name}`,
-        tour_code: pkg?.tour_code ?? base.header.tour_code,
+        title: pkg?.title || base.header.title || `Quote for ${clientDetails.client_name}`,
+        tour_code: tourCode,
         duration_label: durationLabelFromDays(base.days),
         alternate_titles: base.header.alternate_titles?.length
           ? base.header.alternate_titles
@@ -129,6 +142,36 @@ export function NewItineraryWizard() {
 
   function selectPackage(id: string) {
     setPackageId(id);
+  }
+
+  /** Switch package from Step 3 title picker — updates tour code only when package id changes. */
+  function applyPackageSelection(nextPackageId: string) {
+    const pkg = getPackageById(nextPackageId, catalog);
+    if (!pkg || !draft) return;
+    if (draft.source_package_id === nextPackageId) {
+      // Same pre-existing itinerary — keep current tour code (and draft).
+      return;
+    }
+    const prevKeys = draft.category_pricing.map((c) => c.category_key);
+    const prevDiscounts = Object.fromEntries(
+      draft.category_pricing.map((c) => [c.category_key, c.discount_price])
+    );
+    const prevOverrides = Object.fromEntries(
+      draft.category_pricing.map((c) => [c.category_key, c.manual_override])
+    );
+    setPackageId(nextPackageId);
+    const next = buildDraftFromPackage(nextPackageId, {
+      preserveClient: draft.client,
+    });
+    const keys = (prevKeys.length ? prevKeys : ["deluxe_hotels"]).slice(0, 2);
+    const category_pricing = buildCategoryPricing(next, keys, prevDiscounts, prevOverrides);
+    setDraft(
+      normalizeSnapshot({
+        ...next,
+        category_pricing,
+        final_price: category_pricing[0]?.grand_total ?? null,
+      })
+    );
   }
 
   function validateClient(): boolean {
@@ -156,6 +199,19 @@ export function NewItineraryWizard() {
     if (step === 1) {
       if (!packageId) {
         show("Select a tour package or use Create Custom");
+        return;
+      }
+      // Same package selected again → keep draft & tour code; only rebuild when package changes.
+      if (draft && draft.source_package_id === packageId) {
+        setDraft((d) =>
+          d
+            ? normalizeSnapshot({
+                ...d,
+                client: { ...d.client, ...client },
+              })
+            : d
+        );
+        setStep(2);
         return;
       }
       setDraft(buildDraftFromPackage(packageId));
@@ -209,6 +265,8 @@ export function NewItineraryWizard() {
         internal_notes: draft.internal_notes,
         public_notes: draft.public_notes,
         category_pricing: draft.category_pricing,
+        created_by: currentMember.name,
+        owner_name: currentMember.name,
       });
 
       show(`Saved ${record.quote_id}`);
@@ -462,7 +520,7 @@ export function NewItineraryWizard() {
                   {!catalogLoading && packages.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="px-4 py-8 text-center text-stone-500">
-                        No packages found. Add active itineraries in Master Data → Itineraries,
+                        No packages found. Add itineraries in Master Data → Itineraries,
                         or use Create Custom Itinerary.
                       </td>
                     </tr>
@@ -519,6 +577,8 @@ export function NewItineraryWizard() {
           snapshot={draft}
           onChange={setDraft}
           showStepHeader
+          packageCatalog={catalog}
+          onSelectPackage={applyPackageSelection}
           onBack={() => {
             setClient(draft.client);
             setStep(1);

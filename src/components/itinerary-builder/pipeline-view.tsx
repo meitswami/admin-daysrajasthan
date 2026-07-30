@@ -32,26 +32,37 @@ const KANBAN_COLUMNS: WorkflowStatus[] = [
 export function ItineraryBuilderPipelineView({
   initialRecords,
   title = "Itinerary List",
+  listFilter = "all",
 }: {
   initialRecords: ClientItineraryRecord[];
   title?: string;
+  /** pending = unpaid quotes; confirmed = advance paid; all = everything */
+  listFilter?: "all" | "pending" | "confirmed";
 }) {
   const [records, setRecords] = useState(initialRecords);
   const [view, setView] = useState<"kanban" | "list">("list");
   const [search, setSearch] = useState("");
 
+  function loadList() {
+    if (listFilter === "confirmed") return listClientItineraries({ confirmedOnly: true });
+    if (listFilter === "pending") return listClientItineraries({ pendingOnly: true });
+    return listClientItineraries();
+  }
+
   useEffect(() => {
-    setRecords(listClientItineraries());
-  }, []);
+    setRecords(loadList());
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when filter mode changes
+  }, [listFilter]);
 
   useEffect(() => {
     void import("@/lib/system/data-mode").then(({ isRealDataMode }) => {
       if (!isRealDataMode()) return;
       void import("@/lib/itinerary-builder/sync-real").then(({ hydrateItineraryBuilderFromSupabaseIfReal }) =>
-        hydrateItineraryBuilderFromSupabaseIfReal().then((remote) => setRecords(remote))
+        hydrateItineraryBuilderFromSupabaseIfReal().then(() => setRecords(loadList()))
       );
     });
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listFilter]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -65,7 +76,7 @@ export function ItineraryBuilderPipelineView({
   }, [records, search]);
 
   function refresh() {
-    setRecords(listClientItineraries());
+    setRecords(loadList());
   }
 
   return (

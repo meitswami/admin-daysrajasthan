@@ -1,6 +1,16 @@
 import { createClient } from "@/lib/supabase/client";
 import type { ClientItineraryRecord, ItineraryRevision } from "@/types/itinerary-builder";
 
+function displayOwnerName(name: string | null | undefined, fallbackId?: string | null): string {
+  const trimmed = name?.trim();
+  if (trimmed && trimmed !== "System") return trimmed;
+  // Never show raw UUIDs or the "System" placeholder in Created By
+  if (fallbackId && !/^[0-9a-f-]{36}$/i.test(fallbackId) && fallbackId !== "System") {
+    return fallbackId;
+  }
+  return "—";
+}
+
 export async function fetchClientItinerariesFromSupabase(): Promise<ClientItineraryRecord[]> {
   const supabase = createClient();
   const { data, error } = await supabase
@@ -12,38 +22,44 @@ export async function fetchClientItinerariesFromSupabase(): Promise<ClientItiner
 
   if (error) throw error;
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    quote_id: row.quote_id,
-    type: "client_itinerary" as const,
-    title: row.title,
-    tour_code: row.tour_code,
-    workflow_status: row.workflow_status,
-    current_revision_id: row.current_revision_id ?? "",
-    current_version: row.current_version ?? 1,
-    created_by: row.owner_id ?? "System",
-    owner_name: row.owner_id ?? "System",
-    created_at: row.created_at,
-    updated_at: row.updated_at,
-    client_name: row.client_name,
-    client_email: row.client_email,
-    client_phone: row.client_phone,
-    travel_date: row.travel_date,
-    adults: row.adults ?? 2,
-    children: row.children ?? 0,
-    rooms: row.rooms ?? 1,
-    grand_total: Number(row.grand_total ?? 0),
-    category_totals: (row.category_totals as ClientItineraryRecord["category_totals"]) ?? [],
-    currency: row.currency ?? "INR",
-    margin_pct: Number(row.margin_pct ?? 0),
-    payment_status: row.payment_status ?? "unpaid",
-    amount_paid: Number(row.amount_paid ?? 0),
-    deleted_at: row.deleted_at,
-    source_package_id: row.source_package_id,
-    lead_id: row.lead_id,
-    lead_source: row.lead_source,
-    customer_id: row.customer_id ?? null,
-  }));
+  return (data ?? []).map((row) => {
+    const ownerName = displayOwnerName(
+      (row as { owner_name?: string | null }).owner_name,
+      row.owner_id
+    );
+    return {
+      id: row.id,
+      quote_id: row.quote_id,
+      type: "client_itinerary" as const,
+      title: row.title,
+      tour_code: row.tour_code,
+      workflow_status: row.workflow_status,
+      current_revision_id: row.current_revision_id ?? "",
+      current_version: row.current_version ?? 1,
+      created_by: ownerName,
+      owner_name: ownerName,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      client_name: row.client_name,
+      client_email: row.client_email,
+      client_phone: row.client_phone,
+      travel_date: row.travel_date,
+      adults: row.adults ?? 2,
+      children: row.children ?? 0,
+      rooms: row.rooms ?? 1,
+      grand_total: Number(row.grand_total ?? 0),
+      category_totals: (row.category_totals as ClientItineraryRecord["category_totals"]) ?? [],
+      currency: row.currency ?? "INR",
+      margin_pct: Number(row.margin_pct ?? 0),
+      payment_status: row.payment_status ?? "unpaid",
+      amount_paid: Number(row.amount_paid ?? 0),
+      deleted_at: row.deleted_at,
+      source_package_id: row.source_package_id,
+      lead_id: row.lead_id,
+      lead_source: row.lead_source,
+      customer_id: row.customer_id ?? null,
+    };
+  });
 }
 
 export async function fetchRevisionsForItinerary(itineraryId: string): Promise<ItineraryRevision[]> {
@@ -72,7 +88,8 @@ export async function fetchRevisionsForItinerary(itineraryId: string): Promise<I
 
 function recordPayload(
   record: ClientItineraryRecord,
-  currentRevisionId: string | null
+  currentRevisionId: string | null,
+  ownerId: string | null = null
 ) {
   return {
     id: record.id,
@@ -102,7 +119,19 @@ function recordPayload(
     lead_source: record.lead_source,
     customer_id: record.customer_id,
     updated_at: record.updated_at,
+    owner_name: record.owner_name && record.owner_name !== "System" ? record.owner_name : null,
+    ...(ownerId ? { owner_id: ownerId } : {}),
   };
+}
+
+async function resolveAuthOwnerId(): Promise<string | null> {
+  try {
+    const supabase = createClient();
+    const { data } = await supabase.auth.getUser();
+    return data.user?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -115,10 +144,11 @@ export async function upsertClientItineraryToSupabase(
   allRevisions: ItineraryRevision[] = [revision]
 ): Promise<void> {
   const supabase = createClient();
+  const ownerId = await resolveAuthOwnerId();
 
   const { error: recError } = await supabase
     .from("client_itineraries")
-    .upsert(recordPayload(record, null));
+    .upsert(recordPayload(record, null, ownerId));
 
   if (recError) throw recError;
 
@@ -167,6 +197,9 @@ export async function upsertClientItineraryToSupabase(
 
 export async function upsertClientItineraryRecordOnly(record: ClientItineraryRecord): Promise<void> {
   const supabase = createClient();
+  const ownerId = await resolveAuthOwnerId();
+  const ownerName =
+    record.owner_name && record.owner_name !== "System" ? record.owner_name : null;
 
   // Avoid fk_current_revision failures when the revision row is not remote yet:
   // update fields only if the row exists; otherwise upsert with a null pointer.
@@ -207,6 +240,8 @@ export async function upsertClientItineraryRecordOnly(record: ClientItineraryRec
         lead_source: record.lead_source,
         customer_id: record.customer_id,
         updated_at: record.updated_at,
+        owner_name: ownerName,
+        ...(ownerId ? { owner_id: ownerId } : {}),
       })
       .eq("id", record.id);
     if (error) throw error;
@@ -215,7 +250,7 @@ export async function upsertClientItineraryRecordOnly(record: ClientItineraryRec
 
   const { error } = await supabase
     .from("client_itineraries")
-    .upsert(recordPayload(record, null));
+    .upsert(recordPayload(record, null, ownerId));
 
   if (error) throw error;
 }

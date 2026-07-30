@@ -179,8 +179,16 @@ export function normalizeRevision(revision: ItineraryRevision): ItineraryRevisio
 }
 
 export function normalizeRecord(record: ClientItineraryRecord): ClientItineraryRecord {
+  const owner =
+    record.owner_name?.trim() && record.owner_name.trim() !== "System"
+      ? record.owner_name.trim()
+      : record.created_by?.trim() && record.created_by.trim() !== "System"
+        ? record.created_by.trim()
+        : "—";
   return {
     ...record,
+    created_by: owner,
+    owner_name: owner,
     category_totals: record.category_totals ?? [],
     payment_status: record.payment_status ?? "unpaid",
     amount_paid: record.amount_paid ?? 0,

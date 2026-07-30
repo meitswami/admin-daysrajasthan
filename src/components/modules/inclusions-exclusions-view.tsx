@@ -3,13 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { Input, Label, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { FileUploadField } from "@/components/ui/file-upload-field";
 import { PageMain, PageToolbar } from "@/components/ui/data-table";
 import { useToast } from "@/components/ui/toast";
 import { useSystem } from "@/components/providers/system-provider";
-import { canCreateMasterData } from "@/lib/rbac/ownership";
+import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
 import {
   createInclusionExclusion,
   deleteInclusionExclusion,
@@ -59,7 +59,7 @@ export function InclusionsExclusionsView() {
     setKind(item.kind);
     setText(item.text);
     setDescription(item.description ?? "");
-    setImageUrl(item.kind === "inclusion" ? item.image_url : null);
+    setImageUrl(item.image_url);
     setModalOpen(true);
   }
 
@@ -68,7 +68,7 @@ export function InclusionsExclusionsView() {
       show("Title is required");
       return;
     }
-    const image = kind === "inclusion" ? imageUrl : null;
+    const image = imageUrl;
     if (editing) {
       await updateInclusionExclusion(
         editing.id,
@@ -95,7 +95,6 @@ export function InclusionsExclusionsView() {
   const exclusions = items.filter((i) => i.kind === "exclusion");
 
   function renderList(list: InclusionExclusionItem[], title: string, addKind: InclusionExclusionKind) {
-    const showImages = addKind === "inclusion";
     return (
       <div className="rounded-xl border border-stone-200 bg-white">
         <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
@@ -107,10 +106,12 @@ export function InclusionsExclusionsView() {
           )}
         </div>
         <ul className="divide-y divide-stone-100">
-          {list.map((item) => (
+          {list.map((item) => {
+            const createdBy = createdByAttribution(currentMember, item);
+            return (
             <li key={item.id} className="flex items-start justify-between gap-3 px-4 py-3">
               <div className="flex min-w-0 flex-1 items-start gap-3">
-                {showImages && item.image_url ? (
+                {item.image_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={item.image_url}
@@ -123,9 +124,9 @@ export function InclusionsExclusionsView() {
                   {item.description ? (
                     <p className="mt-0.5 text-sm text-stone-500">{item.description}</p>
                   ) : null}
-                  <p className="mt-1 text-xs text-stone-400">
-                    Created by {item.created_by_name ?? "Unknown"}
-                  </p>
+                  {createdBy ? (
+                    <p className="mt-1 text-xs text-stone-400">{createdBy}</p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
@@ -147,7 +148,8 @@ export function InclusionsExclusionsView() {
                 </Button>
               </div>
             </li>
-          ))}
+            );
+          })}
           {!list.length && (
             <li className="px-4 py-6 text-center text-sm text-stone-500">No items yet</li>
           )}
@@ -162,8 +164,8 @@ export function InclusionsExclusionsView() {
       <PageMain>
         <PageToolbar>
           <p className="text-sm text-stone-500">
-            Shared library used when building itinerary packages. Inclusions may include an optional
-            image.
+            Shared library used when building itinerary packages. Each line may include an optional
+            image shown on the itinerary.
           </p>
         </PageToolbar>
         <div className="grid gap-6 lg:grid-cols-2">
@@ -175,29 +177,20 @@ export function InclusionsExclusionsView() {
       <Modal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editing ? "Edit line" : "Add line"}
+        title={
+          editing
+            ? kind === "inclusion"
+              ? "Edit inclusion"
+              : "Edit exclusion"
+            : kind === "inclusion"
+              ? "Add inclusion"
+              : "Add exclusion"
+        }
         description={
-          editing ? `Created by ${editing.created_by_name ?? "Unknown"}` : undefined
+          editing ? createdByAttribution(currentMember, editing) ?? undefined : undefined
         }
       >
         <div className="space-y-4">
-          {!editing && (
-            <div>
-              <Label>Type</Label>
-              <Select
-                className="mt-1.5"
-                value={kind}
-                onChange={(e) => {
-                  const next = e.target.value as InclusionExclusionKind;
-                  setKind(next);
-                  if (next === "exclusion") setImageUrl(null);
-                }}
-              >
-                <option value="inclusion">Inclusion</option>
-                <option value="exclusion">Exclusion</option>
-              </Select>
-            </div>
-          )}
           <div>
             <Label>Title *</Label>
             <Input
@@ -216,15 +209,13 @@ export function InclusionsExclusionsView() {
               placeholder="Optional details…"
             />
           </div>
-          {kind === "inclusion" && (
-            <FileUploadField
-              label="Image (optional)"
-              value={imageUrl}
-              onChange={setImageUrl}
-              folder="inclusions"
-              previewWide
-            />
-          )}
+          <FileUploadField
+            label="Image (optional)"
+            value={imageUrl}
+            onChange={setImageUrl}
+            folder={kind === "inclusion" ? "inclusions" : "exclusions"}
+            previewWide
+          />
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel

@@ -32,9 +32,10 @@ export function CreateQuoteFromLeadButton({ lead }: { lead: UnifiedLead }) {
       size="sm"
       variant="outline"
       onClick={() => {
-        const record = createQuoteFromLead(lead);
-        show(`Created ${record.quote_id} from lead`);
-        router.push(`/itinerary-builder/${record.id}`);
+        void createQuoteFromLead(lead).then((record) => {
+          show(`Created ${record.quote_id} from lead`);
+          router.push(`/itinerary-builder/${record.id}`);
+        });
       }}
     >
       <Route className="h-3.5 w-3.5" />

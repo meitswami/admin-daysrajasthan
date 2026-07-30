@@ -16,12 +16,12 @@ import { useToast } from "@/components/ui/toast";
 import { PageMain, PageToolbar, TableRowActions } from "@/components/ui/data-table";
 import { MediaOverlayCard } from "@/components/shared/media-overlay-card";
 import type { PlaceholderCategory } from "@/lib/constants/placeholder-images";
-import type { DisplayMode, WebsiteContentItem } from "@/types/database";
+import type { DisplayMode, VehicleProvider, WebsiteContentItem } from "@/types/database";
 import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
-import { Grid3X3, List, Plus, Search } from "lucide-react";
+import { Grid3X3, List, Plus, Search, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSystem } from "@/components/providers/system-provider";
-import { canCreateMasterData, isOwnCreatedRecord } from "@/lib/rbac/ownership";
+import { canCreateMasterData, createdByAttribution, isOwnCreatedRecord } from "@/lib/rbac/ownership";
 import {
   createMasterContent,
   deleteMasterContent,
@@ -30,6 +30,10 @@ import {
   type MasterContentEntity,
 } from "@/lib/master-data/content-store";
 import { listMasterCategories } from "@/lib/master-data/categories-store";
+import {
+  emptyVehicleProvider,
+  normalizeVehicleProviders,
+} from "@/lib/master-data/vehicle-providers";
 
 const CMS_TABS: { id: MasterContentEntity; label: string }[] = [
   { id: "destinations", label: "Locations" },
@@ -98,12 +102,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [capacity, setCapacity] = useState("");
-  const [providerCompanyName, setProviderCompanyName] = useState("");
-  const [contactPersonName, setContactPersonName] = useState("");
-  const [contactPhone1, setContactPhone1] = useState("");
-  const [contactPhone2, setContactPhone2] = useState("");
-  const [pricePerKm, setPricePerKm] = useState("");
-  const [pricePerDay, setPricePerDay] = useState("");
+  const [providers, setProviders] = useState<VehicleProvider[]>([emptyVehicleProvider()]);
   const [hotelCategory, setHotelCategory] = useState("");
   const [hotelLocation, setHotelLocation] = useState("");
   const [priceDescription, setPriceDescription] = useState("");
@@ -168,6 +167,14 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         (i.contact_phone_2?.toLowerCase().includes(q) ?? false) ||
         (i.price_per_km?.toLowerCase().includes(q) ?? false) ||
         (i.price_per_day?.toLowerCase().includes(q) ?? false) ||
+        (i.providers?.some(
+          (p) =>
+            p.provider_company_name.toLowerCase().includes(q) ||
+            (p.contact_person_name?.toLowerCase().includes(q) ?? false) ||
+            (p.contact_phone_1?.toLowerCase().includes(q) ?? false) ||
+            (p.contact_phone_2?.toLowerCase().includes(q) ?? false)
+        ) ??
+          false) ||
         (i.google_maps_url?.toLowerCase().includes(q) ?? false)
       );
     });
@@ -185,12 +192,22 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   function resetVehicleFields() {
     setVehicleType("");
     setCapacity("");
-    setProviderCompanyName("");
-    setContactPersonName("");
-    setContactPhone1("");
-    setContactPhone2("");
-    setPricePerKm("");
-    setPricePerDay("");
+    setProviders([emptyVehicleProvider()]);
+  }
+
+  function updateProvider(id: string, patch: Partial<VehicleProvider>) {
+    setProviders((list) => list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  }
+
+  function addProvider() {
+    setProviders((list) => [...list, emptyVehicleProvider()]);
+  }
+
+  function removeProvider(id: string) {
+    setProviders((list) => {
+      const next = list.filter((p) => p.id !== id);
+      return next.length ? next : [emptyVehicleProvider()];
+    });
   }
 
   function openAdd() {
@@ -214,12 +231,8 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setGoogleMapsUrl(item.google_maps_url ?? "");
     setVehicleType(item.vehicle_type ?? "");
     setCapacity(item.capacity ?? "");
-    setProviderCompanyName(item.provider_company_name ?? "");
-    setContactPersonName(item.contact_person_name ?? "");
-    setContactPhone1(item.contact_phone_1 ?? "");
-    setContactPhone2(item.contact_phone_2 ?? "");
-    setPricePerKm(item.price_per_km ?? "");
-    setPricePerDay(item.price_per_day ?? "");
+    const existing = normalizeVehicleProviders(item);
+    setProviders(existing.length ? existing : [emptyVehicleProvider()]);
     setHotelCategory(item.category ?? "");
     setHotelLocation(item.location ?? "");
     setPriceDescription(item.price_description ?? "");
@@ -269,12 +282,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         ? {
             vehicle_type: vehicleType.trim() || null,
             capacity: capacity.trim() || null,
-            provider_company_name: providerCompanyName.trim() || null,
-            contact_person_name: contactPersonName.trim() || null,
-            contact_phone_1: contactPhone1.trim() || null,
-            contact_phone_2: contactPhone2.trim() || null,
-            price_per_km: pricePerKm.trim() || null,
-            price_per_day: pricePerDay.trim() || null,
+            providers,
           }
         : {}),
     };
@@ -462,21 +470,33 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
         {loading ? (
           <p className="text-sm text-stone-500">Loading…</p>
         ) : tab === "hotels" || viewMode === "list" ? (
-          <div className="w-0 min-w-full max-w-full overflow-x-auto rounded-xl border border-stone-200 bg-white">
-            <table className="w-full min-w-[1100px] text-sm">
+          <div
+            className={
+              tab === "hotels"
+                ? "w-0 min-w-full max-w-full overflow-hidden rounded-xl border border-stone-200 bg-white"
+                : "w-0 min-w-full max-w-full overflow-x-auto rounded-xl border border-stone-200 bg-white"
+            }
+          >
+            <table
+              className={
+                tab === "hotels"
+                  ? "w-full table-fixed text-sm"
+                  : "w-full min-w-[960px] text-sm"
+              }
+            >
               <thead className="bg-stone-50 text-left text-xs uppercase tracking-wide text-stone-500">
                 {tab === "hotels" ? (
                   <tr>
-                    <th className="px-3 py-2 w-12">S.No.</th>
-                    <th className="px-3 py-2">Image</th>
-                    <th className="px-3 py-2">Hotel Name</th>
-                    <th className="px-3 py-2">Category</th>
-                    <th className="min-w-[220px] px-3 py-2">Price/Night</th>
-                    <th className="px-3 py-2">Location</th>
-                    <th className="px-3 py-2">Rating</th>
-                    <th className="px-3 py-2">Reviews</th>
-                    <th className="px-3 py-2">Google Reviews</th>
-                    <th className="whitespace-nowrap px-3 py-2">Actions</th>
+                    <th className="w-10 px-2 py-2">S.No.</th>
+                    <th className="w-[4.5rem] px-2 py-2">Image</th>
+                    <th className="px-2 py-2">Hotel Name</th>
+                    <th className="w-[12%] px-2 py-2">Category</th>
+                    <th className="w-[11%] px-2 py-2">Price/Night</th>
+                    <th className="w-[8%] px-2 py-2">Location</th>
+                    <th className="w-12 px-2 py-2">Rating</th>
+                    <th className="w-14 px-2 py-2">Reviews</th>
+                    <th className="w-[6.5rem] px-2 py-2">Google</th>
+                    <th className="w-[12.5rem] px-2 py-2">Actions</th>
                   </tr>
                 ) : tab === "vehicles" ? (
                   <tr>
@@ -505,29 +525,36 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   if (tab === "hotels") {
                     return (
                       <tr key={item.id}>
-                        <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-2.5 tabular-nums text-stone-500">{index + 1}</td>
+                        <td className="px-2 py-2.5">
                           <ImageThumbRow
-                            urls={images.slice(0, 2)}
-                            width={88}
-                            height={56}
-                            max={2}
+                            urls={images.slice(0, 1)}
+                            width={64}
+                            height={44}
+                            max={1}
                             lightboxTitle={item.name}
                           />
                         </td>
-                        <td className="px-3 py-3 font-semibold text-stone-900">{item.name}</td>
-                        <td className="px-3 py-3 text-stone-700">{item.category || "—"}</td>
-                        <td className="max-w-xs px-3 py-3 whitespace-pre-wrap text-stone-600">
+                        <td className="truncate px-2 py-2.5 font-semibold text-stone-900" title={item.name}>
+                          {item.name}
+                        </td>
+                        <td className="truncate px-2 py-2.5 text-stone-700" title={item.category || undefined}>
+                          {item.category || "—"}
+                        </td>
+                        <td
+                          className="truncate px-2 py-2.5 text-stone-600"
+                          title={item.price_description?.trim() || undefined}
+                        >
                           {item.price_description?.trim() || "Not specified"}
                         </td>
-                        <td className="px-3 py-3 text-stone-700">{item.location || "—"}</td>
-                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                        <td className="truncate px-2 py-2.5 text-stone-700">{item.location || "—"}</td>
+                        <td className="px-2 py-2.5 tabular-nums text-stone-700">
                           {item.rating != null ? Number(item.rating).toFixed(1) : "—"}
                         </td>
-                        <td className="px-3 py-3 tabular-nums text-stone-700">
+                        <td className="px-2 py-2.5 tabular-nums text-stone-700">
                           {item.reviews_count ?? "—"}
                         </td>
-                        <td className="px-3 py-3">
+                        <td className="px-2 py-2.5">
                           {item.google_maps_url ? (
                             <a
                               href={item.google_maps_url}
@@ -535,14 +562,14 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                               rel="noopener noreferrer"
                               className="font-medium text-blue-600 hover:underline"
                             >
-                              View on Google
+                              View
                             </a>
                           ) : (
                             <span className="text-stone-400">—</span>
                           )}
                         </td>
-                        <td className="whitespace-nowrap px-3 py-3">
-                          <TableRowActions>
+                        <td className="px-2 py-2.5">
+                          <TableRowActions className="gap-1.5">
                             <StatusToggle
                               active={item.show_on_website}
                               onChange={(v) => void toggleStatus(item, v)}
@@ -570,9 +597,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                     );
                   }
                   if (tab === "vehicles") {
-                    const phones = [item.contact_phone_1, item.contact_phone_2]
-                      .filter(Boolean)
-                      .join(" · ");
+                    const vehicleProviders = normalizeVehicleProviders(item);
+                    const primary = vehicleProviders[0];
+                    const phones = primary
+                      ? [primary.contact_phone_1, primary.contact_phone_2].filter(Boolean).join(" · ")
+                      : "";
+                    const extraCount = Math.max(0, vehicleProviders.length - 1);
                     return (
                       <tr key={item.id}>
                         <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
@@ -592,24 +622,27 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                               .filter(Boolean)
                               .join(" · ") || "—"}
                           </p>
-                          {!isOwnCreatedRecord(currentMember, item) ? (
+                          {createdByAttribution(currentMember, item) ? (
                             <p className="text-xs text-stone-400">
-                              Created by {item.created_by_name ?? "Unknown"}
+                              {createdByAttribution(currentMember, item)}
                             </p>
                           ) : null}
                         </td>
                         <td className="px-3 py-3 text-stone-700">
-                          {item.provider_company_name?.trim() || "—"}
+                          <p>{primary?.provider_company_name?.trim() || "—"}</p>
+                          {extraCount > 0 ? (
+                            <p className="text-xs text-stone-500">+{extraCount} more</p>
+                          ) : null}
                         </td>
                         <td className="px-3 py-3 text-stone-700">
-                          {item.contact_person_name?.trim() || "—"}
+                          {primary?.contact_person_name?.trim() || "—"}
                         </td>
                         <td className="px-3 py-3 text-stone-700">{phones || "—"}</td>
                         <td className="px-3 py-3 tabular-nums text-stone-700">
-                          {formatInrAmount(item.price_per_km)}
+                          {formatInrAmount(primary?.price_per_km)}
                         </td>
                         <td className="px-3 py-3 tabular-nums text-stone-700">
-                          {formatInrAmount(item.price_per_day)}
+                          {formatInrAmount(primary?.price_per_day)}
                         </td>
                         <td className="whitespace-nowrap px-3 py-3">
                           <TableRowActions>
@@ -652,9 +685,9 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                         {item.subtitle ? (
                           <p className="text-sm text-stone-500">{item.subtitle}</p>
                         ) : null}
-                        {!isOwnCreatedRecord(currentMember, item) ? (
+                        {createdByAttribution(currentMember, item) ? (
                           <p className="text-xs text-stone-400">
-                            Created by {item.created_by_name ?? "Unknown"}
+                            {createdByAttribution(currentMember, item)}
                           </p>
                         ) : null}
                       </td>
@@ -726,7 +759,7 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                 : `Add ${heading.singular}`
         }
         description={
-          editing ? `Created by ${editing.created_by_name ?? "Unknown"}` : undefined
+          editing ? createdByAttribution(currentMember, editing) ?? undefined : undefined
         }
         className={
           tab === "hotels" || tab === "vehicles" ? "sm:max-w-2xl" : "sm:max-w-lg"
@@ -768,73 +801,135 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="md-provider">Vehicle Provider Company Name</Label>
-                <Input
-                  id="md-provider"
-                  className="mt-1.5"
-                  value={providerCompanyName}
-                  onChange={(e) => setProviderCompanyName(e.target.value)}
-                  placeholder="Optional"
-                />
-              </div>
-              <div>
-                <Label htmlFor="md-contact-name">Contact Person Name</Label>
-                <Input
-                  id="md-contact-name"
-                  className="mt-1.5"
-                  value={contactPersonName}
-                  onChange={(e) => setContactPersonName(e.target.value)}
-                  placeholder="Optional"
-                />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="md-phone-1">Contact Person Phone Number 1</Label>
-                  <Input
-                    id="md-phone-1"
-                    className="mt-1.5"
-                    type="tel"
-                    value={contactPhone1}
-                    onChange={(e) => setContactPhone1(e.target.value)}
-                    placeholder="Optional"
-                  />
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <Label>Transport providers</Label>
+                    <p className="mt-0.5 text-xs text-stone-500">
+                      One vehicle can be supplied by multiple travel / transport agencies
+                    </p>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={addProvider}>
+                    <Plus className="mr-1 h-3.5 w-3.5" />
+                    Add provider
+                  </Button>
                 </div>
-                <div>
-                  <Label htmlFor="md-phone-2">Contact Person Phone Number 2</Label>
-                  <Input
-                    id="md-phone-2"
-                    className="mt-1.5"
-                    type="tel"
-                    value={contactPhone2}
-                    onChange={(e) => setContactPhone2(e.target.value)}
-                    placeholder="Optional"
-                  />
-                </div>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="md-price-km">Price — per km cost</Label>
-                  <Input
-                    id="md-price-km"
-                    className="mt-1.5"
-                    value={pricePerKm}
-                    onChange={(e) => setPricePerKm(e.target.value)}
-                    placeholder="e.g., 18"
-                  />
-                  <p className="mt-1 text-xs text-stone-500">Optional · shown as ₹ on the list</p>
-                </div>
-                <div>
-                  <Label htmlFor="md-price-day">Price — per day running cost</Label>
-                  <Input
-                    id="md-price-day"
-                    className="mt-1.5"
-                    value={pricePerDay}
-                    onChange={(e) => setPricePerDay(e.target.value)}
-                    placeholder="e.g., 4500"
-                  />
-                  <p className="mt-1 text-xs text-stone-500">Optional · shown as ₹ on the list</p>
-                </div>
+                {providers.map((provider, index) => (
+                  <div
+                    key={provider.id}
+                    className="space-y-3 rounded-xl border border-stone-200 bg-stone-50/80 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-stone-800">
+                        Provider {index + 1}
+                      </p>
+                      {providers.length > 1 ? (
+                        <button
+                          type="button"
+                          className="rounded-md p-1.5 text-red-500 hover:bg-white hover:text-red-700"
+                          aria-label={`Remove provider ${index + 1}`}
+                          onClick={() => removeProvider(provider.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                    <div>
+                      <Label htmlFor={`md-provider-${provider.id}`}>
+                        Vehicle Provider Company Name
+                      </Label>
+                      <Input
+                        id={`md-provider-${provider.id}`}
+                        className="mt-1.5"
+                        value={provider.provider_company_name}
+                        onChange={(e) =>
+                          updateProvider(provider.id, {
+                            provider_company_name: e.target.value,
+                          })
+                        }
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor={`md-contact-name-${provider.id}`}>Contact Person Name</Label>
+                      <Input
+                        id={`md-contact-name-${provider.id}`}
+                        className="mt-1.5"
+                        value={provider.contact_person_name ?? ""}
+                        onChange={(e) =>
+                          updateProvider(provider.id, { contact_person_name: e.target.value })
+                        }
+                        placeholder="Optional"
+                      />
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor={`md-phone-1-${provider.id}`}>
+                          Contact Person Phone Number 1
+                        </Label>
+                        <Input
+                          id={`md-phone-1-${provider.id}`}
+                          className="mt-1.5"
+                          type="tel"
+                          value={provider.contact_phone_1 ?? ""}
+                          onChange={(e) =>
+                            updateProvider(provider.id, { contact_phone_1: e.target.value })
+                          }
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor={`md-phone-2-${provider.id}`}>
+                          Contact Person Phone Number 2
+                        </Label>
+                        <Input
+                          id={`md-phone-2-${provider.id}`}
+                          className="mt-1.5"
+                          type="tel"
+                          value={provider.contact_phone_2 ?? ""}
+                          onChange={(e) =>
+                            updateProvider(provider.id, { contact_phone_2: e.target.value })
+                          }
+                          placeholder="Optional"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <Label htmlFor={`md-price-km-${provider.id}`}>Price — per km cost</Label>
+                        <Input
+                          id={`md-price-km-${provider.id}`}
+                          className="mt-1.5"
+                          value={provider.price_per_km ?? ""}
+                          onChange={(e) =>
+                            updateProvider(provider.id, { price_per_km: e.target.value })
+                          }
+                          placeholder="e.g., 18"
+                        />
+                        <p className="mt-1 text-xs text-stone-500">
+                          Optional · shown as ₹ on the list
+                        </p>
+                      </div>
+                      <div>
+                        <Label htmlFor={`md-price-day-${provider.id}`}>
+                          Price — per day running cost
+                        </Label>
+                        <Input
+                          id={`md-price-day-${provider.id}`}
+                          className="mt-1.5"
+                          value={provider.price_per_day ?? ""}
+                          onChange={(e) =>
+                            updateProvider(provider.id, { price_per_day: e.target.value })
+                          }
+                          placeholder="e.g., 4500"
+                        />
+                        <p className="mt-1 text-xs text-stone-500">
+                          Optional · shown as ₹ on the list
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
               <GalleryImagesField
                 label="Vehicle images (up to 6)"
@@ -1067,25 +1162,37 @@ function ContentCard({
           ) : item.subtitle ? (
             <p className="text-sm text-white/90">{item.subtitle}</p>
           ) : null}
-          {item.provider_company_name ? (
-            <p className="text-xs text-white/75">{item.provider_company_name}</p>
-          ) : null}
-          {(item.price_per_km || item.price_per_day) && (
+          {item.provider_company_name || (item.providers?.length ?? 0) > 0 ? (
             <p className="text-xs text-white/75">
-              {[
-                item.price_per_km?.trim()
-                  ? `${formatInrAmount(item.price_per_km)}/km`
-                  : null,
-                item.price_per_day?.trim()
-                  ? `${formatInrAmount(item.price_per_day)}/day`
-                  : null,
-              ]
+              {normalizeVehicleProviders(item)
+                .map((p) => p.provider_company_name.trim())
                 .filter(Boolean)
-                .join(" · ")}
+                .join(" · ") || item.provider_company_name}
+            </p>
+          ) : null}
+          {(item.price_per_km || item.price_per_day || (item.providers?.length ?? 0) > 0) && (
+            <p className="text-xs text-white/75">
+              {(() => {
+                const primary = normalizeVehicleProviders(item)[0];
+                return [
+                  primary?.price_per_km?.trim()
+                    ? `${formatInrAmount(primary.price_per_km)}/km`
+                    : item.price_per_km?.trim()
+                      ? `${formatInrAmount(item.price_per_km)}/km`
+                      : null,
+                  primary?.price_per_day?.trim()
+                    ? `${formatInrAmount(primary.price_per_day)}/day`
+                    : item.price_per_day?.trim()
+                      ? `${formatInrAmount(item.price_per_day)}/day`
+                      : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
+              })()}
             </p>
           )}
-          {!hideOwnCreator ? (
-            <p className="mt-1 text-xs text-white/70">By {item.created_by_name ?? "Unknown"}</p>
+          {!hideOwnCreator && item.created_by_name?.trim() ? (
+            <p className="mt-1 text-xs text-white/70">By {item.created_by_name.trim()}</p>
           ) : null}
         </div>
         <div className="flex items-center gap-2">

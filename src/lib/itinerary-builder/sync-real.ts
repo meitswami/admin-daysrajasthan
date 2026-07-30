@@ -81,6 +81,19 @@ export async function hydrateItineraryBuilderFromSupabaseIfReal(): Promise<Clien
       mergedById.set(loc.id, loc);
       continue;
     }
+    // Prefer local when it has a real creator name and remote still does not
+    const remOwner = (rem.owner_name ?? "").trim();
+    const locOwner = (loc.owner_name ?? "").trim();
+    const remoteMissingOwner = !remOwner || remOwner === "—" || remOwner === "System";
+    const localHasOwner = Boolean(locOwner && locOwner !== "—" && locOwner !== "System");
+    if (remoteMissingOwner && localHasOwner) {
+      mergedById.set(loc.id, {
+        ...rem,
+        owner_name: loc.owner_name,
+        created_by: loc.created_by || loc.owner_name,
+      });
+      continue;
+    }
     if (new Date(loc.updated_at).getTime() > new Date(rem.updated_at).getTime()) {
       mergedById.set(loc.id, loc);
     }

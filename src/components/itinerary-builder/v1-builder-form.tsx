@@ -11,11 +11,16 @@ import {
   VEHICLE_TYPES,
 } from "@/lib/itinerary-builder/defaults";
 import {
+  durationLabelFromDayCount,
   durationLabelFromDays,
   formatInr,
+  hotelBlockDaysFromItinerary,
+  isDepartureLocation,
   normalizeVehicleType,
+  parseDayCountFromDurationInput,
+  resizeDaysPreservingCache,
 } from "@/lib/itinerary-builder/cost-engine";
-import { buildCategoryPricing } from "@/lib/itinerary-builder/package-catalog";
+import { buildCategoryPricing, type PackageCatalogEntry } from "@/lib/itinerary-builder/package-catalog";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   learnAiSuggestionFromDay,
@@ -26,18 +31,20 @@ import {
   findHotelByOptionLabel,
   formatHotelOption,
   hotelFromWebsiteItem,
-  hotelLocations,
   hotelPriceDescription,
   hotelsForLocation,
-  HOTEL_MASTER,
-  mergeHotelCatalog,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
 import { listMasterContent, updateMasterContent, createMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 import { PLACEHOLDER_IMAGES } from "@/lib/constants/placeholder-images";
-import { cities, destinations, vehicles as masterVehicles } from "@/lib/data/website-content";
+import { vehicles as seedVehicles } from "@/lib/data/website-content";
+import {
+  normalizeVehicleProviders,
+  vehicleProviderDetailBlocks,
+} from "@/lib/master-data/vehicle-providers";
+import type { WebsiteContentItem } from "@/types/database";
 import { useSystem } from "@/components/providers/system-provider";
 import {
   HOTEL_CATEGORY_OPTIONS,
@@ -70,41 +77,14 @@ import {
 const MAX_DAY_IMAGES = 6;
 const MAX_LOCATION_IMAGES = 6;
 
-const FALLBACK_LOCATIONS = [
-  "Jaipur",
-  "Jodhpur",
-  "Udaipur",
-  "Jaisalmer",
-  "Pushkar",
-  "Departure",
-  "Delhi",
-  "Agra",
-];
+/** Always available for last-day overnight logic even if missing from master. */
+const DEPARTURE_LOCATION = "Departure";
 
 type LocationCatalogEntry = {
   id?: string;
   name: string;
   photos: string[];
 };
-
-function buildFallbackCatalog(): LocationCatalogEntry[] {
-  const byName = new Map<string, string[]>();
-  for (const d of destinations) {
-    byName.set(d.name, collectDisplayImages(d.image_url, d.gallery_urls, MAX_LOCATION_IMAGES));
-  }
-  for (const c of cities) {
-    const name = c.name.replace(/ City$/, "");
-    if (!byName.has(name)) {
-      byName.set(name, collectDisplayImages(c.image_url, c.gallery_urls, MAX_LOCATION_IMAGES));
-    }
-  }
-  for (const name of [...hotelLocations(), ...FALLBACK_LOCATIONS]) {
-    if (!byName.has(name)) byName.set(name, []);
-  }
-  return Array.from(byName.entries())
-    .map(([name, photos]) => ({ name, photos }))
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
 
 function photosForLocation(
   catalog: LocationCatalogEntry[],
@@ -116,14 +96,31 @@ function photosForLocation(
   return (hit?.photos ?? []).slice(0, MAX_DAY_IMAGES);
 }
 
-function vehicleOptions(): string[] {
+function ensureDepartureInCatalog(entries: LocationCatalogEntry[]): LocationCatalogEntry[] {
+  if (entries.some((e) => e.name.trim().toLowerCase() === "departure")) {
+    return entries;
+  }
+  return [...entries, { name: DEPARTURE_LOCATION, photos: [] }].sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+}
+
+function vehicleOptions(catalog: WebsiteContentItem[] = seedVehicles): string[] {
   const names = new Set<string>([
     ...VEHICLE_TYPES,
     "Tempo Traveller 17 Seater",
     "Tempo Traveller 12 Seater",
   ]);
-  masterVehicles.forEach((v) => names.add(v.name));
+  catalog.forEach((v) => names.add(v.name));
   return Array.from(names);
+}
+
+function findVehicleByName(
+  catalog: WebsiteContentItem[],
+  name: string
+): WebsiteContentItem | null {
+  const q = name.trim().toLowerCase();
+  return catalog.find((v) => v.name.trim().toLowerCase() === q) ?? null;
 }
 
 function mergeOptionalInclusions(base: string[], keys: string[]): string[] {
@@ -227,6 +224,171 @@ function DayTitleSuggest({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Pick a pre-existing master itinerary by title — tour code updates only on a real package change. */
+function PackageTitleSuggest({
+  value,
+  onChange,
+  packages,
+  currentPackageId,
+  onSelectPackage,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  packages: PackageCatalogEntry[];
+  currentPackageId: string | null;
+  onSelectPackage?: (packageId: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const matches = useMemo(() => {
+    const q = value.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return packages
+      .filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.tour_code.toLowerCase().includes(q)
+      )
+      .slice(0, 12);
+  }, [value, packages]);
+
+  return (
+    <div className="relative flex-1">
+      <Input
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => {
+          if (value.trim().length >= 2) setOpen(true);
+        }}
+        onBlur={() => {
+          window.setTimeout(() => setOpen(false), 150);
+        }}
+        placeholder="Itinerary title"
+      />
+      {open && matches.length > 0 && (
+        <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-stone-200 bg-white p-1 shadow-lg">
+          {matches.map((pkg) => {
+            const selected = currentPackageId === pkg.id;
+            return (
+              <button
+                key={pkg.id}
+                type="button"
+                className={cn(
+                  "flex w-full flex-col gap-0.5 rounded-lg px-3 py-2 text-left hover:bg-blue-50",
+                  selected && "bg-blue-50"
+                )}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  onChange(pkg.title);
+                  setOpen(false);
+                  if (!selected) onSelectPackage?.(pkg.id);
+                }}
+              >
+                <span className="text-sm font-medium text-stone-900">{pkg.title}</span>
+                <span className="font-mono text-xs text-stone-500">
+                  {pkg.tour_code} · {pkg.duration_label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SelectedVehicleChip({
+  name,
+  vehicle,
+  onRemove,
+}: {
+  name: string;
+  vehicle: WebsiteContentItem | null;
+  onRemove: () => void;
+}) {
+  const [infoOpen, setInfoOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const blocks = vehicleProviderDetailBlocks(
+    vehicle ? normalizeVehicleProviders(vehicle) : []
+  );
+
+  useEffect(() => {
+    if (!infoOpen) return;
+    function onDocPointer(e: MouseEvent) {
+      if (!rootRef.current?.contains(e.target as Node)) setInfoOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setInfoOpen(false);
+    }
+    document.addEventListener("mousedown", onDocPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [infoOpen]);
+
+  return (
+    <div
+      ref={rootRef}
+      className="relative flex items-center justify-between gap-2 rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900"
+    >
+      <span className="min-w-0 flex-1 truncate">{name}</span>
+      <div className="flex shrink-0 items-center gap-1">
+        <div className="relative">
+          <button
+            type="button"
+            className={cn(
+              "rounded-full p-1 text-violet-600 hover:bg-white hover:text-blue-600",
+              infoOpen && "bg-white text-blue-600"
+            )}
+            aria-label="Vehicle details"
+            aria-expanded={infoOpen}
+            onClick={() => setInfoOpen((v) => !v)}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+          {infoOpen && (
+            <div
+              role="dialog"
+              aria-label="Vehicle details"
+              className="absolute right-0 bottom-full z-20 mb-2 w-72 rounded-lg border border-stone-200 bg-white p-3 text-left shadow-lg"
+            >
+              <div className="max-h-64 space-y-3 overflow-y-auto">
+                {blocks.map((block) => (
+                  <div key={block.title}>
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-stone-500">
+                      {block.title}
+                    </p>
+                    <dl className="space-y-1">
+                      {block.lines.map((line) => (
+                        <div key={line.label} className="text-xs leading-relaxed text-stone-800">
+                          <dt className="inline font-semibold">{line.label}: </dt>
+                          <dd className="inline">{line.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          className="rounded-md p-1 text-red-500 hover:bg-white hover:text-red-700"
+          aria-label={`Remove ${name}`}
+          onClick={onRemove}
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -606,6 +768,8 @@ export function V1BuilderForm({
   onAddNote,
   saveLabel = "Save New Itinerary",
   saveRequiresChanges = false,
+  packageCatalog = [],
+  onSelectPackage,
 }: {
   snapshot: ItinerarySnapshot;
   onChange: (next: ItinerarySnapshot) => void;
@@ -617,6 +781,10 @@ export function V1BuilderForm({
   saveLabel?: string;
   /** When true, hide Save until title / description / location / day add-delete changes. */
   saveRequiresChanges?: boolean;
+  /** Master packages — used to switch pre-existing itinerary from the title field. */
+  packageCatalog?: PackageCatalogEntry[];
+  /** Called when a different pre-existing package is picked (tour code should update). */
+  onSelectPackage?: (packageId: string) => void;
 }) {
   const { show } = useToast();
   const { currentMember } = useSystem();
@@ -628,19 +796,24 @@ export function V1BuilderForm({
     if (!saveRequiresChanges || baselineFingerprintRef.current == null) return true;
     return itineraryEditFingerprint(s) !== baselineFingerprintRef.current;
   }, [s, saveRequiresChanges]);
+  /** Keeps trimmed day cards so Duration typos can restore prior content. */
+  const dayCacheRef = useRef<ItineraryDay[]>(s.days.map((d) => ({ ...d })));
+  const [durationFocused, setDurationFocused] = useState(false);
+  const [durationDraft, setDurationDraft] = useState("");
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
-    buildFallbackCatalog()
+    ensureDepartureInCatalog([])
   );
-  const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>(HOTEL_MASTER);
+  const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>([]);
+  const [vehicleCatalog, setVehicleCatalog] = useState<WebsiteContentItem[]>(seedVehicles);
   const [uploadingDayImage, setUploadingDayImage] = useState<number | null>(null);
   const locs = useMemo(
     () => locationCatalog.map((e) => e.name),
     [locationCatalog]
   );
-  const vehicles = useMemo(() => vehicleOptions(), []);
+  const vehicles = useMemo(() => vehicleOptions(vehicleCatalog), [vehicleCatalog]);
   const selectedKeys = s.category_pricing.map((c) => c.category_key) as HotelCategoryKey[];
-  /** One hotels block per overnight stay (last day has no night) */
-  const hotelBlockDays = s.days.slice(0, Math.max(0, s.days.length - 1));
+  /** Night cards match days; last day omitted only when location is Departure. */
+  const hotelBlockDays = hotelBlockDaysFromItinerary(s.days);
   const isThreeDayTwoNight = s.days.length === 3;
   const priceBasisOptions: [PriceBasis, string][] = isThreeDayTwoNight
     ? [["whole_group", "Whole Group/Family"]]
@@ -665,20 +838,19 @@ export function V1BuilderForm({
     void listMasterContent("destinations").then((items) => {
       if (cancelled) return;
       const byName = new Map<string, LocationCatalogEntry>();
-      for (const entry of buildFallbackCatalog()) {
-        byName.set(entry.name, entry);
-      }
       for (const item of items) {
         const name = item.name.trim();
         if (!name) continue;
-        byName.set(name, {
+        byName.set(name.toLowerCase(), {
           id: item.id,
           name,
           photos: collectDisplayImages(item.image_url, item.gallery_urls, MAX_LOCATION_IMAGES),
         });
       }
       setLocationCatalog(
-        Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
+        ensureDepartureInCatalog(
+          Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
+        )
       );
     });
     return () => {
@@ -693,7 +865,18 @@ export function V1BuilderForm({
       const mapped = items
         .map(hotelFromWebsiteItem)
         .filter((h): h is HotelMasterItem => Boolean(h));
-      setHotelCatalog(mergeHotelCatalog(mapped, HOTEL_MASTER));
+      setHotelCatalog(mapped);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterContent("vehicles").then((items) => {
+      if (cancelled) return;
+      setVehicleCatalog(items.length ? items : seedVehicles);
     });
     return () => {
       cancelled = true;
@@ -749,6 +932,9 @@ export function V1BuilderForm({
 
   function updateDay(index: number, updater: (d: ItineraryDay) => ItineraryDay) {
     const days = s.days.map((d, i) => (i === index ? updater(d) : d));
+    days.forEach((d, i) => {
+      dayCacheRef.current[i] = d;
+    });
     const next = {
       ...s,
       days,
@@ -761,8 +947,59 @@ export function V1BuilderForm({
     });
   }
 
+  function setDayCount(dayCount: number) {
+    if (!Number.isFinite(dayCount) || dayCount < 1) return;
+    if (dayCount === s.days.length) {
+      patch({
+        header: { ...s.header, duration_label: durationLabelFromDays(s.days) },
+      });
+      return;
+    }
+    const { days, cache } = resizeDaysPreservingCache(
+      s.days,
+      dayCount,
+      dayCacheRef.current,
+      emptyDay
+    );
+    dayCacheRef.current = cache;
+    const next = {
+      ...s,
+      days,
+      header: { ...s.header, duration_label: durationLabelFromDays(days) },
+    };
+    patch({
+      days,
+      header: next.header,
+      ...pricingFrom(next),
+    });
+  }
+
+  function onDurationInputChange(raw: string) {
+    setDurationDraft(raw);
+    const parsed = parseDayCountFromDurationInput(raw);
+    if (parsed != null && parsed >= 1) {
+      setDayCount(parsed);
+    }
+  }
+
+  function onDurationFocus() {
+    setDurationFocused(true);
+    setDurationDraft(String(s.days.length).padStart(2, "0"));
+  }
+
+  function onDurationBlur() {
+    const parsed = parseDayCountFromDurationInput(durationDraft);
+    const finalCount = parsed != null && parsed >= 1 ? parsed : s.days.length;
+    setDayCount(finalCount);
+    setDurationFocused(false);
+    setDurationDraft("");
+  }
+
   function addDay() {
     const days = [...s.days, emptyDay(s.days.length + 1)];
+    days.forEach((d, i) => {
+      dayCacheRef.current[i] = d;
+    });
     const next = {
       ...s,
       days,
@@ -777,9 +1014,16 @@ export function V1BuilderForm({
 
   function removeDay(index: number) {
     if (s.days.length <= 1) return;
+    // Snapshot full list first so Duration restore can bring trimmed days back.
+    s.days.forEach((d, i) => {
+      dayCacheRef.current[i] = d;
+    });
     const days = s.days
       .filter((_, i) => i !== index)
       .map((d, i) => ({ ...d, day_number: i + 1 }));
+    for (let i = 0; i < days.length; i++) {
+      dayCacheRef.current[i] = days[i];
+    }
     const next = {
       ...s,
       days,
@@ -883,7 +1127,9 @@ export function V1BuilderForm({
           };
           setLocationCatalog((prev) => {
             const without = prev.filter((e) => e.name.toLowerCase() !== q);
-            return [...without, entry!].sort((a, b) => a.name.localeCompare(b.name));
+            return ensureDepartureInCatalog(
+              [...without, entry!].sort((a, b) => a.name.localeCompare(b.name))
+            );
           });
         } else if (currentMember) {
           const created = await createMasterContent(
@@ -907,7 +1153,9 @@ export function V1BuilderForm({
           };
           setLocationCatalog((prev) => {
             const without = prev.filter((e) => e.name.toLowerCase() !== q);
-            return [...without, entry!].sort((a, b) => a.name.localeCompare(b.name));
+            return ensureDepartureInCatalog(
+              [...without, entry!].sort((a, b) => a.name.localeCompare(b.name))
+            );
           });
           show(`Added photos to Location master “${created.name}”`);
           return;
@@ -1051,15 +1299,29 @@ export function V1BuilderForm({
             <div className="space-y-3">
               {titleList.map((title, index) => (
                 <div key={index} className="flex gap-2">
-                  <Input
-                    value={title}
-                    onChange={(e) => {
-                      const next = [...titleList];
-                      next[index] = e.target.value;
-                      setTitles(next);
-                    }}
-                    placeholder={index === 0 ? "Itinerary title" : `Alternate title ${index + 1}`}
-                  />
+                  {index === 0 && packageCatalog.length > 0 ? (
+                    <PackageTitleSuggest
+                      value={title}
+                      onChange={(v) => {
+                        const next = [...titleList];
+                        next[index] = v;
+                        setTitles(next);
+                      }}
+                      packages={packageCatalog}
+                      currentPackageId={s.source_package_id}
+                      onSelectPackage={onSelectPackage}
+                    />
+                  ) : (
+                    <Input
+                      value={title}
+                      onChange={(e) => {
+                        const next = [...titleList];
+                        next[index] = e.target.value;
+                        setTitles(next);
+                      }}
+                      placeholder={index === 0 ? "Itinerary title" : `Alternate title ${index + 1}`}
+                    />
+                  )}
                   <button
                     type="button"
                     className="rounded-lg p-2 text-red-500 hover:bg-red-50"
@@ -1103,14 +1365,46 @@ export function V1BuilderForm({
                   value={s.header.tour_code ?? ""}
                   onChange={(e) => patchHeader({ tour_code: e.target.value || null })}
                 />
+                <p className="mt-1 text-xs text-stone-500">
+                  Auto-updates only when the selected itinerary package changes.
+                </p>
               </div>
               <div className="sm:col-span-2">
                 <Label>Duration</Label>
                 <Input
-                  className="mt-1.5 bg-stone-50"
-                  readOnly
-                  value={s.header.duration_label ?? durationLabelFromDays(s.days)}
+                  className="mt-1.5"
+                  inputMode="numeric"
+                  placeholder="e.g. 03 → 03 Days / 03 Nights"
+                  value={
+                    durationFocused
+                      ? durationDraft
+                      : s.header.duration_label ?? durationLabelFromDays(s.days)
+                  }
+                  onFocus={(e) => {
+                    onDurationFocus();
+                    requestAnimationFrame(() => e.currentTarget.select());
+                  }}
+                  onBlur={onDurationBlur}
+                  onChange={(e) => onDurationInputChange(e.target.value)}
                 />
+                <p className="mt-1.5 text-xs text-stone-500">
+                  Type days (e.g. 03). Day and night cards stay equal; set the last day location to
+                  Departure to drop one night (03 Days / 02 Nights).
+                  {durationFocused &&
+                    (() => {
+                      const preview = parseDayCountFromDurationInput(durationDraft);
+                      if (preview == null || preview < 1) return null;
+                      return (
+                        <>
+                          {" "}
+                          →{" "}
+                          <span className="font-medium text-emerald-700">
+                            {durationLabelFromDayCount(preview)}
+                          </span>
+                        </>
+                      );
+                    })()}
+                </p>
               </div>
             </div>
           </section>
@@ -1434,19 +1728,12 @@ export function V1BuilderForm({
             </div>
             <div className="mt-3 space-y-2">
               {vehicleList.map((v) => (
-                <div
+                <SelectedVehicleChip
                   key={v}
-                  className="flex items-center justify-between rounded-lg bg-violet-50 px-3 py-2 text-sm text-violet-900"
-                >
-                  <span>{v}</span>
-                  <button
-                    type="button"
-                    className="text-red-500 hover:text-red-700"
-                    onClick={() => removeVehicle(v)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
+                  name={v}
+                  vehicle={findVehicleByName(vehicleCatalog, v)}
+                  onRemove={() => removeVehicle(v)}
+                />
               ))}
             </div>
             <div className="mt-4 space-y-4">
@@ -1503,6 +1790,12 @@ export function V1BuilderForm({
               />
             );
           })}
+          {isDepartureLocation(s.days[s.days.length - 1]?.location) && (
+              <p className="text-xs text-stone-500">
+                Last day is Departure — Night {String(s.days.length).padStart(2, "0")} is omitted.
+                Hotel data is kept if you change the location back.
+              </p>
+            )}
         </div>
       </div>
 

@@ -23,7 +23,7 @@ import {
   primaryGrandTotal,
 } from "@/lib/itinerary-builder/cost-engine";
 import { emptySnapshot, newUuid } from "@/lib/itinerary-builder/defaults";
-import { buildCategoryPricing, getPackageById } from "@/lib/itinerary-builder/package-catalog";
+import { buildCategoryPricing } from "@/lib/itinerary-builder/package-catalog";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { logPricingChange } from "@/lib/itinerary-builder/pricing-log";
 import { cloneSnapshot, createRevision } from "@/lib/itinerary-builder/revisions";
@@ -43,8 +43,19 @@ import {
   normalizeRevision,
   normalizeSnapshot,
 } from "@/lib/itinerary-builder/normalize";
+import { getCurrentTeamMember } from "@/lib/rbac/current-user";
 
-const DEMO_USER = "Vandana Shekhawat";
+function resolveActorName(explicit?: string | null): string {
+  const trimmed = explicit?.trim();
+  if (trimmed && trimmed !== "System") return trimmed;
+  try {
+    const name = getCurrentTeamMember().name?.trim();
+    if (name && name !== "System") return name;
+  } catch {
+    // SSR / unavailable
+  }
+  return "Staff";
+}
 
 export { normalizeSnapshot, normalizeRecord };
 
@@ -91,6 +102,7 @@ function syncRecordFromSnapshot(
 export function listClientItineraries(opts?: {
   includeDeleted?: boolean;
   confirmedOnly?: boolean;
+  pendingOnly?: boolean;
 }): ClientItineraryRecord[] {
   const { records } = loadState();
   let list = [...records].filter((r) => r.type === "client_itinerary");
@@ -98,9 +110,9 @@ export function listClientItineraries(opts?: {
     list = list.filter((r) => !r.deleted_at);
   }
   if (opts?.confirmedOnly) {
-    list = list.filter((r) =>
-      ["booking_confirmed", "completed"].includes(r.workflow_status)
-    );
+    list = list.filter(isConfirmedBooking);
+  } else if (opts?.pendingOnly) {
+    list = list.filter(isPendingQuote);
   }
   // Catalog rows mistakenly stored as quotes (client_name "Website Package")
   list = list.filter((r) => {
@@ -148,8 +160,8 @@ function buildRecordFromSnapshot(
     workflow_status: "draft",
     current_revision_id: revision.id,
     current_version: revision.version_number,
-    created_by: DEMO_USER,
-    owner_name: DEMO_USER,
+    created_by: resolveActorName(),
+    owner_name: resolveActorName(),
     created_at: revision.created_at,
     updated_at: revision.created_at,
     client_name: normalized.client.client_name,
@@ -204,19 +216,23 @@ export type WizardCreateInput = {
   lead_id?: string | null;
   lead_source?: ClientItineraryRecord["lead_source"];
   customer_id?: string | null;
+  created_by?: string | null;
+  owner_name?: string | null;
 };
 
 export function createClientItineraryFromWizard(input: WizardCreateInput): ClientItineraryRecord {
   const state = loadState();
   const id = newUuid();
   const quote_id = nextQuoteId(state.records);
+  const actorName = resolveActorName(input.owner_name ?? input.created_by);
 
-  let snapshot: ItinerarySnapshot;
-  if (input.packageId) {
-    const pkg = getPackageById(input.packageId);
-    snapshot = pkg ? pkg.buildTemplate() : emptySnapshot();
-  } else {
-    snapshot = emptySnapshot();
+  // Templates come from Master Data (caller passes days); no demo catalog.
+  let snapshot: ItinerarySnapshot = emptySnapshot();
+  if (input.packageId && input.days?.length) {
+    snapshot = emptySnapshot({
+      days: input.days,
+      source_package_id: input.packageId,
+    });
   }
 
   const primaryTitle =
@@ -279,13 +295,15 @@ export function createClientItineraryFromWizard(input: WizardCreateInput): Clien
     snapshot,
     save_type: "manual",
     milestone_label: input.packageId ? "Created from catalog" : "Draft 1",
-    created_by: DEMO_USER,
+    created_by: actorName,
   });
 
   const record = buildRecordFromSnapshot(id, quote_id, snapshot, revision, {
     lead_id: input.lead_id ?? null,
     lead_source: input.lead_source ?? null,
     customer_id: input.customer_id ?? null,
+    created_by: actorName,
+    owner_name: actorName,
   });
   state.records.unshift(record);
   state.revisions[id] = [revision];
@@ -381,7 +399,7 @@ export function saveSnapshotRevision(
     snapshot: normalized,
     save_type: options.save_type ?? "manual",
     milestone_label: options.milestone_label ?? null,
-    created_by: DEMO_USER,
+    created_by: resolveActorName(),
     previous_snapshot: prevRev?.snapshot ?? null,
   });
 
@@ -476,10 +494,17 @@ export function updatePaymentStatus(
   const state = loadState();
   const idx = state.records.findIndex((r) => r.id === itineraryId);
   if (idx < 0) return null;
+  const prev = state.records[idx];
+  const paid = Number(amount_paid) || 0;
+  const nextWorkflow =
+    paid > 0 && isPendingStatus(prev.workflow_status)
+      ? ("booking_confirmed" as WorkflowStatus)
+      : prev.workflow_status;
   state.records[idx] = {
-    ...state.records[idx],
+    ...prev,
     payment_status,
-    amount_paid,
+    amount_paid: paid,
+    workflow_status: nextWorkflow,
     updated_at: new Date().toISOString(),
   };
   saveState(state);
@@ -492,8 +517,8 @@ export function updatePaymentStatus(
       module: "itinerary_builder",
       entity_type: "quote",
       entity_id: itineraryId,
-      summary: `${state.records[idx].quote_id} payment → ${payment_status} (₹${amount_paid})`,
-      metadata: { payment_status, amount_paid },
+      summary: `${state.records[idx].quote_id} payment → ${payment_status} (₹${paid})`,
+      metadata: { payment_status, amount_paid: paid, workflow_status: nextWorkflow },
     })
   );
   return state.records[idx];
@@ -566,7 +591,7 @@ export function cloneClientItinerary(id: string): ClientItineraryRecord | null {
     snapshot: applyCostToSnapshot(clonedSnap),
     save_type: "duplicate",
     milestone_label: `Cloned from ${source.quote_id}`,
-    created_by: DEMO_USER,
+    created_by: resolveActorName(),
   });
 
   const record = buildRecordFromSnapshot(newId, quote_id, clonedSnap, revision, {
@@ -600,4 +625,23 @@ export function getServerItineraryBuilderSeed() {
 
 export function isPendingStatus(status: WorkflowStatus): boolean {
   return !["booking_confirmed", "completed", "archived"].includes(status);
+}
+
+/** Confirmed booking = client has paid some advance (or fully paid). */
+export function hasAdvancePayment(record: Pick<ClientItineraryRecord, "amount_paid" | "payment_status">): boolean {
+  if (Number(record.amount_paid) > 0) return true;
+  return record.payment_status === "partial" || record.payment_status === "paid";
+}
+
+/** Pending quote = no advance yet (and not archived). */
+export function isPendingQuote(record: ClientItineraryRecord): boolean {
+  if (record.workflow_status === "archived") return false;
+  return !hasAdvancePayment(record);
+}
+
+/** Confirmed booking list = advance received, or workflow already confirmed/completed. */
+export function isConfirmedBooking(record: ClientItineraryRecord): boolean {
+  if (record.workflow_status === "archived") return false;
+  if (hasAdvancePayment(record)) return true;
+  return record.workflow_status === "booking_confirmed" || record.workflow_status === "completed";
 }

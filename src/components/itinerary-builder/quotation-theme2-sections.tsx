@@ -34,14 +34,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Attach master-library images to inclusion cards matched by title. */
-function enrichInclusionIcons(
+/** Attach master-library images to inclusion/exclusion cards matched by title. */
+function enrichPolicyIcons(
   items: ContentBlockItem[],
-  master: InclusionExclusionItem[]
+  master: InclusionExclusionItem[],
+  kind: "inclusion" | "exclusion"
 ): ContentBlockItem[] {
   const byTitle = new Map<string, string>();
   for (const row of master) {
-    if (row.kind !== "inclusion" || !row.image_url) continue;
+    if (row.kind !== kind || !row.image_url) continue;
     byTitle.set(row.text.trim().toLowerCase(), row.image_url);
   }
   return items.map((item) => {
@@ -198,12 +199,12 @@ export function Theme2TourPolicies({
 }) {
   const tone = accent ?? (variant === "theme3" ? THEME3_ACCENT : THEME2_ACCENT);
   const [tab, setTab] = useState<PolicyTabId>("inclusions");
-  const [masterInclusions, setMasterInclusions] = useState<InclusionExclusionItem[]>([]);
+  const [masterLibrary, setMasterLibrary] = useState<InclusionExclusionItem[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void listInclusionExclusions().then((rows) => {
-      if (!cancelled) setMasterInclusions(rows);
+      if (!cancelled) setMasterLibrary(rows);
     });
     return () => {
       cancelled = true;
@@ -211,19 +212,24 @@ export function Theme2TourPolicies({
   }, []);
 
   const panels = useMemo(() => {
-    const inclusions = enrichInclusionIcons(
+    const inclusions = enrichPolicyIcons(
       inclusionItems.filter((i) => i.title.trim()),
-      masterInclusions
+      masterLibrary,
+      "inclusion"
     );
-    const exclusions = exclusionItems.filter((i) => i.title.trim());
+    const exclusions = enrichPolicyIcons(
+      exclusionItems.filter((i) => i.title.trim()),
+      masterLibrary,
+      "exclusion"
+    );
     return {
       inclusions,
-      exclusions: exclusions.map((i) => i.title),
+      exclusions,
       terms: MASTER_TERMS.map((t) => t.title),
       cancellation: MASTER_CANCELLATION.map((t) => t.title),
       payment: MASTER_PAYMENT.map((t) => t.title),
     };
-  }, [inclusionItems, exclusionItems, masterInclusions]);
+  }, [inclusionItems, exclusionItems, masterLibrary]);
 
   return (
     <section className="break-inside-avoid">
@@ -274,7 +280,19 @@ export function Theme2TourPolicies({
             ))}
           </div>
         )}
-        {tab === "exclusions" && <SimplePolicyCards lines={panels.exclusions} />}
+        {tab === "exclusions" && (
+          <div className="space-y-3">
+            {panels.exclusions.map((item, i) => (
+              <PolicyAccordionItem
+                key={item.id}
+                item={item}
+                defaultOpen={i === 0}
+                accent={tone}
+                variant={variant}
+              />
+            ))}
+          </div>
+        )}
         {tab === "terms" && <SimplePolicyCards lines={panels.terms} />}
         {tab === "cancellation" && <SimplePolicyCards lines={panels.cancellation} />}
         {tab === "payment" && <SimplePolicyCards lines={panels.payment} />}
@@ -302,7 +320,17 @@ export function Theme2TourPolicies({
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>
             Exclusions
           </h3>
-          <SimplePolicyCards lines={panels.exclusions} />
+          <div className="space-y-3">
+            {panels.exclusions.map((item) => (
+              <PolicyAccordionItem
+                key={`print-${item.id}`}
+                item={item}
+                defaultOpen
+                accent={tone}
+                variant={variant}
+              />
+            ))}
+          </div>
         </div>
         <div>
           <h3 className="mb-3 text-sm font-bold uppercase tracking-wide" style={{ color: tone }}>

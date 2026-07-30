@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import {
   homeNav,
   bookingNav,
-  crmNav,
   operationsNav,
   masterDataNav,
   reportsNav,
@@ -136,7 +135,6 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         Modules
       </p>
       <CollapsibleGroup group={bookingNav} pathname={pathname} onNavigate={onNavigate} defaultOpen filterItem={filterItem} />
-      <CollapsibleGroup group={crmNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
       <CollapsibleGroup group={operationsNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
       <CollapsibleGroup group={masterDataNav} pathname={pathname} onNavigate={onNavigate} filterItem={filterItem} />
       {reportsNav.filter(filterItem).map((item) => (

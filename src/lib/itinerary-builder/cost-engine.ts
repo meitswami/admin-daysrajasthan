@@ -325,11 +325,115 @@ export function applyCostToSnapshot(snapshot: ItinerarySnapshot): ItinerarySnaps
   };
 }
 
-export function durationLabelFromDays(days: ItineraryDay[]): string {
+/** Max itinerary length staff can drive from the Duration field. */
+export const MAX_ITINERARY_DAYS = 60;
+
+export function isDepartureLocation(location: string | null | undefined): boolean {
+  return (location ?? "").trim().toLowerCase() === "departure";
+}
+
+/** Hotel nights: one per day, minus the last day when it is Departure. */
+export function nightCountFromDays(days: ItineraryDay[]): number {
   const n = days?.length ?? 0;
+  if (n <= 0) return 0;
+  if (isDepartureLocation(days[n - 1]?.location)) return Math.max(0, n - 1);
+  return n;
+}
+
+/** Days that get a Night / hotel block on the right column. */
+export function hotelBlockDaysFromItinerary(days: ItineraryDay[]): ItineraryDay[] {
+  if (!days?.length) return [];
+  if (isDepartureLocation(days[days.length - 1]?.location)) {
+    return days.slice(0, -1);
+  }
+  return days;
+}
+
+/** Format as `03 Days / 03 Nights` (or `03 Days / 02 Nights` when nights passed). */
+export function durationLabelFromDayCount(dayCount: number, nightCount?: number): string {
+  const n = Math.max(0, Math.floor(dayCount));
   if (n <= 0) return "";
-  const nights = Math.max(0, n - 1);
-  return `${nights} Night${nights !== 1 ? "s" : ""} / ${n} Day${n !== 1 ? "s" : ""}`;
+  const nights =
+    nightCount != null && Number.isFinite(nightCount)
+      ? Math.max(0, Math.floor(nightCount))
+      : n;
+  const dd = String(n).padStart(2, "0");
+  const nn = String(nights).padStart(2, "0");
+  return `${dd} Day${n !== 1 ? "s" : ""} / ${nn} Night${nights !== 1 ? "s" : ""}`;
+}
+
+export function durationLabelFromDays(days: ItineraryDay[]): string {
+  const dayCount = days?.length ?? 0;
+  return durationLabelFromDayCount(dayCount, nightCountFromDays(days ?? []));
+}
+
+/**
+ * Interpret Duration box typing: `03`, `3`, `30`, or full labels like
+ * `03 Days / 02 Nights` / legacy `2 Nights / 3 Days`.
+ * Partial digit input (`3`) is treated as that many days until more digits arrive.
+ */
+export function parseDayCountFromDurationInput(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const daysMatch = trimmed.match(/(\d+)\s*Days?/i);
+  if (daysMatch) {
+    const n = Number(daysMatch[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  if (/^\d{1,3}$/.test(trimmed)) {
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const nightsFirst = trimmed.match(/^(\d+)\s*Nights?/i);
+  if (nightsFirst) {
+    const n = Number(nightsFirst[1]) + 1;
+    return Number.isFinite(n) ? n : null;
+  }
+
+  const leading = trimmed.match(/^(\d{1,3})\b/);
+  if (leading) {
+    const n = Number(leading[1]);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  return null;
+}
+
+/**
+ * Resize day list to `targetCount`, restoring previously trimmed days from
+ * `cache` (by index) so accidental Duration edits do not lose staff work.
+ */
+export function resizeDaysPreservingCache(
+  current: ItineraryDay[],
+  targetCount: number,
+  cache: ItineraryDay[],
+  createEmpty: (dayNumber: number) => ItineraryDay
+): { days: ItineraryDay[]; cache: ItineraryDay[] } {
+  const target = Math.max(1, Math.min(MAX_ITINERARY_DAYS, Math.floor(targetCount)));
+  const nextCache = cache.slice();
+  current.forEach((day, i) => {
+    nextCache[i] = day;
+  });
+
+  const days: ItineraryDay[] = [];
+  for (let i = 0; i < target; i++) {
+    const fromCurrent = current[i];
+    const fromCache = nextCache[i];
+    if (fromCurrent) {
+      days.push({ ...fromCurrent, day_number: i + 1 });
+    } else if (fromCache) {
+      days.push({ ...fromCache, day_number: i + 1 });
+    } else {
+      const empty = createEmpty(i + 1);
+      days.push(empty);
+      nextCache[i] = empty;
+    }
+  }
+
+  return { days, cache: nextCache };
 }
 
 export function formatInr(amount: number): string {
