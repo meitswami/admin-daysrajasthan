@@ -34,21 +34,28 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Attach master-library images to inclusion/exclusion cards matched by title. */
-function enrichPolicyIcons(
+/** Fill missing description / images from the master inclusion–exclusion library. */
+function enrichPolicyFromMaster(
   items: ContentBlockItem[],
   master: InclusionExclusionItem[],
   kind: "inclusion" | "exclusion"
 ): ContentBlockItem[] {
-  const byTitle = new Map<string, string>();
+  const byTitle = new Map<string, InclusionExclusionItem>();
   for (const row of master) {
-    if (row.kind !== kind || !row.image_url) continue;
-    byTitle.set(row.text.trim().toLowerCase(), row.image_url);
+    if (row.kind !== kind) continue;
+    byTitle.set(row.text.trim().toLowerCase(), row);
   }
   return items.map((item) => {
-    if (item.images?.some(Boolean)) return item;
-    const url = byTitle.get(item.title.trim().toLowerCase());
-    return url ? { ...item, images: [url] } : item;
+    const hit = byTitle.get(item.title.trim().toLowerCase());
+    if (!hit) return item;
+    const description = item.description?.trim() || hit.description?.trim() || "";
+    const images =
+      item.images?.some(Boolean)
+        ? item.images.filter(Boolean)
+        : hit.image_url
+          ? [hit.image_url]
+          : [];
+    return { ...item, description, images };
   });
 }
 
@@ -84,9 +91,8 @@ function PolicyAccordionItem({
   variant: TourPolicyVariant;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  const iconImage = item.images?.find(Boolean) ?? null;
-  const extraImages = (item.images ?? []).filter(Boolean).slice(1);
-  const hasBody = Boolean(item.description?.trim() || extraImages.length);
+  const bodyImage = item.images?.find(Boolean) ?? null;
+  const hasBody = Boolean(item.description?.trim() || bodyImage);
 
   return (
     <div
@@ -101,35 +107,22 @@ function PolicyAccordionItem({
           "flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5",
           variant === "theme3"
             ? "bg-white hover:bg-[#F8E9EC]/40"
-            : "bg-gradient-to-r from-stone-50 to-white",
-          hasBody && variant !== "theme3" && "hover:from-green-50"
+            : "bg-gradient-to-r from-stone-50 to-white hover:from-green-50"
         )}
-        onClick={() => hasBody && setOpen((v) => !v)}
+        onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
         <span className="flex min-w-0 items-center gap-3">
-          {iconImage ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={iconImage}
-              alt=""
-              className="h-9 w-9 shrink-0 rounded-lg object-cover ring-1 ring-stone-200"
-            />
-          ) : variant === "theme3" ? (
-            <span
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ backgroundColor: accent }}
-            >
+          <span
+            className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
+            style={{ backgroundColor: accent }}
+          >
+            {variant === "theme3" ? (
               <Info className="h-3.5 w-3.5" strokeWidth={2.5} />
-            </span>
-          ) : (
-            <span
-              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ backgroundColor: accent }}
-            >
+            ) : (
               <Check className="h-3.5 w-3.5" strokeWidth={3} />
-            </span>
-          )}
+            )}
+          </span>
           <span
             className={cn(
               "text-sm font-semibold text-stone-800 sm:text-base",
@@ -139,34 +132,34 @@ function PolicyAccordionItem({
             {item.title}
           </span>
         </span>
-        {hasBody && (
-          <span className="no-print shrink-0 print:hidden" style={{ color: accent }}>
-            {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
-          </span>
-        )}
+        <span className="no-print shrink-0 print:hidden" style={{ color: accent }}>
+          {open ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+        </span>
       </button>
-      {hasBody && (
-        <div
-          className={cn(
-            "border-t border-stone-100 px-4 py-4 sm:px-5",
-            open ? "block" : "hidden print:block"
-          )}
-        >
+      <div
+        className={cn(
+          "border-t border-stone-100 px-4 py-4 sm:px-5",
+          open ? "block" : "hidden print:block"
+        )}
+      >
+        {hasBody ? (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-            {extraImages[0] && (
+            {bodyImage && (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={extraImages[0]}
+                src={bodyImage}
                 alt=""
                 className="h-28 w-40 shrink-0 rounded-lg object-cover sm:h-32 sm:w-44"
               />
             )}
-            {item.description?.trim() && (
+            {item.description?.trim() ? (
               <p className="text-sm leading-relaxed text-stone-600">{item.description}</p>
-            )}
+            ) : null}
           </div>
-        </div>
-      )}
+        ) : (
+          <p className="text-sm italic text-stone-400">No additional details.</p>
+        )}
+      </div>
     </div>
   );
 }
@@ -212,12 +205,12 @@ export function Theme2TourPolicies({
   }, []);
 
   const panels = useMemo(() => {
-    const inclusions = enrichPolicyIcons(
+    const inclusions = enrichPolicyFromMaster(
       inclusionItems.filter((i) => i.title.trim()),
       masterLibrary,
       "inclusion"
     );
-    const exclusions = enrichPolicyIcons(
+    const exclusions = enrichPolicyFromMaster(
       exclusionItems.filter((i) => i.title.trim()),
       masterLibrary,
       "exclusion"
