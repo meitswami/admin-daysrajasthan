@@ -965,7 +965,7 @@ export function QuotationDocument({
     : "Travel Package";
 
   const documentClassName = isTheme3
-    ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-[#FBF7F0] p-0 text-stone-900"
+    ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-white p-0 text-stone-900"
     : mode === "print"
       ? `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-none p-0 text-stone-900`
       : isTheme2
@@ -974,7 +974,7 @@ export function QuotationDocument({
 
   const documentStyle = {
     backgroundColor: isTheme3
-      ? "#FBF7F0"
+      ? "#ffffff"
       : theme.id === 1
         ? "#ffffff"
         : theme.id === 5
@@ -1355,7 +1355,7 @@ export function QuotationDocument({
 
   return (
     <div
-      className="relative w-full overflow-hidden bg-[#FBF7F0] text-stone-900"
+      className="relative w-full overflow-hidden bg-white text-stone-900"
       style={{
         WebkitPrintColorAdjust: "exact",
         printColorAdjust: "exact",

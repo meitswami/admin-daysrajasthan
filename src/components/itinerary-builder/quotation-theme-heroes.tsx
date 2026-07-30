@@ -299,7 +299,7 @@ export function Theme3Hero({
 
   return (
     <header
-      className="relative z-[2] overflow-hidden bg-[#FBF7F0] px-4 py-4 sm:px-6 lg:px-8"
+      className="relative z-[2] overflow-hidden bg-white px-4 py-4 sm:px-6 lg:px-8"
       style={{ fontFamily: "var(--font-poltawski), \"Poltawski Nowy\", serif" }}
     >
       <div className="mb-4 flex w-full items-center justify-between px-4 py-4 sm:px-6">

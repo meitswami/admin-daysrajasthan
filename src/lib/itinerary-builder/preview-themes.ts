@@ -68,7 +68,7 @@ export const PREVIEW_THEMES: PreviewTheme[] = [
     styleName: "Parchment Heritage",
     shortLabel: "Maroon Parchment",
     gradient: "from-[#7B1E2E] via-[#A63D4F] to-[#4A0E18]",
-    shell: "bg-[#FBF7F0]",
+    shell: "bg-white",
     accent: "#7F1D1D",
     accentSoft: "#F8E9EC",
     heading: "#1c1917",
