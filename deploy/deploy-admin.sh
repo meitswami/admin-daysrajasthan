@@ -31,29 +31,58 @@ if [[ -f /opt/daysrajasthan/env/admin.env ]]; then
   cp /opt/daysrajasthan/env/admin.env "$ADMIN_DIR/.env.local"
 fi
 
-# Fresh install avoids intermittent npm ENOTEMPTY/rmdir failures on stale trees.
-rm -rf node_modules
+# Stop the running app first — open file handles in node_modules cause
+# intermittent "Directory not empty" / ENOTEMPTY failures during rm/npm.
+pm2 stop daysrajasthan-admin >/dev/null 2>&1 || true
+pm2 delete daysrajasthan-admin >/dev/null 2>&1 || true
+sleep 1
+
+# Prefer rename+delete over in-place rm -rf (more reliable on busy disks).
+remove_tree() {
+  local target="$1"
+  [[ -e "$target" ]] || return 0
+  local trash="${target}.__trash_$$"
+  mv "$target" "$trash"
+  # Best-effort cleanup; never block deploy if trash delete is flaky.
+  chmod -R u+w "$trash" 2>/dev/null || true
+  rm -rf "$trash" 2>/dev/null || true
+  if [[ -e "$trash" ]]; then
+    find "$trash" -mindepth 1 -delete 2>/dev/null || true
+    rm -rf "$trash" 2>/dev/null || true
+  fi
+  # Last resort: leave trash aside so npm can still install into a fresh path.
+  if [[ -e "$trash" ]]; then
+    echo "WARN: could not fully delete $trash — leaving for later cleanup" >&2
+  fi
+}
+
+remove_tree node_modules
+# Clear any leftover trash dirs from prior failed deploys.
+for d in node_modules.__trash_*; do
+  [[ -e "$d" ]] || continue
+  remove_tree "$d"
+done
+
 npm ci || npm install
 
 # Keep previous build until the new one succeeds (failed builds must not wipe production).
-rm -rf .next.prev
+remove_tree .next.prev
 if [[ -d .next ]]; then
   mv .next .next.prev
 fi
 
 if ! npm run build; then
   echo "ADMIN_BUILD_FAILED — restoring previous .next" >&2
-  rm -rf .next
+  remove_tree .next
   if [[ -d .next.prev ]]; then
     mv .next.prev .next
   fi
   exit 1
 fi
 
-rm -rf .next.prev
+remove_tree .next.prev
 chown -R deploy:deploy "$ADMIN_DIR"
 
-pm2 delete daysrajasthan-admin >/dev/null 2>&1 || true
 set -a
 [[ -f /opt/daysrajasthan/env/admin.env ]] && . /opt/daysrajasthan/env/admin.env
 set +a
