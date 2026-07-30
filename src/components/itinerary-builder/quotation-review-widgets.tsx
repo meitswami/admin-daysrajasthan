@@ -23,13 +23,16 @@ type Props = {
   layout?: "stack" | "row";
   accentClassName?: string;
   className?: string;
+  titleClassName?: string;
 };
 
 export function QuotationReviewWidgets({
   layout = "stack",
   accentClassName = "text-[#7B1E2E]",
   className,
+  titleClassName,
 }: Props) {
+  const titleCls = titleClassName ?? "text-sm font-semibold text-stone-900 sm:text-base";
   return (
     <div
       className={cn(
@@ -41,23 +44,21 @@ export function QuotationReviewWidgets({
         href={GOOGLE_REVIEWS_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-sm transition hover:border-stone-300 hover:shadow"
+        className="inline-flex items-center gap-4 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm transition hover:border-stone-300 hover:shadow"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/theme-assets/reviews/google-g.webp"
           alt="Google"
-          className="h-11 w-11 shrink-0 object-contain"
+          className="h-12 w-12 shrink-0 object-contain"
         />
         <div className="min-w-0">
-          <p className="font-serif text-sm font-semibold text-stone-900 sm:text-base">
-            Customer Reviews
-          </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm">
+          <p className={titleCls}>Customer Reviews</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-yellow-500">
             <Stars rating={REVIEW_STATS.google.rating} />
-            <span className="font-semibold text-stone-800">{REVIEW_STATS.google.rating}</span>
-            <span className={cn("text-xs font-medium sm:text-sm", accentClassName)}>
-              {REVIEW_STATS.google.count.toLocaleString("en-IN")} {REVIEW_STATS.google.label}
+            <span className="ml-1 text-xs text-gray-600">{REVIEW_STATS.google.rating}</span>
+            <span className={cn("ml-1 text-xs text-gray-500", accentClassName)}>
+              ({REVIEW_STATS.google.count.toLocaleString("en-IN")} {REVIEW_STATS.google.label})
             </span>
           </div>
         </div>
@@ -67,23 +68,21 @@ export function QuotationReviewWidgets({
         href={TRIPADVISOR_REVIEWS_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-flex items-center gap-3 rounded-xl border border-stone-200 bg-white px-3 py-2.5 shadow-sm transition hover:border-stone-300 hover:shadow"
+        className="inline-flex items-center gap-4 rounded-xl border border-stone-200 bg-white px-4 py-3 shadow-sm transition hover:border-stone-300 hover:shadow"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/theme-assets/reviews/tripadvisor.png"
           alt="TripAdvisor"
-          className="h-11 w-11 shrink-0 rounded-full object-contain"
+          className="h-12 w-12 shrink-0 rounded-full object-contain p-1"
         />
         <div className="min-w-0">
-          <p className="font-serif text-sm font-semibold text-stone-900 sm:text-base">
-            TripAdvisor Review
-          </p>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm">
+          <p className={titleCls}>TripAdvisor Review</p>
+          <div className="mt-0.5 flex flex-wrap items-center gap-1 text-yellow-500">
             <Stars rating={REVIEW_STATS.tripadvisor.rating} />
-            <span className="font-semibold text-stone-800">{REVIEW_STATS.tripadvisor.rating}</span>
-            <span className={cn("text-xs font-medium sm:text-sm", accentClassName)}>
-              {REVIEW_STATS.tripadvisor.count.toLocaleString("en-IN")} {REVIEW_STATS.tripadvisor.label}
+            <span className="ml-1 text-xs text-gray-600">{REVIEW_STATS.tripadvisor.rating}</span>
+            <span className={cn("ml-1 text-xs text-gray-500", accentClassName)}>
+              ({REVIEW_STATS.tripadvisor.count.toLocaleString("en-IN")} {REVIEW_STATS.tripadvisor.label})
             </span>
           </div>
         </div>

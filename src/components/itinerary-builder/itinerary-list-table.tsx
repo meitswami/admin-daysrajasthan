@@ -174,20 +174,6 @@ export function ItineraryListTable({
                       <Plus className="h-4 w-4" />
                     </button>
                     )}
-                    {showTrashAction && can("itinerary_builder.delete") && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          softDeleteClientItinerary(r.id);
-                          show(`Moved ${r.quote_id} to trash`);
-                          onRefresh();
-                        }}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
-                        title="Trash"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
                     <Link
                       href={`/itinerary-builder/${r.id}`}
                       className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500 text-white hover:bg-amber-600"
@@ -210,6 +196,20 @@ export function ItineraryListTable({
                     >
                       <Download className="h-4 w-4" />
                     </Link>
+                    {showTrashAction && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          softDeleteClientItinerary(r.id);
+                          show(`Moved ${r.quote_id} to trash`);
+                          onRefresh();
+                        }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white hover:bg-red-700"
+                        title="Delete"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
                     {can("itinerary_builder.edit") && (
                     <button
                       type="button"

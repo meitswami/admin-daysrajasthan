@@ -2,12 +2,16 @@ import type { ReportBrand } from "@/lib/branding/report-brand";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
 import {
   bookingAmount,
+  buildHotelPackageNights,
   buildNightSegments,
   DEFAULT_CANCELLATION_POLICY,
   DEFAULT_PAYMENT_POLICY,
-  displayHotelRating,
+  formatCoveringDestinations,
   formatDestinationsSummary,
+  resolvePackageVehicles,
   tierRowsFromSnapshot,
+  type CoveringDestination,
+  type HotelPackageNight,
   type NightSegment,
 } from "@/lib/itinerary-builder/quotation-layout";
 import {
@@ -29,6 +33,7 @@ import {
   defaultPaymentDetailsFromSeed,
   type PaymentDetails,
 } from "@/lib/itinerary-builder/payment-details";
+import { findHotelByOptionLabel } from "@/lib/itinerary-builder/hotel-master";
 import type { CompanyStructure } from "@/types/company-structure";
 import type { CategoryTotalSummary, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
@@ -48,7 +53,8 @@ import {
   QuotationLegacyPaymentSection,
   QuotationLegacyPolicies,
 } from "@/components/itinerary-builder/quotation-legacy-sections";
-
+import { Car, Coffee, Navigation } from "lucide-react";
+import { cn } from "@/lib/utils";
 function brandWithSelectedContact(
   brand: ReportBrand,
   contact: PreviewContact | null
@@ -90,42 +96,76 @@ function richPolicyItems(
   return defaults.map((i) => ({ ...i }));
 }
 
-function StarRating({ rating }: { rating: number }) {
-  const full = Math.floor(rating);
-  const half = rating - full >= 0.5;
-  return (
-    <span className="inline-flex items-center gap-0.5 text-amber-500" aria-label={`${rating} out of 5 stars`}>
-      {Array.from({ length: 5 }).map((_, i) => (
-        <span key={i} className={i < full ? "text-amber-500" : i === full && half ? "text-amber-300" : "text-stone-300"}>
-          ★
-        </span>
-      ))}
-      <span className="ml-1 text-xs font-medium text-stone-600">{rating.toFixed(1)}</span>
-    </span>
-  );
-}
-
 function ClientDetailsTable({
   clientLabel,
   client,
   header,
   accent,
   title = "Client Details",
+  variant = "default",
 }: {
   clientLabel: string;
   client: ItinerarySnapshot["client"];
   header: ItinerarySnapshot["header"];
   accent: string;
   title?: string;
+  variant?: "default" | "theme2" | "theme3";
 }) {
   const rows = [
     ["Name", clientLabel],
     ["Email", client.email],
     ["Phone", client.phone],
-    ["Adults", String(client.adults)],
-    ["Rooms", String(client.rooms)],
+    ["Adults", client.adults != null ? String(client.adults).padStart(2, "0") : null],
+    ["Rooms", client.rooms != null ? String(client.rooms).padStart(2, "0") : null],
     ["Travel Date", client.travel_date ? formatDate(client.travel_date) : null],
   ].filter(([, value]) => value);
+
+  if (variant === "theme3") {
+    return (
+      <section className="my-3 break-inside-avoid rounded-lg border-2 p-4 shadow-sm">
+        <h2 className="mb-4 border-b pb-2 text-2xl font-semibold text-gray-700">{title}</h2>
+        <div className="grid grid-cols-1 gap-4 bg-white text-lg md:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <p key={label}>
+              <strong>{label}:</strong> {value}
+            </p>
+          ))}
+        </div>
+        {header.tour_code && (
+          <p className="mt-3 text-sm text-gray-500">
+            Tour Code:{" "}
+            <span className="font-semibold" style={{ color: accent }}>
+              {header.tour_code}
+            </span>
+          </p>
+        )}
+      </section>
+    );
+  }
+
+  if (variant === "theme2") {
+    return (
+      <section className="h-fit break-inside-avoid rounded-2xl border bg-white p-6 shadow-md">
+        <h2 className="mb-4 text-xl font-bold text-gray-700">{title}</h2>
+        <div className="space-y-2 text-base text-gray-700">
+          {rows.map(([label, value]) => (
+            <div key={label} className="flex justify-between gap-4">
+              <span>{label}</span>
+              <span className="text-right font-medium text-gray-900">{value}</span>
+            </div>
+          ))}
+        </div>
+        {header.tour_code && (
+          <p className="mt-3 text-xs text-gray-500">
+            Tour Code:{" "}
+            <span className="font-semibold" style={{ color: accent }}>
+              {header.tour_code}
+            </span>
+          </p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="break-inside-avoid rounded-2xl border border-stone-200 bg-white p-5">
@@ -150,6 +190,372 @@ function ClientDetailsTable({
           </span>
         </p>
       )}
+    </section>
+  );
+}
+
+function Theme3PackageSummaryCard({
+  label,
+  packagePrice,
+  grandTotal,
+  advancePercent,
+}: {
+  label: string;
+  packagePrice: number;
+  grandTotal: number;
+  advancePercent: 20 | 30;
+}) {
+  const advance = bookingAmount(grandTotal, advancePercent / 100);
+  const shortKey = label.replace(/ Package$/i, "").toLowerCase();
+  return (
+    <section className="my-3 break-inside-avoid rounded-lg border-2 p-4 shadow-sm">
+      <h2 className="mb-4 border-b pb-2 text-2xl font-semibold text-gray-700">Package Summary</h2>
+      <div className="bg-white p-1 text-lg">
+        <h3 className="mb-6 text-2xl font-bold capitalize text-gray-900">{label}</h3>
+        <div className="flex items-center justify-between border-b py-2 text-lg">
+          <span className="font-semibold text-gray-700">Base Price</span>
+          <span className="font-bold text-gray-900">{formatInr(packagePrice)}</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between border-b py-2 text-lg">
+          <span className="font-semibold text-gray-700">Total ({shortKey})</span>
+          <span className="font-bold text-green-700">{formatInr(grandTotal)}/-</span>
+        </div>
+        <div className="mt-2 flex items-center justify-between py-2 text-lg">
+          <span className="font-semibold text-gray-700">Booking Amount ({shortKey})</span>
+          <span className="font-bold text-red-700">{formatInr(advance)}/-</span>
+        </div>
+        <button
+          type="button"
+          className="mt-8 inline-block w-full rounded-xl bg-red-900 px-4 py-4 text-xl font-semibold text-white hover:bg-red-800"
+        >
+          Book Now
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function Theme2PackagePriceCard({
+  label,
+  packagePrice,
+  grandTotal,
+  advancePercent,
+}: {
+  label: string;
+  packagePrice: number;
+  grandTotal: number;
+  advancePercent: 20 | 30;
+}) {
+  const advance = bookingAmount(grandTotal, advancePercent / 100);
+  const plain = (n: number) => `₹${Math.round(n)}/-`;
+  return (
+    <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
+      <h3 className="mb-4 text-2xl font-extrabold capitalize text-gray-700">{label}</h3>
+      <div className="mb-2 flex justify-between text-gray-700">
+        <span>Base Price</span>
+        <span className="font-semibold">{plain(packagePrice)}</span>
+      </div>
+      <hr className="my-3" />
+      <div className="flex justify-between font-semibold text-gray-900">
+        <span>Total Price</span>
+        <span>{plain(grandTotal)}</span>
+      </div>
+      <div className="my-1 flex justify-between text-gray-700">
+        <span>Booking Amount</span>
+        <span>{plain(advance)}</span>
+      </div>
+      <button
+        type="button"
+        className="mt-6 w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
+      >
+        Book Now
+      </button>
+    </section>
+  );
+}
+
+function CoveringDestinationsRow({
+  covering,
+  vehicles,
+  variant = "theme2",
+  accent,
+}: {
+  covering: CoveringDestination[];
+  vehicles: string[];
+  variant?: "theme2" | "theme3";
+  accent?: string;
+}) {
+  const isTheme3 = variant === "theme3";
+  return (
+    <div className="mb-6">
+      <div
+        className={cn(
+          "text-lg font-extrabold sm:text-2xl md:text-3xl",
+          isTheme3 ? "text-red-900" : "text-green-700"
+        )}
+        style={!isTheme3 && accent ? undefined : undefined}
+      >
+        Travel Itinerary
+      </div>
+      {covering.length > 0 && (
+        <p className="mt-1 flex flex-wrap gap-2 text-gray-700">
+          <span className={cn("text-xl", isTheme3 ? "text-red-900" : "text-green-600")}>
+            Covering Destinations
+          </span>
+          {covering.map((item) =>
+            isTheme3 ? (
+              <span key={item.label} className="flex items-center gap-1">
+                <Navigation className="mr-1 h-2 w-2 shrink-0 text-red-900" />
+                <span className="font-semibold text-gray-800">{item.destination}</span>
+                <span className="ml-1 text-sm text-red-900">-{item.nights}N</span>
+              </span>
+            ) : (
+              <span key={item.label} className="mr-2 flex items-center gap-1 text-lg">
+                <span className="text-yellow-500">•</span> {item.label}
+              </span>
+            )
+          )}
+        </p>
+      )}
+      {vehicles.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {vehicles.map((vehicle) => (
+            <p
+              key={vehicle}
+              className={cn(
+                "mb-2 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold capitalize text-white sm:text-lg",
+                isTheme3 ? "bg-red-900" : "bg-[#00A63E]"
+              )}
+            >
+              <Car className="h-5 w-5 shrink-0" strokeWidth={2} />
+              {vehicle}
+            </p>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Theme2HotelCard({
+  option,
+  checkIn,
+  checkOut,
+}: {
+  option: HotelPackageNight["options"][number];
+  checkIn: string | null;
+  checkOut: string | null;
+}) {
+  const master =
+    findHotelByOptionLabel(option.optionLabel) ??
+    findHotelByOptionLabel(option.hotelName);
+  const image =
+    option.imageUrl ||
+    master?.image_url ||
+    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=80";
+  const rating = master?.rating || option.rating;
+  const reviews = option.reviewCount;
+  const fullStars = Math.min(5, Math.round(rating));
+
+  return (
+    <div className="relative w-full max-w-[450px] rounded-2xl border-2 border-stone-200 bg-white p-6 shadow-lg">
+      <div className="flex flex-col gap-6 sm:flex-row">
+        <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl shadow-md sm:w-40">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={image} alt={option.hotelName} className="h-full w-full object-cover" />
+        </div>
+        <div className="min-w-0 flex-1 space-y-3">
+          <h3 className="text-xl font-bold text-stone-900">{option.hotelName}</h3>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-1 text-yellow-500">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <span key={i}>{i < fullStars ? "★" : "☆"}</span>
+              ))}
+              <span className="ml-1 text-xs text-stone-600">{rating.toFixed(1)}</span>
+            </div>
+            <span className="text-sm text-stone-600">({reviews} Reviews)</span>
+          </div>
+          <a
+            href={`https://www.google.com/search?q=${encodeURIComponent(option.hotelName + " hotel photos")}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-600 underline hover:text-blue-800"
+          >
+            View Photos
+          </a>
+          <div className="space-y-1 pt-2 text-sm text-stone-600">
+            {checkIn && (
+              <div className="flex gap-2">
+                <span className="font-semibold text-stone-800">Check-in:</span>
+                <span>{checkIn}</span>
+              </div>
+            )}
+            {checkOut && (
+              <div className="flex gap-2">
+                <span className="font-semibold text-stone-800">Check-out:</span>
+                <span>{checkOut}</span>
+              </div>
+            )}
+          </div>
+          {option.breakfast && (
+            <div className="mt-2 flex flex-wrap gap-3">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-2 py-1 text-xs font-bold text-white shadow">
+                <Coffee className="h-3.5 w-3.5" />
+                Breakfast
+              </span>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Theme2HotelsPackage({
+  packageLabel,
+  nights,
+}: {
+  packageLabel: string;
+  nights: HotelPackageNight[];
+}) {
+  if (!nights.length) return null;
+  return (
+    <section className="break-inside-avoid">
+      <div className="mb-4 flex items-center justify-between border-b-2 border-green-900 pb-3">
+        <h3 className="text-lg font-bold capitalize text-green-900 sm:text-xl md:text-2xl lg:text-3xl">
+          <span>{packageLabel}</span>
+        </h3>
+      </div>
+      <div className="mb-8 space-y-8 rounded-2xl border border-gray-300 bg-white p-6 shadow-lg">
+        {nights.map((night) => (
+          <div key={`${night.nightLabel}-${night.destination}`} className="mb-12">
+            <div className="mb-6">
+              <span className="rounded-full bg-green-900 px-3 py-1 text-lg font-bold text-white shadow-md">
+                {night.nightLabel}{" "}
+              </span>
+              <br />
+              <span className="mt-4 inline-flex flex-wrap gap-4 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-green-700">
+                {"  "}
+                {night.dateLabel}
+              </span>
+            </div>
+            <h5 className="mb-4 text-xl font-bold text-gray-800">{night.destination}</h5>
+            <div className="flex w-full flex-col items-center justify-center lg:flex-row lg:justify-evenly lg:gap-6">
+              {night.options.map((option, index) => (
+                <div key={`${option.hotelName}-${index}`} className="contents">
+                  {index > 0 && (
+                    <>
+                      <div className="hidden text-xl font-bold text-green-900 lg:block">OR</div>
+                      <div className="py-2 text-center text-xl font-bold text-green-900 lg:hidden">OR</div>
+                    </>
+                  )}
+                  <Theme2HotelCard option={option} checkIn={night.checkIn} checkOut={night.checkOut} />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Theme3HotelsPackage({
+  packageLabel,
+  nights,
+}: {
+  packageLabel: string;
+  nights: HotelPackageNight[];
+}) {
+  if (!nights.length) return null;
+  return (
+    <section className="break-inside-avoid overflow-hidden">
+      <h3 className="mb-6 text-2xl font-bold capitalize text-gray-900">{packageLabel}</h3>
+      <div className="space-y-10">
+        {nights.map((night) => (
+          <div key={`${night.nightLabel}-${night.destination}`}>
+            <div className="mb-3">
+              <div className="inline-flex items-center rounded-full bg-red-900 px-3 py-1 font-bold text-white">
+                <span>{night.nightLabel.replace(/-/g, " – ")} </span>
+              </div>
+              <br />
+              <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-0 text-red-700">
+                <span>{night.dateLabel}</span>
+              </div>
+            </div>
+            <div className="space-y-6 rounded-xl border border-gray-300 bg-white p-5 shadow-sm">
+              <div className="border-b pb-6 last:border-0 last:pb-0">
+                <h5 className="mb-4 text-lg font-bold text-gray-800">{night.destination}</h5>
+                <div className="flex w-full flex-col items-center justify-center gap-4 md:flex-row md:gap-4 lg:gap-6">
+                  {night.options.map((option, index) => {
+                    const master =
+                      findHotelByOptionLabel(option.optionLabel) ??
+                      findHotelByOptionLabel(option.hotelName);
+                    const image =
+                      option.imageUrl ||
+                      master?.image_url ||
+                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=80";
+                    const rating = master?.rating || option.rating;
+                    return (
+                      <div key={`${option.hotelName}-${index}`} className="contents">
+                        {index > 0 && (
+                          <div className="text-xl font-bold text-red-900">OR</div>
+                        )}
+                        <div className="w-full md:w-1/2">
+                          <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 transition hover:border-red-300 sm:flex-row">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={image}
+                              alt={option.hotelName}
+                              className="h-32 w-full rounded-lg object-cover shadow-md sm:h-28 sm:w-28"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-gray-900">{option.hotelName}</p>
+                              <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
+                                <span className="text-yellow-500">★</span>
+                                <span>{rating.toFixed(1)}</span>
+                                <span>({option.reviewCount} Reviews)</span>
+                              </div>
+                              {option.breakfast && (
+                                <span className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-bold text-white">
+                                  <Coffee className="h-3 w-3" />
+                                  Breakfast
+                                </span>
+                              )}
+                              <a
+                                href={`https://www.google.com/search?q=${encodeURIComponent(option.hotelName + " hotel photos")}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="mt-2 block text-sm text-blue-600 underline"
+                              >
+                                View Photos
+                              </a>
+                              <div className="mt-2 space-y-0.5 text-sm text-gray-600">
+                                {night.checkIn && (
+                                  <p>
+                                    <span className="font-semibold text-gray-800">Check-in:</span>{" "}
+                                    {night.checkIn}
+                                  </p>
+                                )}
+                                {night.checkOut && (
+                                  <p>
+                                    <span className="font-semibold text-gray-800">Check-out:</span>{" "}
+                                    {night.checkOut}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -220,38 +626,6 @@ function PackageOptionCard({
   );
 }
 
-function DayHotelBlock({
-  day,
-  accent,
-}: {
-  day: ItineraryDay;
-  accent: string;
-}) {
-  if (!day.hotel_name) return null;
-  const { rating, reviewCount } = displayHotelRating(day.hotel_name);
-
-  return (
-    <div className="mt-3 break-inside-avoid rounded-xl border border-stone-200 bg-stone-50/80 p-3 sm:p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-stone-500">Stay</p>
-          <p className="mt-0.5 font-semibold text-stone-900">{day.hotel_name}</p>
-          {day.location && <p className="text-xs text-stone-500">{day.location}</p>}
-        </div>
-        <StarRating rating={rating} />
-      </div>
-      <p className="mt-1 text-[11px] text-stone-500">
-        ({reviewCount.toLocaleString("en-IN")} reviews)
-      </p>
-      <p className="mt-2 text-xs font-medium" style={{ color: accent }}>
-        {[day.room_category, day.breakfast ? "Breakfast included" : null, day.meal_plan]
-          .filter(Boolean)
-          .join(" · ")}
-      </p>
-    </div>
-  );
-}
-
 function dayImagesForCard(day: ItineraryDay, theme: PreviewTheme): string[] {
   const fromDay = (day.images ?? []).filter(Boolean);
   if (fromDay.length > 0) return fromDay;
@@ -267,75 +641,88 @@ function TimelineDayCard({
   theme,
   isLast,
   layout,
+  packageVehicles = [],
 }: {
   day: ItineraryDay;
   travelDate: string | null;
   theme: PreviewTheme;
   isLast: boolean;
   layout: "theme2" | "theme3";
+  packageVehicles?: string[];
 }) {
   const dateLabel = travelDate
     ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
     : null;
   const images = dayImagesForCard(day, theme);
-  const accent = theme.accent;
+  const dayVehicle =
+    day.vehicle_type?.trim() ||
+    (layout === "theme3" ? packageVehicles[0] : undefined);
 
-  return (
-    <div className="relative flex flex-col gap-4 sm:flex-row sm:gap-6">
-      <div className="w-full shrink-0 text-left sm:w-24 sm:text-right">
-        <p className="font-bold" style={{ color: accent }}>
-          Day {day.day_number}
-        </p>
-        {dateLabel && <p className="text-sm text-stone-500">{dateLabel}</p>}
-      </div>
-
-      <div className="relative hidden w-10 shrink-0 flex-col items-center self-stretch sm:flex">
-        {!isLast && (
-          <div className="absolute bottom-0 top-4 w-0.5" style={{ backgroundColor: accent }} />
-        )}
-        <div
-          className="z-10 mt-1 h-4 w-4 rounded-full border-2 bg-white"
-          style={{ borderColor: accent }}
-        />
-      </div>
-
-      {layout === "theme2" ? (
-        <>
-          <div className="w-full sm:w-1/4">
-            <p className="text-lg font-bold text-stone-800">{day.day_title}</p>
-            <QuotationDayCarousel
-              images={images}
-              alt={day.day_title}
-              accent={accent}
-              className="mt-4"
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            {day.day_description && (
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700 sm:text-base">
-                {day.day_description}
-              </p>
-            )}
-            <DayHotelBlock day={day} accent={accent} />
-          </div>
-        </>
-      ) : (
+  if (layout === "theme3") {
+    return (
+      <div className="relative flex flex-col gap-4 sm:flex-row sm:gap-6">
+        <div className="w-full shrink-0 text-left sm:w-28 sm:text-right">
+          <p className="font-semibold text-red-900">Day {day.day_number}</p>
+          {dateLabel && <p className="text-sm text-gray-600">{dateLabel}</p>}
+        </div>
+        <div className="relative hidden w-8 shrink-0 flex-col items-center self-stretch sm:flex sm:w-12">
+          {!isLast && <div className="absolute bottom-0 top-4 w-0.5 bg-red-900" />}
+          <div className="z-10 mt-1 h-4 w-4 rounded-full border-2 border-red-900 bg-white" />
+        </div>
         <div className="min-w-0 flex-1">
-          <p className="text-lg font-semibold text-stone-900">{day.day_title}</p>
+          <div className="flex w-full flex-wrap items-center gap-3">
+            <span className="font-semibold text-gray-900">{day.day_title}</span>
+            {dayVehicle && (
+              <span className="inline-flex items-center gap-2 rounded-lg bg-red-900 px-2 py-1 text-xs capitalize text-white sm:text-sm">
+                <Car className="h-4 w-4" />
+                {dayVehicle}
+              </span>
+            )}
+          </div>
           <QuotationDayCarousel
             images={images}
             alt={day.day_title}
-            accent={accent}
-            className="mt-4 max-w-xl"
+            accent="#7F1D1D"
+            className="mt-4 max-w-xl overflow-hidden rounded-lg"
+            heightClassName="h-48 sm:h-60"
           />
           {day.day_description && (
-            <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-stone-700 sm:text-base">
+            <p className="mt-4 whitespace-pre-wrap text-base leading-relaxed text-gray-700 md:text-lg">
               {day.day_description}
             </p>
           )}
-          <DayHotelBlock day={day} accent={accent} />
         </div>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex flex-col gap-4 text-lg text-slate-600 sm:flex-row sm:gap-6">
+      <div className="w-full shrink-0 text-left sm:w-24 sm:text-right">
+        <p className="font-bold text-green-600">Day {day.day_number}</p>
+        {dateLabel && <p className="text-sm text-gray-500">{dateLabel}</p>}
+      </div>
+      <div className="relative hidden w-8 shrink-0 flex-col items-center self-stretch sm:flex sm:w-12">
+        {!isLast && <div className="absolute bottom-0 top-4 w-0.5 bg-green-500" />}
+        <div className="z-10 mt-1 hidden h-4 w-4 rounded-full border-2 border-green-500 bg-white sm:flex" />
+      </div>
+      <div className="mt-4 w-full text-lg sm:mt-0 sm:w-1/4">
+        <p className="font-bold text-gray-800">{day.day_title}</p>
+        <QuotationDayCarousel
+          images={images}
+          alt={day.day_title}
+          accent="#16A34A"
+          className="mt-4 overflow-hidden rounded-lg"
+          heightClassName="h-48 sm:h-60"
+        />
+      </div>
+      <div className="mt-4 min-w-0 flex-1 sm:mt-6">
+        {day.day_description && (
+          <p className="whitespace-pre-wrap text-lg leading-relaxed text-slate-600">
+            {day.day_description}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -373,7 +760,6 @@ function DayCard({
           {day.day_description && (
             <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{day.day_description}</p>
           )}
-          <DayHotelBlock day={day} accent={theme.accent} />
         </div>
         <div className="overflow-hidden rounded-xl">
           <QuotationDayCarousel
@@ -438,7 +824,6 @@ function DayCard({
                 </span>
               )}
             </div>
-            <DayHotelBlock day={day} accent={theme.accent} />
             {(day.activities ?? []).length > 0 && (
               <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
                 {(day.activities ?? []).map((activity) => (
@@ -564,16 +949,28 @@ export function QuotationDocument({
   const clientLabel = [client.title, client.client_name].filter(Boolean).join(" ");
   const nightSegments = buildNightSegments(days, client.travel_date);
   const destinationsSummary = formatDestinationsSummary(nightSegments);
+  const coveringDestinations = formatCoveringDestinations(nightSegments);
+  const packageVehicles = resolvePackageVehicles(snapshot);
+  const hotelPackageNights = buildHotelPackageNights(days, client.travel_date);
   const tierRows = tierRowsFromSnapshot(categoryTotals, category_pricing ?? []);
   const hasTiers = tierRows.length > 0;
   const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
   const advanceRate = advancePercent / 100;
+  const primaryTier = tierRows[0];
+  const primaryPackagePrice =
+    primaryTier?.package_price ?? snapshot.final_price ?? cost_sheet.grand_total;
+  const primaryGrandTotal = primaryTier?.grand_total ?? cost_sheet.grand_total;
+  const primaryPackageLabel = primaryTier
+    ? `${primaryTier.label} Package`
+    : "Travel Package";
 
   const documentClassName = isTheme3
     ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-[#FBF7F0] p-0 text-stone-900"
     : mode === "print"
       ? `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-none p-0 text-stone-900`
-      : `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-4xl rounded-2xl border border-stone-200 text-stone-900 shadow-sm`;
+      : isTheme2
+        ? `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-7xl rounded-2xl border border-stone-200 text-stone-900 shadow-sm`
+        : `quotation-document quotation-theme-${theme.id} relative isolate mx-auto max-w-4xl rounded-2xl border border-stone-200 text-stone-900 shadow-sm`;
 
   const documentStyle = {
     backgroundColor: isTheme3
@@ -585,6 +982,11 @@ export function QuotationDocument({
           : "#ffffff",
     WebkitPrintColorAdjust: "exact" as const,
     printColorAdjust: "exact" as const,
+    ...(isTheme2
+      ? { fontFamily: "var(--font-nunito)" as const }
+      : isTheme3
+        ? { fontFamily: "var(--font-poltawski)" as const }
+        : {}),
   };
 
   const body = (
@@ -600,9 +1002,10 @@ export function QuotationDocument({
         client={client}
         header={header}
         destinationsSummary={destinationsSummary}
+        coveringDestinations={coveringDestinations}
+        packagePrice={isTheme2 || isTheme3 ? primaryPackagePrice : null}
         quoteId={quoteId}
         versionNumber={versionNumber}
-        contactName={selectedContact?.name ?? null}
       />
 
       {isLegacyTheme && <QuotationLegacyExploreBanner />}
@@ -612,7 +1015,7 @@ export function QuotationDocument({
           isLegacyTheme
             ? "px-4 py-6 sm:px-6"
             : isTheme3
-              ? "px-10 py-8 sm:px-14 md:px-16"
+              ? "px-4 py-8 sm:px-6 lg:px-8"
               : "px-6 py-8"
         }`}
       >
@@ -663,39 +1066,41 @@ export function QuotationDocument({
           </div>
         )}
 
-        {(theme.id === 2 || theme.id === 3) && (
-          <ClientDetailsTable
-            clientLabel={clientLabel}
-            client={client}
-            header={header}
-            accent={theme.accent}
-            title={theme.id === 3 ? "Your Information" : "Client Details"}
-          />
+        {isTheme2 && (
+          <div className="grid grid-cols-1 gap-4 sm:gap-5 md:grid-cols-2 md:gap-6">
+            <ClientDetailsTable
+              clientLabel={clientLabel}
+              client={client}
+              header={header}
+              accent={theme.accent}
+              variant="theme2"
+            />
+            <Theme2PackagePriceCard
+              label={primaryPackageLabel}
+              packagePrice={primaryPackagePrice}
+              grandTotal={primaryGrandTotal}
+              advancePercent={advancePercent}
+            />
+          </div>
         )}
 
-        {hasTiers && (
-          <section className="break-inside-avoid">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-              Travel Package Options
-            </h2>
-            <p className="mt-1 text-sm text-stone-600">
-              We&apos;ve curated exclusive travel packages for you. Choose the one that suits your journey best.
-            </p>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {tierRows.map((tier, index) => (
-                <PackageOptionCard
-                  key={tier.category_key}
-                  optionNumber={index + 1}
-                  label={`${tier.label} Package`}
-                  packagePrice={tier.package_price}
-                  grandTotal={tier.grand_total}
-                  segments={nightSegments}
-                  advancePercent={advancePercent}
-                  theme={theme}
-                />
-              ))}
-            </div>
-          </section>
+        {isTheme3 && (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <ClientDetailsTable
+              clientLabel={clientLabel}
+              client={client}
+              header={header}
+              accent={theme.accent}
+              title="Your Information"
+              variant="theme3"
+            />
+            <Theme3PackageSummaryCard
+              label={primaryPackageLabel}
+              packagePrice={primaryPackagePrice}
+              grandTotal={primaryGrandTotal}
+              advancePercent={advancePercent}
+            />
+          </div>
         )}
 
         <section>
@@ -704,7 +1109,15 @@ export function QuotationDocument({
               Day-wise Itinerary
             </h2>
           )}
-          {usesTimelineDays && (
+          {usesTimelineDays && (isTheme2 || isTheme3) && (
+            <CoveringDestinationsRow
+              covering={coveringDestinations}
+              vehicles={isTheme2 ? packageVehicles : []}
+              variant={isTheme3 ? "theme3" : "theme2"}
+              accent={theme.accent}
+            />
+          )}
+          {usesTimelineDays && !isTheme2 && !isTheme3 && (
             <div className="mb-6">
               <h2 className="text-2xl font-bold" style={{ color: theme.accent }}>
                 Travel Itinerary
@@ -737,6 +1150,7 @@ export function QuotationDocument({
                   theme={theme}
                   isLast={index === days.length - 1}
                   layout={theme.id === 3 ? "theme3" : "theme2"}
+                  packageVehicles={packageVehicles}
                 />
               ) : (
                 <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
@@ -745,6 +1159,67 @@ export function QuotationDocument({
           </div>
         </section>
 
+        {isTheme2 && hotelPackageNights.some((n) => n.options.length > 0) && (
+          <Theme2HotelsPackage
+            packageLabel={primaryPackageLabel}
+            nights={hotelPackageNights}
+          />
+        )}
+
+        {isTheme3 && hotelPackageNights.some((n) => n.options.length > 0) && (
+          <Theme3HotelsPackage
+            packageLabel={primaryPackageLabel}
+            nights={hotelPackageNights}
+          />
+        )}
+
+        {hasTiers && !isTheme2 && !isTheme3 && (
+          <section className="break-inside-avoid">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              {tierRows.length === 1 ? "Travel Package Option" : "Travel Package Options"}
+            </h2>
+            <p className="mt-1 text-sm text-stone-600">
+              We&apos;ve curated exclusive travel packages for you. Choose the one that suits your journey best.
+            </p>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {tierRows.map((tier, index) => (
+                <PackageOptionCard
+                  key={tier.category_key}
+                  optionNumber={index + 1}
+                  label={`${tier.label} Package`}
+                  packagePrice={tier.package_price}
+                  grandTotal={tier.grand_total}
+                  segments={nightSegments}
+                  advancePercent={advancePercent}
+                  theme={theme}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Secondary tier (if Theme 2 has 2 categories): show second package price card above hotels already primary */}
+        {isTheme2 && tierRows.length > 1 && (
+          <section className="break-inside-avoid">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Additional Package Options
+            </h2>
+            <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              {tierRows.slice(1).map((tier, index) => (
+                <PackageOptionCard
+                  key={tier.category_key}
+                  optionNumber={index + 2}
+                  label={`${tier.label} Package`}
+                  packagePrice={tier.package_price}
+                  grandTotal={tier.grand_total}
+                  segments={nightSegments}
+                  advancePercent={advancePercent}
+                  theme={theme}
+                />
+              ))}
+            </div>
+          </section>
+        )}
         {usesRichPolicies ? (
           <Theme2TourPolicies
             inclusionItems={inclusionItems}

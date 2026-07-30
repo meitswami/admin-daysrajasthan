@@ -232,13 +232,9 @@ export function QuotationPrintView({
 
   return (
     <div className="min-h-screen overflow-x-clip bg-stone-100 print:bg-transparent">
-      <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-          {publicMode ? (
-            <p className="text-sm font-semibold text-stone-800">
-              {brand.companyName} · {record.quote_id}
-            </p>
-          ) : (
+      {!publicMode && (
+        <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
             <Link
               href={`/itinerary-builder/${itineraryId}/preview-confirm`}
               className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900"
@@ -246,35 +242,35 @@ export function QuotationPrintView({
               <ArrowLeft className="h-4 w-4" />
               Back to Preview & Confirm
             </Link>
-          )}
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              size="sm"
-              className="no-print text-white hover:opacity-90"
-              style={{ backgroundColor: bookAccent }}
-              onClick={() => {
-                const el = document.getElementById("book");
-                el?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              Book Now
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="no-print"
-              style={{ borderColor: bookAccent, color: bookAccent }}
-              disabled={printing}
-              onClick={() => void handlePrint()}
-            >
-              <Printer className="h-4 w-4" />
-              {printing ? "Preparing…" : "Print"}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="no-print text-white hover:opacity-90"
+                style={{ backgroundColor: bookAccent }}
+                onClick={() => {
+                  const el = document.getElementById("book");
+                  el?.scrollIntoView({ behavior: "smooth" });
+                }}
+              >
+                Book Now
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="no-print"
+                style={{ borderColor: bookAccent, color: bookAccent }}
+                disabled={printing}
+                onClick={() => void handlePrint()}
+              >
+                <Printer className="h-4 w-4" />
+                {printing ? "Preparing…" : "Print"}
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
       <div
         className={
           isTheme3

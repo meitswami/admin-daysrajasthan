@@ -189,7 +189,11 @@ export function findHotelByOptionLabel(
   label: string,
   catalog: HotelMasterItem[] = HOTEL_MASTER
 ): HotelMasterItem | null {
-  return catalog.find((h) => formatHotelOption(h) === label) ?? null;
+  const exact = catalog.find((h) => formatHotelOption(h) === label);
+  if (exact) return exact;
+  const name = label.split(" - ")[0]?.trim().toLowerCase();
+  if (!name) return null;
+  return catalog.find((h) => h.name.trim().toLowerCase() === name) ?? null;
 }
 
 export function hotelLocations(catalog: HotelMasterItem[] = HOTEL_MASTER): string[] {

@@ -482,8 +482,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     const result = await handleSave();
     if (!result) return;
 
-    // Always use the browser's public host (admin.daysrajasthan.com), never PM2 localhost:3102.
-    // Opaque ?v= lock pins this theme so later theme edits do not change shared links.
+    // Public share link on daysrajasthan.com/{id}/quotation?v=… (opaque theme lock).
     const publicUrl = publicQuotationUrl(
       itineraryId,
       null,

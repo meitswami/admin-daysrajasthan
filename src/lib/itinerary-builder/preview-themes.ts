@@ -69,7 +69,7 @@ export const PREVIEW_THEMES: PreviewTheme[] = [
     shortLabel: "Maroon Parchment",
     gradient: "from-[#7B1E2E] via-[#A63D4F] to-[#4A0E18]",
     shell: "bg-[#FBF7F0]",
-    accent: "#7B1E2E",
+    accent: "#7F1D1D",
     accentSoft: "#F8E9EC",
     heading: "#1c1917",
     heroImage: "/theme-assets/amber-gate.jpg",

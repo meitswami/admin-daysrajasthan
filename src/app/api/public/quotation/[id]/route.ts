@@ -4,7 +4,7 @@ import {
   getPublicQuotation,
   publishPublicQuotation,
 } from "@/lib/itinerary-builder/public-quotation-store";
-import { publicQuotationUrl, resolveAdminRequestOrigin } from "@/lib/admin-public-url";
+import { publicQuotationUrl } from "@/lib/admin-public-url";
 import { clampPreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 import type { CategoryTotalSummary, ItinerarySnapshot } from "@/types/itinerary-builder";
 
@@ -47,12 +47,11 @@ export async function POST(request: Request, { params }: Params) {
     published_at: new Date().toISOString(),
   });
 
-  const origin = resolveAdminRequestOrigin(request);
   const themeId = clampPreviewTheme(
     (parsed.data.snapshot as { preview_theme?: unknown }).preview_theme
   );
   return NextResponse.json({
     ...payload,
-    url: publicQuotationUrl(id, origin, themeId),
+    url: publicQuotationUrl(id, null, themeId),
   });
 }

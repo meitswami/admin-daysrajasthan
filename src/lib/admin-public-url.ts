@@ -1,6 +1,6 @@
 /**
- * Canonical public origin for admin.daysrajasthan.com links
- * (quotations, proposals) — never expose internal PM2 localhost ports.
+ * Canonical origins for shareable admin links (proposals) and
+ * client-facing quotation URLs on the public marketing site.
  */
 
 import {
@@ -8,6 +8,7 @@ import {
   type PreviewThemeId,
 } from "@/lib/itinerary-builder/preview-themes";
 import { encodeThemeToken } from "@/lib/itinerary-builder/theme-token";
+import { getPublicWebsiteOrigin } from "@/lib/website-url";
 
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/$/, "");
@@ -30,7 +31,7 @@ function isLoopbackUrl(url: string): boolean {
 export const DEFAULT_ADMIN_PUBLIC_ORIGIN = "https://admin.daysrajasthan.com";
 
 /**
- * Public origin for shareable admin URLs (quotation, proposal).
+ * Public origin for shareable admin URLs (proposals, internal tools).
  * Prefer browser host when not loopback; else NEXT_PUBLIC_APP_URL; else production default.
  */
 export function getAdminPublicOrigin(explicit?: string | null): string {
@@ -52,15 +53,16 @@ export function getAdminPublicOrigin(explicit?: string | null): string {
 }
 
 /**
- * Absolute public quotation URL for an itinerary id.
- * When `themeId` is set, appends an opaque `?v=` lock so the theme stays fixed for that link.
+ * Client-shareable quotation URL on the marketing site:
+ * https://daysrajasthan.com/{id}/quotation?v=…
+ * (`origin` is ignored — quotations always use the public website host.)
  */
 export function publicQuotationUrl(
   itineraryId: string,
-  origin?: string | null,
+  _origin?: string | null,
   themeId?: PreviewThemeId | null
 ): string {
-  const base = `${getAdminPublicOrigin(origin)}/itinerary-builder/${itineraryId}/quotation`;
+  const base = `${getPublicWebsiteOrigin()}/${itineraryId}/quotation`;
   if (themeId == null) return base;
   const token = encodeThemeToken(clampPreviewTheme(themeId));
   return `${base}?v=${encodeURIComponent(token)}`;

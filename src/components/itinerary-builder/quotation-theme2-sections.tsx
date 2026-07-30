@@ -53,7 +53,7 @@ function enrichPolicyIcons(
 }
 
 const THEME2_ACCENT = "#56AB2F";
-const THEME3_ACCENT = "#7B1E2E";
+const THEME3_ACCENT = "#7F1D1D"; // red-900
 
 export type TourPolicyVariant = "theme2" | "theme3";
 
@@ -235,8 +235,8 @@ export function Theme2TourPolicies({
     <section className="break-inside-avoid">
       <h2
         className={cn(
-          "font-bold text-stone-700",
-          variant === "theme3" ? "font-serif text-2xl text-stone-800 sm:text-3xl" : "text-2xl"
+          "mb-4 font-semibold text-stone-700",
+          variant === "theme3" ? "font-serif text-2xl text-stone-800 sm:text-3xl" : "text-xl sm:text-2xl"
         )}
       >
         Tour Policies
@@ -382,13 +382,18 @@ export function Theme2About({
       <div>
         <h2
           className={cn(
-            "font-bold text-stone-800 sm:text-2xl",
-            variant === "theme3" ? "font-serif text-2xl sm:text-3xl" : "text-xl"
+            "font-bold text-gray-700",
+            variant === "theme3" ? "font-serif text-2xl text-stone-800 sm:text-3xl" : "text-sm sm:text-lg"
           )}
         >
           {title}
         </h2>
-        <div className="mt-4 grid gap-4 text-sm leading-relaxed text-stone-600 sm:grid-cols-2 sm:text-justify">
+        <div
+          className={cn(
+            "mt-4 grid gap-4 leading-relaxed text-gray-600 sm:grid-cols-2 sm:text-justify",
+            variant === "theme3" ? "text-sm" : "text-sm sm:text-base"
+          )}
+        >
           {paragraphs.length >= 2 ? (
             <>
               <p className="whitespace-pre-wrap">{paragraphs[0]}</p>
@@ -403,8 +408,8 @@ export function Theme2About({
       <div>
         <h3
           className={cn(
-            "font-bold text-stone-900 underline decoration-2 underline-offset-4",
-            variant === "theme3" ? "font-serif text-xl text-sky-800" : "text-lg"
+            "mb-4 font-bold underline",
+            variant === "theme3" ? "text-base text-sky-800" : "text-base text-gray-700"
           )}
           style={variant === "theme3" ? undefined : { textDecorationColor: tone }}
         >
@@ -499,7 +504,14 @@ export function Theme2Contact({
           onSubmit={handleSubmit}
           className="no-print break-inside-avoid rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-6 print:hidden"
         >
-          <h3 className="text-xl font-bold text-stone-900">Write to us</h3>
+          <h2
+            className={cn(
+              "mb-3 font-bold text-gray-800 sm:mb-4",
+              variant === "theme2" ? "text-lg sm:text-xl md:text-2xl" : "text-xl"
+            )}
+          >
+            Write to us
+          </h2>
           <label className="mt-4 block text-sm text-stone-500">
             Name
             <input
@@ -539,8 +551,22 @@ export function Theme2Contact({
         </form>
 
         <div className="break-inside-avoid rounded-lg border border-stone-200 bg-white p-4 shadow-sm sm:p-6">
-          <p className="text-xs font-semibold uppercase tracking-wide text-stone-400">Contact</p>
-          <p className="mt-2 text-2xl font-bold text-stone-900">{agentName}</p>
+          <p
+            className={cn(
+              "mb-2 font-medium uppercase tracking-wide text-gray-600",
+              variant === "theme2" ? "text-sm sm:text-lg" : "text-xs font-semibold text-stone-400"
+            )}
+          >
+            CONTACT
+          </p>
+          <h2
+            className={cn(
+              "mb-4 font-bold text-gray-800",
+              variant === "theme2" ? "text-2xl md:text-3xl lg:text-4xl" : "mt-2 text-2xl text-stone-900"
+            )}
+          >
+            {agentName}
+          </h2>
           <dl className="mt-4 space-y-3 text-sm">
             <div>
               <dt className="text-stone-500">Call To Expert</dt>

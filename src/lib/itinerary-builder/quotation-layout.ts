@@ -31,7 +31,7 @@ export function extractDestination(day: ItineraryDay): string {
   const beforeDash = source.split(" - ")[0]?.trim();
   const beforeComma = beforeDash.split(",")[0]?.trim();
   const cleaned = (beforeComma || source)
-    .replace(/\b(the|arrival|departure|from|to)\b/gi, "")
+    .replace(/\b(the|arrival|departure|from|to|in)\b/gi, "")
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned) return `Day ${day.day_number}`;
@@ -105,8 +105,132 @@ export function buildNightSegments(
   return segments;
 }
 
+/** Unique destinations as a simple path: `Udaipur -> Jaipur -> Jodhpur` */
 export function formatDestinationsSummary(segments: NightSegment[]): string {
-  return segments.map((s) => `${s.destination} · ${s.nights}N`).join(" • ");
+  const seen = new Set<string>();
+  const names: string[] = [];
+  for (const s of segments) {
+    const key = s.destination.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    names.push(s.destination.trim());
+  }
+  return names.join(" -> ");
+}
+
+export type CoveringDestination = {
+  destination: string;
+  nights: number;
+  /** Theme 2 / SenduserviewData3 format: `Jaipur -2N` */
+  label: string;
+};
+
+/** Aggregate nights per destination in visit order: Jaipur -2N, Jodhpur -2N, … */
+export function formatCoveringDestinations(segments: NightSegment[]): CoveringDestination[] {
+  const order: string[] = [];
+  const totals = new Map<string, { destination: string; nights: number }>();
+  for (const s of segments) {
+    const name = s.destination.trim();
+    const key = name.toLowerCase();
+    if (!key) continue;
+    if (!totals.has(key)) {
+      order.push(key);
+      totals.set(key, { destination: name, nights: 0 });
+    }
+    totals.get(key)!.nights += s.nights;
+  }
+  return order.map((key) => {
+    const row = totals.get(key)!;
+    return {
+      destination: row.destination,
+      nights: row.nights,
+      label: `${row.destination} -${row.nights}N`,
+    };
+  });
+}
+
+/** Booking-level vehicles, falling back to unique per-day vehicle types. */
+export function resolvePackageVehicles(input: {
+  vehicle_types?: string[] | null;
+  vehicle_type?: string | null;
+  days?: { vehicle_type?: string | null }[];
+}): string[] {
+  const fromList = (input.vehicle_types ?? []).map((v) => v.trim()).filter(Boolean);
+  if (fromList.length) return Array.from(new Set(fromList));
+  if (input.vehicle_type?.trim()) return [input.vehicle_type.trim()];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const day of input.days ?? []) {
+    const v = day.vehicle_type?.trim();
+    if (!v) continue;
+    const key = v.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+  }
+  return out;
+}
+
+export type HotelPackageOption = {
+  hotelName: string;
+  /** Original option label for master-catalog lookup */
+  optionLabel: string;
+  rating: number;
+  reviewCount: number;
+  breakfast: boolean;
+  imageUrl?: string | null;
+};
+
+export type HotelPackageNight = {
+  nightLabel: string;
+  dateLabel: string;
+  destination: string;
+  checkIn: string | null;
+  checkOut: string | null;
+  options: HotelPackageOption[];
+};
+
+/** Night-grouped hotel cards for Theme 2 (OR layout from breakfast hotel pair). */
+export function buildHotelPackageNights(
+  days: ItineraryDay[],
+  travelDate: string | null
+): HotelPackageNight[] {
+  const segments = buildNightSegments(days, travelDate);
+  return segments.map((segment) => {
+    const day =
+      days.find((d) => d.day_number === segment.startDay && d.hotel_name) ??
+      days.find((d) => d.day_number >= segment.startDay && d.day_number <= segment.endDay);
+    const pair = day
+      ? [day.breakfast_hotels?.[0], day.breakfast_hotels?.[1]].filter(Boolean)
+      : [];
+    const names =
+      pair.length > 0
+        ? (pair as string[])
+        : day?.hotel_name
+          ? [day.hotel_name]
+          : [];
+    const uniqueNames = Array.from(new Set(names.map((n) => n.trim()).filter(Boolean)));
+    const checkIn = dayDate(travelDate, segment.startDay);
+    const checkOut = dayDate(travelDate, segment.endDay + 1);
+    return {
+      nightLabel: segment.nightLabel,
+      dateLabel: segment.dateLabel,
+      destination: segment.destination,
+      checkIn: checkIn ? formatDate(checkIn) : null,
+      checkOut: checkOut ? formatDate(checkOut) : null,
+      options: uniqueNames.map((hotelName) => {
+        const displayName = hotelName.split(" - ")[0]?.trim() || hotelName;
+        const { rating, reviewCount } = displayHotelRating(displayName);
+        return {
+          hotelName: displayName,
+          optionLabel: hotelName,
+          rating,
+          reviewCount,
+          breakfast: Boolean(day?.breakfast || day?.breakfast_hotels?.includes(hotelName)),
+        };
+      }),
+    };
+  });
 }
 
 export function displayHotelRating(hotelName: string): { rating: number; reviewCount: number } {

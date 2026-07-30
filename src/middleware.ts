@@ -63,7 +63,10 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/login/forgot-password") ||
     pathname.startsWith("/login/update-password");
   const isPublicQuotation =
-    /^\/itinerary-builder\/[^/]+\/quotation\/?$/.test(pathname);
+    /^\/itinerary-builder\/[^/]+\/quotation\/?$/.test(pathname) ||
+    /^\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/quotation\/?$/i.test(
+      pathname
+    );
   const isPublicPath =
     pathname.startsWith("/proposal") ||
     pathname.startsWith("/embed") ||

@@ -9,6 +9,28 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-nunito: var(--font-nunito-sans), "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-poltawski: var(--font-poltawski-nowy), "Poltawski Nowy", ui-serif, Georgia, serif;
+}
+
+/* Theme 2 — Royal Circle / SenduserviewData3 (Nunito Sans at reference sizes) */
+.quotation-theme-2 {
+  font-family: var(--font-nunito), "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+  color: #334155;
+}
+
+.quotation-theme-2 .font-serif {
+  font-family: var(--font-nunito), "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Theme 3 — Parchment Heritage / SenduserviewData4 */
+.quotation-theme-3 {
+  font-family: var(--font-poltawski), "Poltawski Nowy", ui-serif, Georgia, serif;
+  color: #111827;
+}
+
+.quotation-theme-3 .font-serif {
+  font-family: var(--font-poltawski), "Poltawski Nowy", ui-serif, Georgia, serif;
 }
 
 body {
