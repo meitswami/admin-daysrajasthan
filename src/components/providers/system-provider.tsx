@@ -43,8 +43,9 @@ type SystemContextValue = {
 const SystemContext = createContext<SystemContextValue | null>(null);
 
 export function SystemProvider({ children }: { children: ReactNode }) {
-  const [dataMode, setDataModeState] = useState<DataMode>("dummy");
-  const [currentMember, setCurrentMember] = useState<TeamMember>(getCurrentTeamMember());
+  const [dataMode, setDataModeState] = useState<DataMode>(() => getDataMode());
+  const [dataModeReady, setDataModeReady] = useState(false);
+  const [currentMember, setCurrentMember] = useState<TeamMember>(getCurrentTeamMember);
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>(() => listTeamMembers());
   const [permTick, setPermTick] = useState(0);
 
@@ -54,15 +55,24 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
-    fetchDataModeFromServer().then((serverMode) => {
-      if (serverMode && serverMode !== getDataMode()) {
+    let cancelled = false;
+
+    void (async () => {
+      // Prefer server-wide mode so every device loads Real data, not browser-local Demo.
+      const serverMode = await fetchDataModeFromServer();
+      if (cancelled) return;
+      if (serverMode) {
         setDataMode(serverMode);
-        refresh();
+        setDataModeState(serverMode);
+      } else {
+        setDataModeState(getDataMode());
       }
-    });
+      setDataModeReady(true);
+    })();
+
     void listPermissionGroups();
     void fetchTeamMembers().then((members) => {
+      if (cancelled) return;
       setTeamMembers(members);
       // Refresh signed-in member from DB so permission_group_id / overrides apply
       const current = getCurrentTeamMember();
@@ -89,6 +99,7 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     window.addEventListener("td-rbac-overrides-change", onPerms);
     window.addEventListener("td-permission-groups-change", onGroups);
     return () => {
+      cancelled = true;
       window.removeEventListener("td-data-mode-change", onMode);
       window.removeEventListener("td-team-member-change", onMember);
       window.removeEventListener("td-rbac-overrides-change", onPerms);
@@ -132,6 +143,14 @@ export function SystemProvider({ children }: { children: ReactNode }) {
     }),
     [dataMode, setDataModeAndPersist, currentMember, teamMembers, refresh, permTick]
   );
+
+  if (!dataModeReady) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center text-sm text-stone-500">
+        Loading workspace…
+      </div>
+    );
+  }
 
   return <SystemContext.Provider value={value}>{children}</SystemContext.Provider>;
 }

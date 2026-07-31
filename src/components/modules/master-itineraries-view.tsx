@@ -107,7 +107,7 @@ function dayLocationList(day: ItineraryDayPlan): string[] {
 
 export function MasterItinerariesView() {
   const { show } = useToast();
-  const { currentMember } = useSystem();
+  const { currentMember, dataMode } = useSystem();
   const [items, setItems] = useState<Itinerary[]>([]);
   const [destinations, setDestinations] = useState<WebsiteContentItem[]>([]);
   const [search, setSearch] = useState("");
@@ -146,7 +146,7 @@ export function MasterItinerariesView() {
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, dataMode]);
 
   const inactiveCount = useMemo(
     () => items.filter((i) => i.status !== "active").length,

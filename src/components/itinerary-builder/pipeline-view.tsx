@@ -10,6 +10,7 @@ import { formatInr } from "@/lib/itinerary-builder/cost-engine";
 import { listClientItineraries } from "@/lib/itinerary-builder/storage";
 import type { ClientItineraryRecord, WorkflowStatus } from "@/types/itinerary-builder";
 import { WORKFLOW_LABELS, WORKFLOW_PIPELINE } from "@/types/itinerary-builder";
+import { useSystem } from "@/components/providers/system-provider";
 import {
   LayoutGrid,
   List,
@@ -39,6 +40,7 @@ export function ItineraryBuilderPipelineView({
   /** pending = unpaid quotes; confirmed = advance paid; all = everything */
   listFilter?: "all" | "pending" | "confirmed";
 }) {
+  const { dataMode } = useSystem();
   const [records, setRecords] = useState(initialRecords);
   const [view, setView] = useState<"kanban" | "list">("list");
   const [search, setSearch] = useState("");
@@ -55,14 +57,12 @@ export function ItineraryBuilderPipelineView({
   }, [listFilter]);
 
   useEffect(() => {
-    void import("@/lib/system/data-mode").then(({ isRealDataMode }) => {
-      if (!isRealDataMode()) return;
-      void import("@/lib/itinerary-builder/sync-real").then(({ hydrateItineraryBuilderFromSupabaseIfReal }) =>
-        hydrateItineraryBuilderFromSupabaseIfReal().then(() => setRecords(loadList()))
-      );
-    });
+    if (dataMode !== "real") return;
+    void import("@/lib/itinerary-builder/sync-real").then(({ hydrateItineraryBuilderFromSupabaseIfReal }) =>
+      hydrateItineraryBuilderFromSupabaseIfReal().then(() => setRecords(loadList()))
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listFilter]);
+  }, [listFilter, dataMode]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
