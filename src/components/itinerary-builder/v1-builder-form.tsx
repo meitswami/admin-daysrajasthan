@@ -204,9 +204,15 @@ function DayTitleSuggest({
       setOpen(false);
       return;
     }
-    const found = searchAiSuggestions(value);
-    setMatches(found);
-    setOpen(found.length > 0);
+    let cancelled = false;
+    void searchAiSuggestions(value).then((found) => {
+      if (cancelled) return;
+      setMatches(found);
+      setOpen(found.length > 0);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [value]);
 
   return (
@@ -217,15 +223,16 @@ function DayTitleSuggest({
           onChange={(e) => onChange(e.target.value)}
           onFocus={() => {
             if (value.trim().length >= 2) {
-              const found = searchAiSuggestions(value);
-              setMatches(found);
-              setOpen(found.length > 0);
+              void searchAiSuggestions(value).then((found) => {
+                setMatches(found);
+                setOpen(found.length > 0);
+              });
             }
           }}
           onBlur={() => {
             // learn custom titles into master data
             if (value.trim().length >= 3) {
-              learnAiSuggestionFromDay(value, "");
+              void learnAiSuggestionFromDay(value, "");
             }
           }}
           placeholder="Day title"
@@ -1581,7 +1588,7 @@ export function V1BuilderForm({
                           day_title: sug.title,
                           day_description: sug.description,
                         }));
-                        learnAiSuggestionFromDay(sug.title, sug.description);
+                        void learnAiSuggestionFromDay(sug.title, sug.description);
                       }}
                     />
                     <Button
@@ -1621,7 +1628,7 @@ export function V1BuilderForm({
                       }
                       onBlur={() => {
                         if (day.day_title.trim()) {
-                          learnAiSuggestionFromDay(day.day_title, day.day_description);
+                          void learnAiSuggestionFromDay(day.day_title, day.day_description);
                         }
                       }}
                       rows={5}

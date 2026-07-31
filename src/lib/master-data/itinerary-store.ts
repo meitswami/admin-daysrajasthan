@@ -1,11 +1,11 @@
 import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
-import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
+import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
-  return isSupabaseConfigured() && isRealDataMode();
+  return useCloudMaster();
 }
 
 const STORAGE_KEY = "td-master-itineraries-v1";
@@ -385,25 +385,21 @@ export async function deleteMasterItinerary(id: string, actor?: TeamMember): Pro
   const before = all.find((i) => i.id === id) ?? null;
 
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("itineraries").delete().eq("id", id);
-      if (!error) {
-        logMasterDataChange({
-          entityType: "itinerary",
-          entityId: id,
-          action: "delete",
-          summary: `Deleted package “${before?.package_name ?? id}”`,
-          before: before ? { ...before } : null,
-          actor,
-        });
-        return true;
-      }
-    } catch {
-      // fall through
-    }
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { error } = await supabase.from("itineraries").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    logMasterDataChange({
+      entityType: "itinerary",
+      entityId: id,
+      action: "delete",
+      summary: `Deleted package “${before?.package_name ?? id}”`,
+      before: before ? { ...before } : null,
+      actor,
+    });
+    return true;
   }
+
   writeLocal(readLocal().filter((i) => i.id !== id));
   logMasterDataChange({
     entityType: "itinerary",

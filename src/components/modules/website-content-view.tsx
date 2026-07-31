@@ -29,7 +29,7 @@ import {
   updateMasterContent,
   type MasterContentEntity,
 } from "@/lib/master-data/content-store";
-import { listMasterCategories } from "@/lib/master-data/categories-store";
+import { listMasterCategoriesCached } from "@/lib/master-data/categories-store";
 import {
   emptyVehicleProvider,
   normalizeVehicleProviders,
@@ -50,7 +50,7 @@ const TAB_TITLES: Record<MasterContentEntity, { title: string; singular: string 
 };
 
 function hotelCategoryOptions(): { value: string; label: string }[] {
-  const fromMaster = listMasterCategories().map((c) => ({ value: c.label, label: c.label }));
+  const fromMaster = listMasterCategoriesCached().map((c) => ({ value: c.label, label: c.label }));
   if (fromMaster.length) return fromMaster;
   return HOTEL_CATEGORY_OPTIONS.map((c) => ({ value: c.label, label: c.label }));
 }

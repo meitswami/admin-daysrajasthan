@@ -13,6 +13,7 @@ import {
   deleteAiSuggestion,
   listAiSuggestions,
   updateAiSuggestion,
+  countPendingLocalAiSuggestions,
   type AiSuggestion,
 } from "@/lib/itinerary-builder/ai-suggestions";
 import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
@@ -20,8 +21,11 @@ import { Plus } from "lucide-react";
 
 export function AiSuggestionsView() {
   const { show } = useToast();
-  const { currentMember } = useSystem();
+  const { currentMember, dataMode } = useSystem();
   const [items, setItems] = useState<AiSuggestion[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [migratedCount, setMigratedCount] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -29,13 +33,26 @@ export function AiSuggestionsView() {
 
   const canCreate = canCreateMasterData(currentMember);
 
-  function refresh() {
-    setItems(listAiSuggestions());
+  async function refresh() {
+    setLoading(true);
+    const pendingBefore = countPendingLocalAiSuggestions();
+    try {
+      const list = await listAiSuggestions();
+      setItems(list);
+      if (pendingBefore > 0) {
+        setMigratedCount(pendingBefore);
+        show(`Synced ${pendingBefore} browser-local suggestion(s) to Supabase`);
+      }
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to load suggestions from cloud");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    refresh();
-  }, []);
+    void refresh();
+  }, [dataMode]);
 
   function resetForm() {
     setModalOpen(false);
@@ -62,33 +79,44 @@ export function AiSuggestionsView() {
     setModalOpen(true);
   }
 
-  function save() {
+  async function save() {
     if (!title.trim()) {
       show("Suggestion title is required");
       return;
     }
-    if (editId) {
-      updateAiSuggestion(editId, { title, description });
-      show("Suggestion updated");
-    } else {
-      createAiSuggestion({
-        title,
-        description,
-        source: "manual",
-        created_by_id: currentMember.id,
-        created_by_name: currentMember.name,
-      });
-      show("Suggestion saved");
+    setSaving(true);
+    try {
+      if (editId) {
+        await updateAiSuggestion(editId, { title, description });
+        show("Suggestion updated in Supabase");
+      } else {
+        await createAiSuggestion({
+          title,
+          description,
+          source: "manual",
+          created_by_id: currentMember.id,
+          created_by_name: currentMember.name,
+        });
+        show("Suggestion saved to Supabase");
+      }
+      resetForm();
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Cloud save failed");
+    } finally {
+      setSaving(false);
     }
-    resetForm();
-    refresh();
   }
 
-  function remove(item: AiSuggestion) {
+  async function remove(item: AiSuggestion) {
     if (!confirm("Delete this suggestion?")) return;
-    deleteAiSuggestion(item.id);
-    show("Suggestion deleted");
-    refresh();
+    try {
+      await deleteAiSuggestion(item.id);
+      show("Suggestion deleted from Supabase");
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Cloud delete failed");
+    }
   }
 
   return (
@@ -104,43 +132,58 @@ export function AiSuggestionsView() {
           )}
         </PageToolbar>
 
-        <div className="space-y-3">
-          {items.map((item) => {
-            const createdBy = createdByAttribution(currentMember, item);
-            return (
-              <div
-                key={item.id}
-                className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
-              >
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-semibold text-stone-900">{item.title}</h4>
-                  <p className="mt-1 text-sm leading-relaxed text-stone-600">{item.description}</p>
-                  {createdBy ? (
-                    <p className="mt-2 text-xs text-stone-400">{createdBy}</p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="bg-blue-600 text-white hover:bg-blue-700"
-                    onClick={() => startEdit(item)}
-                  >
-                    Edit
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="destructive"
-                    onClick={() => remove(item)}
-                  >
-                    Delete
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+          All suggestions are stored in Supabase (production). Open this page once on any device that
+          still has old browser-only entries — they upload automatically.
+          {migratedCount != null ? (
+            <span className="mt-1 block font-medium">
+              Last sync from this browser recovered local data into the cloud.
+            </span>
+          ) : null}
         </div>
+
+        {loading ? (
+          <p className="text-sm text-stone-500">Loading suggestions from cloud…</p>
+        ) : (
+          <div className="space-y-3">
+            {items.map((item) => {
+              const createdBy = createdByAttribution(currentMember, item);
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col gap-3 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-semibold text-stone-900">{item.title}</h4>
+                    <p className="mt-1 text-sm leading-relaxed text-stone-600">{item.description}</p>
+                    {createdBy ? (
+                      <p className="mt-2 text-xs text-stone-400">{createdBy}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={() => startEdit(item)}>
+                      Edit
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600"
+                      onClick={() => void remove(item)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+            {!items.length && (
+              <p className="rounded-xl border border-dashed border-stone-200 p-6 text-center text-sm text-stone-500">
+                No suggestions yet. Add day titles and descriptions for the itinerary builder.
+              </p>
+            )}
+          </div>
+        )}
       </PageMain>
 
       <Modal
@@ -150,12 +193,12 @@ export function AiSuggestionsView() {
       >
         <div className="space-y-4">
           <div>
-            <Label>Suggestion Title</Label>
+            <Label>Title</Label>
             <Input
               className="mt-1.5"
-              placeholder="Suggestion Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Arrival At Jaipur"
             />
           </div>
           <div>
@@ -163,17 +206,17 @@ export function AiSuggestionsView() {
             <Textarea
               className="mt-1.5"
               rows={5}
-              placeholder="Describe the day…"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              placeholder="Day description shown in itinerary builder suggestions"
             />
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={resetForm}>
               Cancel
             </Button>
-            <Button type="button" onClick={save}>
-              Save Suggestion
+            <Button type="button" onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>

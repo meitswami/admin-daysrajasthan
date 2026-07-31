@@ -21,8 +21,10 @@ import { Plus } from "lucide-react";
 
 export function MasterDataCategoriesView() {
   const { show } = useToast();
-  const { currentMember } = useSystem();
+  const { currentMember, dataMode } = useSystem();
   const [items, setItems] = useState<MasterCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MasterCategory | null>(null);
   const [label, setLabel] = useState("");
@@ -31,13 +33,20 @@ export function MasterDataCategoriesView() {
 
   const canCreate = canCreateMasterData(currentMember);
 
-  function refresh() {
-    setItems(listMasterCategories());
+  async function refresh() {
+    setLoading(true);
+    try {
+      setItems(await listMasterCategories());
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to load categories");
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
-    refresh();
-  }, []);
+    void refresh();
+  }, [dataMode]);
 
   function openAdd() {
     if (!canCreate) {
@@ -59,27 +68,45 @@ export function MasterDataCategoriesView() {
     setModalOpen(true);
   }
 
-  function save() {
+  async function save() {
     if (!label.trim() || !key.trim()) {
       show("Label and key are required");
       return;
     }
-    if (editing) {
-      updateMasterCategory(editing.id, { label, room_category: roomCategory, key });
-      show("Updated");
-    } else {
-      createMasterCategory({ label, room_category: roomCategory, key }, currentMember);
-      show("Created");
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateMasterCategory(
+          editing.id,
+          { label, room_category: roomCategory, key },
+          currentMember
+        );
+        show("Updated");
+      } else {
+        await createMasterCategory(
+          { label, room_category: roomCategory, key },
+          currentMember
+        );
+        show("Created");
+      }
+      setModalOpen(false);
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    refresh();
   }
 
-  function remove(item: MasterCategory) {
+  async function remove(item: MasterCategory) {
     if (!confirm(`Delete “${item.label}”?`)) return;
-    deleteMasterCategory(item.id);
-    show("Deleted");
-    refresh();
+    try {
+      await deleteMasterCategory(item.id, currentMember);
+      show("Deleted");
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Delete failed");
+    }
   }
 
   return (
@@ -94,52 +121,55 @@ export function MasterDataCategoriesView() {
             </Button>
           )}
         </PageToolbar>
-        <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
-              <tr>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Room category</th>
-                <th className="px-4 py-3 font-medium">Created by</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-b border-stone-100 last:border-0">
-                  <td className="px-4 py-3 font-medium text-stone-900">{item.label}</td>
-                  <td className="px-4 py-3 text-stone-700">{item.room_category}</td>
-                  <td className="px-4 py-3 text-xs text-stone-500">
-                    {createdByAttribution(currentMember, item) ?? ""}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div>
-                      <TableRowActions>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="shrink-0 bg-blue-600 text-white hover:bg-blue-700"
-                        onClick={() => openEdit(item)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="destructive"
-                        className="shrink-0"
-                        onClick={() => remove(item)}
-                      >
-                        Delete
-                      </Button>
-                      </TableRowActions>
-                    </div>
-                  </td>
+        {loading ? (
+          <p className="text-sm text-stone-500">Loading categories…</p>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-stone-200 bg-white">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Category</th>
+                  <th className="px-4 py-3 font-medium">Room category</th>
+                  <th className="px-4 py-3 font-medium">Created by</th>
+                  <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id} className="border-b border-stone-100 last:border-0">
+                    <td className="px-4 py-3 font-medium text-stone-900">{item.label}</td>
+                    <td className="px-4 py-3 text-stone-700">{item.room_category}</td>
+                    <td className="px-4 py-3 text-xs text-stone-500">
+                      {createdByAttribution(currentMember, item) ?? ""}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div>
+                        <TableRowActions>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-blue-600 text-white hover:bg-blue-700"
+                            onClick={() => openEdit(item)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => void remove(item)}
+                          >
+                            Delete
+                          </Button>
+                        </TableRowActions>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </PageMain>
 
       <Modal
@@ -168,8 +198,8 @@ export function MasterDataCategoriesView() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={save}>
-              Save
+            <Button type="button" onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>

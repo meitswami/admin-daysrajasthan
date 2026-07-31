@@ -411,9 +411,13 @@ export function saveSnapshotRevision(
   state.records[idx] = syncRecordFromSnapshot(record, normalized, revision);
   saveState(state);
 
-  void import("@/lib/itinerary-builder/sync-real").then(({ syncRecordToSupabaseIfReal }) =>
-    syncRecordToSupabaseIfReal(state.records[idx], revision)
-  );
+  // Production: require cloud sync — local-only success is not enough.
+  void import("@/lib/itinerary-builder/sync-real").then(async ({ syncRecordToSupabaseIfReal }) => {
+    const result = await syncRecordToSupabaseIfReal(state.records[idx], revision);
+    if (!result.ok) {
+      console.error("[itinerary] Supabase sync failed after save:", result.error);
+    }
+  });
   void import("@/lib/system/activity-log").then(({ logActivity }) =>
     logActivity({
       action: "quote_update",

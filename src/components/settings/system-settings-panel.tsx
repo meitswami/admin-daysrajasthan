@@ -19,7 +19,6 @@ import type { ActivityAction } from "@/types/system";
 import { formatDateTime } from "@/lib/utils";
 import { downloadCsv } from "@/lib/utils/csv";
 import { Database, Shield, History, IndianRupee, Smartphone, Download, Percent } from "lucide-react";
-import { cn } from "@/lib/utils";
 import type { ActivityLogEntry } from "@/types/system";
 import { RbacPermissionMatrix } from "@/components/settings/rbac-permission-matrix";
 
@@ -43,11 +42,9 @@ const ACTION_OPTIONS: ActivityAction[] = [
 ];
 
 export function SystemSettingsPanel() {
-  const { dataMode, setDataModeAndPersist, supabaseConfigured, currentMember, teamMembers, switchMember, can } =
-    useSystem();
+  const { supabaseConfigured, currentMember, teamMembers, switchMember, can } = useSystem();
   const { settings, updateAdminGeneral } = useSiteSettings();
   const { show } = useToast();
-  const [confirmReal, setConfirmReal] = useState(false);
   const [activity, setActivity] = useState<ActivityLogEntry[]>(listActivityLogs({ limit: 30 }));
   const [moduleFilter, setModuleFilter] = useState("");
   const [actionFilter, setActionFilter] = useState<ActivityAction | "">("");
@@ -78,21 +75,6 @@ export function SystemSettingsPanel() {
         log.entity_id ?? "",
       ])
     );
-  }
-
-  async function handleDataModeChange(mode: "dummy" | "real") {
-    if (mode === "real" && !confirmReal) {
-      setConfirmReal(true);
-      show("Click Real again to confirm — mock seed data will be hidden");
-      return;
-    }
-    if (!supabaseConfigured && mode === "real") {
-      show("Live database env is not configured — cannot use Real mode");
-      return;
-    }
-    await setDataModeAndPersist(mode);
-    setConfirmReal(false);
-    show(`Data mode: ${mode.toUpperCase()}`);
   }
 
   if (!can("settings.system") && !can("activity_logs.view")) {
@@ -131,44 +113,30 @@ export function SystemSettingsPanel() {
   return (
     <div className="space-y-6">
       {can("data_mode.toggle") && (
-        <Card className={cn(dataMode === "real" ? "border-emerald-300 bg-emerald-50/30" : "border-amber-200/60 bg-amber-50/40")}>
+        <Card className="border-emerald-300 bg-emerald-50/30">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Database className="h-5 w-5" />
               Data Mode
             </CardTitle>
             <CardDescription>
-              Dummy shows mock/local data site-wide. Real uses the live database only (no seed QRT rows).
+              Production is locked to Real — all master data and quotes must use the live Supabase
+              database. Dummy / fake seed mode is disabled.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
-              <Badge variant={dataMode === "real" ? "success" : "warning"}>
-                {dataMode === "real" ? "REAL" : "DUMMY"}
-              </Badge>
+              <Badge variant="success">REAL (production)</Badge>
               {!supabaseConfigured && (
-                <span className="text-xs text-red-600">Live database env not configured — Real mode limited</span>
+                <span className="text-xs text-red-600">
+                  Live database env not configured — configure NEXT_PUBLIC_SUPABASE_URL
+                </span>
               )}
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant={dataMode === "dummy" ? "default" : "outline"}
-                onClick={() => handleDataModeChange("dummy")}
-              >
-                Dummy (testing)
-              </Button>
-              <Button
-                type="button"
-                variant={dataMode === "real" ? "default" : "outline"}
-                onClick={() => handleDataModeChange("real")}
-              >
-                Real (production)
-              </Button>
-            </div>
-            {confirmReal && (
-              <p className="text-xs text-amber-800">Confirm: click Real again to switch to live database data.</p>
-            )}
+            <p className="text-sm text-stone-600">
+              Dummy mode cannot be enabled while Supabase is connected. New and edited records are
+              saved only to the cloud.
+            </p>
           </CardContent>
         </Card>
       )}

@@ -1,3 +1,6 @@
+import { requireCloudMaster, useCloudMaster } from "@/lib/master-data/cloud";
+import { logMasterDataChange } from "@/lib/master-data/audit";
+
 export type AiSuggestion = {
   id: string;
   title: string;
@@ -10,6 +13,7 @@ export type AiSuggestion = {
 };
 
 const STORAGE_KEY = "td_ai_suggestions_v1";
+const MIGRATED_FLAG = "td_ai_suggestions_cloud_migrated_v1";
 
 const SEED: Omit<AiSuggestion, "id" | "created_at" | "updated_at" | "source">[] = [
   {
@@ -104,6 +108,37 @@ function uid() {
     : `sug-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function mapRow(row: Record<string, unknown>): AiSuggestion {
+  const sourceRaw = String(row.source ?? "manual");
+  const source: AiSuggestion["source"] =
+    sourceRaw === "seed" || sourceRaw === "learned" || sourceRaw === "manual"
+      ? sourceRaw
+      : "manual";
+  return {
+    id: String(row.id),
+    title: String(row.title ?? ""),
+    description: String(row.description ?? ""),
+    created_at: String(row.created_at ?? now()),
+    updated_at: String(row.updated_at ?? row.created_at ?? now()),
+    source,
+    created_by_id: (row.created_by as string | null) ?? null,
+    created_by_name: (row.created_by_name as string | null) ?? null,
+  };
+}
+
+function toRow(item: AiSuggestion) {
+  return {
+    id: item.id,
+    title: item.title,
+    description: item.description,
+    source: item.source,
+    created_at: item.created_at,
+    updated_at: item.updated_at,
+    created_by: item.created_by_id,
+    created_by_name: item.created_by_name,
+  };
+}
+
 function seedList(): AiSuggestion[] {
   const t = now();
   return SEED.map((s) => ({
@@ -117,29 +152,98 @@ function seedList(): AiSuggestion[] {
   }));
 }
 
-export function listAiSuggestions(): AiSuggestion[] {
-  if (typeof window === "undefined") return seedList();
+/** Read browser cache without inventing seed data. */
+function readLocalRaw(): AiSuggestion[] {
+  if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seeded = seedList();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw) as AiSuggestion[];
-    return Array.isArray(parsed) ? parsed : seedList();
+    return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return seedList();
+    return [];
   }
 }
 
-function saveAll(list: AiSuggestion[]) {
+function writeLocalCache(list: AiSuggestion[]) {
+  if (typeof window === "undefined") return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
 }
 
-export function searchAiSuggestions(query: string): AiSuggestion[] {
+async function fetchRemote(): Promise<AiSuggestion[]> {
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_ai_suggestions")
+    .select("*")
+    .order("updated_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
+/**
+ * Upload any browser-local suggestions missing from Supabase.
+ * Recovers 50+ entries that were previously saved only to localStorage.
+ */
+async function uploadMissingLocal(remote: AiSuggestion[]): Promise<AiSuggestion[]> {
+  const local = readLocalRaw();
+  if (!local.length) return remote;
+
+  const remoteIds = new Set(remote.map((r) => r.id));
+  const missing = local.filter((l) => l.title.trim() && !remoteIds.has(l.id));
+  if (!missing.length) return remote;
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  // Chunk upserts to avoid payload limits.
+  const chunkSize = 50;
+  for (let i = 0; i < missing.length; i += chunkSize) {
+    const chunk = missing.slice(i, i + chunkSize).map(toRow);
+    const { error } = await supabase.from("td_ai_suggestions").upsert(chunk, { onConflict: "id" });
+    if (error) throw new Error(`Failed to migrate AI suggestions to cloud: ${error.message}`);
+  }
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+  }
+
+  return fetchRemote();
+}
+
+export async function listAiSuggestions(): Promise<AiSuggestion[]> {
+  if (!useCloudMaster()) {
+    // Dev without Supabase only — never invent production data paths here.
+    const local = readLocalRaw();
+    return local.length ? local : seedList();
+  }
+
+  let remote = await fetchRemote();
+
+  // Prefer recovering local production data before seeding empty cloud.
+  if (remote.length === 0) {
+    const local = readLocalRaw();
+    if (local.length > 0) {
+      remote = await uploadMissingLocal([]);
+    } else {
+      const seeded = seedList();
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { error } = await supabase.from("td_ai_suggestions").insert(seeded.map(toRow));
+      if (error) throw new Error(error.message);
+      remote = seeded;
+    }
+  } else {
+    remote = await uploadMissingLocal(remote);
+  }
+
+  writeLocalCache(remote);
+  return remote;
+}
+
+export async function searchAiSuggestions(query: string): Promise<AiSuggestion[]> {
   const q = query.trim().toLowerCase();
-  const all = listAiSuggestions();
+  const all = await listAiSuggestions();
   if (!q) return all.slice(0, 20);
   return all.filter(
     (s) =>
@@ -147,14 +251,14 @@ export function searchAiSuggestions(query: string): AiSuggestion[] {
   );
 }
 
-export function createAiSuggestion(input: {
+export async function createAiSuggestion(input: {
   title: string;
   description: string;
   source?: AiSuggestion["source"];
   created_by_id?: string | null;
   created_by_name?: string | null;
-}): AiSuggestion {
-  const list = listAiSuggestions();
+}): Promise<AiSuggestion> {
+  requireCloudMaster();
   const t = now();
   const item: AiSuggestion = {
     id: uid(),
@@ -166,48 +270,128 @@ export function createAiSuggestion(input: {
     created_by_id: input.created_by_id ?? null,
     created_by_name: input.created_by_name ?? null,
   };
-  list.unshift(item);
-  saveAll(list);
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_ai_suggestions").insert(toRow(item));
+  if (error) throw new Error(error.message);
+
+  const cache = readLocalRaw().filter((s) => s.id !== item.id);
+  cache.unshift(item);
+  writeLocalCache(cache);
+
+  if (item.source === "manual") {
+    logMasterDataChange({
+      entityType: "ai_suggestion",
+      entityId: item.id,
+      action: "create",
+      summary: `Created AI suggestion “${item.title}”`,
+      after: { ...item },
+    });
+  }
+
   return item;
 }
 
-export function updateAiSuggestion(
+export async function updateAiSuggestion(
   id: string,
   input: { title: string; description: string }
-): AiSuggestion | null {
-  const list = listAiSuggestions();
-  const idx = list.findIndex((s) => s.id === id);
-  if (idx < 0) return null;
-  list[idx] = {
-    ...list[idx],
+): Promise<AiSuggestion | null> {
+  requireCloudMaster();
+  const list = await listAiSuggestions();
+  const existing = list.find((s) => s.id === id);
+  if (!existing) return null;
+  const next: AiSuggestion = {
+    ...existing,
     title: input.title.trim(),
     description: input.description.trim(),
     updated_at: now(),
   };
-  saveAll(list);
-  return list[idx];
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase
+    .from("td_ai_suggestions")
+    .update({
+      title: next.title,
+      description: next.description,
+      updated_at: next.updated_at,
+    })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+
+  const cache = readLocalRaw();
+  const idx = cache.findIndex((s) => s.id === id);
+  if (idx >= 0) {
+    cache[idx] = next;
+    writeLocalCache(cache);
+  }
+
+  logMasterDataChange({
+    entityType: "ai_suggestion",
+    entityId: id,
+    action: "update",
+    summary: `Updated AI suggestion “${next.title}”`,
+    before: { ...existing },
+    after: { ...next },
+  });
+
+  return next;
 }
 
-export function deleteAiSuggestion(id: string): boolean {
-  const list = listAiSuggestions();
-  const next = list.filter((s) => s.id !== id);
-  if (next.length === list.length) return false;
-  saveAll(next);
+export async function deleteAiSuggestion(id: string): Promise<boolean> {
+  requireCloudMaster();
+  const list = await listAiSuggestions();
+  const existing = list.find((s) => s.id === id);
+  if (!existing) return false;
+
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_ai_suggestions").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  writeLocalCache(readLocalRaw().filter((s) => s.id !== id));
+
+  logMasterDataChange({
+    entityType: "ai_suggestion",
+    entityId: id,
+    action: "delete",
+    summary: `Deleted AI suggestion “${existing.title}”`,
+    before: { ...existing },
+  });
+
   return true;
 }
 
 /** Learn from custom day title/description so suggestions stay fresh */
-export function learnAiSuggestionFromDay(title: string, description: string) {
+export async function learnAiSuggestionFromDay(title: string, description: string) {
   const t = title.trim();
   const d = description.trim();
   if (!t || t.length < 3) return;
-  const list = listAiSuggestions();
-  const existing = list.find((s) => s.title.toLowerCase() === t.toLowerCase());
-  if (existing) {
-    if (d && d !== existing.description) {
-      updateAiSuggestion(existing.id, { title: existing.title, description: d });
+  try {
+    const list = await listAiSuggestions();
+    const existing = list.find((s) => s.title.toLowerCase() === t.toLowerCase());
+    if (existing) {
+      if (d && d !== existing.description) {
+        await updateAiSuggestion(existing.id, { title: existing.title, description: d });
+      }
+      return;
     }
-    return;
+    await createAiSuggestion({ title: t, description: d || t, source: "learned" });
+  } catch (err) {
+    console.warn("[ai-suggestions] learn failed", err);
   }
-  createAiSuggestion({ title: t, description: d || t, source: "learned" });
+}
+
+/** How many browser-local suggestions are waiting to upload (for UI banner). */
+export function countPendingLocalAiSuggestions(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as AiSuggestion[];
+    return Array.isArray(parsed) ? parsed.length : 0;
+  } catch {
+    return 0;
+  }
 }

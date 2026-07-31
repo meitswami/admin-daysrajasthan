@@ -5,7 +5,7 @@ import {
   hotels as seedHotels,
   vehicles as seedVehicles,
 } from "@/lib/data/website-content";
-import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
+import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import {
   flatFieldsFromProviders,
@@ -14,9 +14,9 @@ import {
 } from "@/lib/master-data/vehicle-providers";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
-/** Real mode + configured env → Supabase. Dummy → local mock/seed. */
+/** Production: always Supabase when env is configured. */
 function useSupabaseMaster(): boolean {
-  return isSupabaseConfigured() && isRealDataMode();
+  return useCloudMaster();
 }
 
 export type MasterContentEntity = "destinations" | "hotels" | "vehicles";
@@ -526,24 +526,19 @@ export async function deleteMasterContent(
   const before = beforeList.find((i) => i.id === id) ?? null;
 
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from(TABLE_MAP[entity]).delete().eq("id", id);
-      if (!error) {
-        logMasterDataChange({
-          entityType: entity,
-          entityId: id,
-          action: "delete",
-          summary: `Deleted ${entity.slice(0, -1)} “${before?.name ?? id}”`,
-          before: before ? asMeta(before) : null,
-          actor,
-        });
-        return true;
-      }
-    } catch {
-      // fall through
-    }
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { error } = await supabase.from(TABLE_MAP[entity]).delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    logMasterDataChange({
+      entityType: entity,
+      entityId: id,
+      action: "delete",
+      summary: `Deleted ${entity.slice(0, -1)} “${before?.name ?? id}”`,
+      before: before ? asMeta(before) : null,
+      actor,
+    });
+    return true;
   }
 
   const list = readLocal(entity).filter((i) => i.id !== id);

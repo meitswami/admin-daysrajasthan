@@ -14,12 +14,12 @@ import {
   DEFAULT_ACHIEVEMENT_NAME,
   DEFAULT_COMPANY_LOGO_URL,
 } from "@/types/company-structure";
-import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
+import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
-  return isSupabaseConfigured() && isRealDataMode();
+  return useCloudMaster();
 }
 
 const STORAGE_KEY = "td-company-structure-v2";
@@ -280,6 +280,7 @@ export async function saveCompanyStructure(
   };
 
   let persisted = false;
+  let lastError: string | null = null;
   if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
@@ -299,12 +300,14 @@ export async function saveCompanyStructure(
         updated_by_name: actor?.name ?? null,
       });
       if (!error) persisted = true;
-    } catch {
-      // fall through
+      else lastError = error.message;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Failed to save structure";
     }
   }
 
   if (!persisted) {
+    if (useSupabaseMaster() && lastError) throw new Error(lastError);
     writeLocal(next);
   }
 

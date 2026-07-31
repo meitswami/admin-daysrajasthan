@@ -27,8 +27,10 @@ const SECTIONS: { key: PolicySectionKey; title: string; tone: string }[] = [
 
 export function PoliciesMasterView() {
   const { show } = useToast();
-  const { currentMember } = useSystem();
+  const { currentMember, dataMode } = useSystem();
   const [items, setItems] = useState<MasterPolicyLine[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<MasterPolicyLine | null>(null);
   const [section, setSection] = useState<PolicySectionKey>("terms");
@@ -36,13 +38,15 @@ export function PoliciesMasterView() {
 
   const canCreate = canCreateMasterData(currentMember);
 
-  function refresh() {
-    setItems(listMasterPolicies());
+  async function refresh() {
+    setLoading(true);
+    setItems(await listMasterPolicies());
+    setLoading(false);
   }
 
   useEffect(() => {
-    refresh();
-  }, []);
+    void refresh();
+  }, [dataMode]);
 
   function openAdd(sec: PolicySectionKey) {
     if (!canCreate) {
@@ -62,92 +66,108 @@ export function PoliciesMasterView() {
     setModalOpen(true);
   }
 
-  function save() {
+  async function save() {
     if (!title.trim()) {
       show("Policy text is required");
       return;
     }
-    if (editing) {
-      updateMasterPolicy(editing.id, title);
-      show("Updated");
-    } else {
-      createMasterPolicy(section, title, currentMember);
-      show("Created");
+    setSaving(true);
+    try {
+      if (editing) {
+        await updateMasterPolicy(editing.id, title, currentMember);
+        show("Updated in Supabase");
+      } else {
+        await createMasterPolicy(section, title, currentMember);
+        show("Created in Supabase");
+      }
+      setModalOpen(false);
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Cloud save failed");
+    } finally {
+      setSaving(false);
     }
-    setModalOpen(false);
-    refresh();
   }
 
-  function remove(item: MasterPolicyLine) {
+  async function remove(item: MasterPolicyLine) {
     if (!confirm("Delete this policy line?")) return;
-    deleteMasterPolicy(item.id);
+    await deleteMasterPolicy(item.id, currentMember);
     show("Deleted");
-    refresh();
+    await refresh();
   }
 
   return (
     <>
       <Header />
       <PageMain>
-        <div className="space-y-6">
-          {SECTIONS.map((sec) => {
-            const lines = items.filter((i) => i.section === sec.key);
-            return (
-              <section
-                key={sec.key}
-                className={`rounded-2xl border border-stone-200 p-5 ${sec.tone}`}
-              >
-                <div className="mb-3 flex items-center justify-between gap-2">
-                  <h2 className="text-lg font-semibold text-stone-900">{sec.title}</h2>
-                  {canCreate && (
-                    <Button type="button" size="sm" variant="outline" onClick={() => openAdd(sec.key)}>
-                      <Plus className="h-4 w-4" /> Add
-                    </Button>
-                  )}
-                </div>
-                <ul className="space-y-2">
-                  {lines.map((item, idx) => {
-                    const createdBy = createdByAttribution(currentMember, item);
-                    return (
-                    <li
-                      key={item.id}
-                      className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm"
-                    >
-                      <div>
-                        <p className="text-stone-800">
-                          <span className="mr-2 text-stone-400">{idx + 1}.</span>
-                          {item.title}
-                        </p>
-                        {createdBy ? (
-                          <p className="mt-1 text-xs text-stone-400">{createdBy}</p>
-                        ) : null}
-                      </div>
-                      <div className="flex shrink-0 flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          size="sm"
-                          className="bg-blue-600 text-white hover:bg-blue-700"
-                          onClick={() => openEdit(item)}
+        {loading ? (
+          <p className="text-sm text-stone-500">Loading policies…</p>
+        ) : (
+          <div className="space-y-6">
+            {SECTIONS.map((sec) => {
+              const lines = items.filter((i) => i.section === sec.key);
+              return (
+                <section
+                  key={sec.key}
+                  className={`rounded-2xl border border-stone-200 p-5 ${sec.tone}`}
+                >
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h2 className="text-lg font-semibold text-stone-900">{sec.title}</h2>
+                    {canCreate && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openAdd(sec.key)}
+                      >
+                        <Plus className="h-4 w-4" /> Add
+                      </Button>
+                    )}
+                  </div>
+                  <ul className="space-y-2">
+                    {lines.map((item, idx) => {
+                      const createdBy = createdByAttribution(currentMember, item);
+                      return (
+                        <li
+                          key={item.id}
+                          className="flex items-start justify-between gap-3 rounded-lg bg-white/70 px-3 py-2 text-sm"
                         >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => remove(item)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </li>
-                    );
-                  })}
-                </ul>
-              </section>
-            );
-          })}
-        </div>
+                          <div>
+                            <p className="text-stone-800">
+                              <span className="mr-2 text-stone-400">{idx + 1}.</span>
+                              {item.title}
+                            </p>
+                            {createdBy ? (
+                              <p className="mt-1 text-xs text-stone-400">{createdBy}</p>
+                            ) : null}
+                          </div>
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="bg-blue-600 text-white hover:bg-blue-700"
+                              onClick={() => openEdit(item)}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => void remove(item)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
+        )}
       </PageMain>
 
       <Modal
@@ -164,8 +184,8 @@ export function PoliciesMasterView() {
             <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="button" onClick={save}>
-              Save
+            <Button type="button" onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
             </Button>
           </div>
         </div>

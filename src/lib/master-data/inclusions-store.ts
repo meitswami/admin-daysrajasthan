@@ -1,10 +1,10 @@
 import type { TeamMember } from "@/types/rbac";
-import { isRealDataMode, isSupabaseConfigured } from "@/lib/system/data-mode";
+import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
-  return isSupabaseConfigured() && isRealDataMode();
+  return useCloudMaster();
 }
 
 export type InclusionExclusionKind = "inclusion" | "exclusion";
@@ -150,6 +150,7 @@ export async function createInclusionExclusion(
   };
 
   let persisted = false;
+  let lastError: string | null = null;
   if (useSupabaseMaster()) {
     try {
       const { createClient } = await import("@/lib/supabase/client");
@@ -164,12 +165,14 @@ export async function createInclusionExclusion(
         created_by_name: actor.name,
       });
       if (!error) persisted = true;
-    } catch {
-      // fall through
+      else lastError = error.message;
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : "Failed to save";
     }
   }
 
   if (!persisted) {
+    if (useSupabaseMaster() && lastError) throw new Error(lastError);
     const list = readLocal();
     list.unshift(item);
     writeLocal(list);
@@ -214,31 +217,29 @@ export async function updateInclusionExclusion(
     patch.description !== undefined ? patch.description.trim() : before.description;
 
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("td_master_inclusions_exclusions")
-        .update({ text: nextText, description: nextDescription, image_url: nextImage })
-        .eq("id", id)
-        .select("*")
-        .maybeSingle();
-      if (!error && data) {
-        const after = mapRow(data as Record<string, unknown>);
-        logMasterDataChange({
-          entityType: "inclusion_exclusion",
-          entityId: id,
-          action: "update",
-          summary: `Updated ${after.kind} “${after.text}”`,
-          before: before ? { ...before } : null,
-          after: { ...after },
-          actor,
-        });
-        return after;
-      }
-    } catch {
-      // fall through
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("td_master_inclusions_exclusions")
+      .update({ text: nextText, description: nextDescription, image_url: nextImage })
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) {
+      const after = mapRow(data as Record<string, unknown>);
+      logMasterDataChange({
+        entityType: "inclusion_exclusion",
+        entityId: id,
+        action: "update",
+        summary: `Updated ${after.kind} “${after.text}”`,
+        before: before ? { ...before } : null,
+        after: { ...after },
+        actor,
+      });
+      return after;
     }
+    return null;
   }
 
   const list = readLocal();
@@ -268,24 +269,19 @@ export async function deleteInclusionExclusion(id: string, actor?: TeamMember): 
   const before = beforeList.find((i) => i.id === id) ?? null;
 
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_master_inclusions_exclusions").delete().eq("id", id);
-      if (!error) {
-        logMasterDataChange({
-          entityType: "inclusion_exclusion",
-          entityId: id,
-          action: "delete",
-          summary: `Deleted ${before?.kind ?? "item"} “${before?.text ?? id}”`,
-          before: before ? { ...before } : null,
-          actor,
-        });
-        return true;
-      }
-    } catch {
-      // fall through
-    }
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { error } = await supabase.from("td_master_inclusions_exclusions").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    logMasterDataChange({
+      entityType: "inclusion_exclusion",
+      entityId: id,
+      action: "delete",
+      summary: `Deleted ${before?.kind ?? "item"} “${before?.text ?? id}”`,
+      before: before ? { ...before } : null,
+      actor,
+    });
+    return true;
   }
   writeLocal(readLocal().filter((i) => i.id !== id));
   logMasterDataChange({
