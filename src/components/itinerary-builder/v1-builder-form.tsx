@@ -38,7 +38,13 @@ import {
   parseDayCountFromDurationInput,
   resizeDaysPreservingCache,
 } from "@/lib/itinerary-builder/cost-engine";
-import { buildCategoryPricing, type PackageCatalogEntry } from "@/lib/itinerary-builder/package-catalog";
+import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
+import {
+  buildCategoryPricing,
+  lastTourCodeAmong,
+  type PackageCatalogEntry,
+} from "@/lib/itinerary-builder/package-catalog";
+import { listClientItineraries } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   learnAiSuggestionFromDay,
@@ -890,10 +896,19 @@ export function V1BuilderForm({
         ["whole_group", "Whole Group/Family"],
       ];
   const vehicleList = s.vehicle_types?.length
-    ? s.vehicle_types
+    ? s.vehicle_types.slice(0, 1)
     : s.vehicle_type
       ? [s.vehicle_type]
       : [];
+
+  const lastTourCodeTip = useMemo(() => {
+    const fromPackages = packageCatalog.map((p) => p.tour_code);
+    const fromQuotes = listClientItineraries().map((r) => r.tour_code);
+    return lastTourCodeAmong([...fromPackages, ...fromQuotes], "WRT");
+  }, [packageCatalog]);
+
+  /** Single selected vehicle (multi-select is not allowed). */
+  const selectedVehicle = vehicleList[0] ?? "";
 
   useEffect(() => {
     if (!isThreeDayTwoNight || s.price_basis === "whole_group") return;
@@ -1142,12 +1157,23 @@ export function V1BuilderForm({
     return true;
   }
 
+  function requireTravelDate(): boolean {
+    const err = travelDateValidationError(s.client.travel_date);
+    if (err) {
+      show(err);
+      return false;
+    }
+    return true;
+  }
+
   function handleSaveClick() {
+    if (!requireTravelDate()) return;
     if (!requireLastDayDeparture()) return;
     onSave();
   }
 
   function handlePreviewClick() {
+    if (!requireTravelDate()) return;
     if (!requireLastDayDeparture()) return;
     onPreview();
   }
@@ -1181,7 +1207,9 @@ export function V1BuilderForm({
   }
 
   function syncVehicles(vehicle_types: string[]) {
-    const primary = vehicle_types[0] ?? null;
+    // Single vehicle only — keep the first entry if multiple are passed.
+    const unique = vehicle_types.filter(Boolean).slice(0, 1);
+    const primary = unique[0] ?? null;
     const rateKey = primary ? normalizeVehicleType(primary) : null;
     const days = s.days.map((d) => ({
       ...d,
@@ -1190,24 +1218,19 @@ export function V1BuilderForm({
     const next = {
       ...s,
       days,
-      vehicle_types,
+      vehicle_types: unique,
       vehicle_type: primary,
     };
     patch({
       days,
-      vehicle_types,
+      vehicle_types: unique,
       vehicle_type: primary,
       ...pricingFrom(next),
     });
   }
 
-  function addVehicle(v: string) {
-    if (!v || vehicleList.includes(v)) return;
-    syncVehicles([...vehicleList, v]);
-  }
-
-  function removeVehicle(v: string) {
-    syncVehicles(vehicleList.filter((x) => x !== v));
+  function setVehicle(v: string) {
+    syncVehicles(v ? [v] : []);
   }
 
   function toggleOptional(key: string) {
@@ -1468,6 +1491,7 @@ export function V1BuilderForm({
                 <Input
                   type="date"
                   className="mt-1.5"
+                  min={todayIsoDate()}
                   value={s.client.travel_date ?? ""}
                   onChange={(e) =>
                     patch({ client: { ...s.client, travel_date: e.target.value || null } })
@@ -1478,11 +1502,17 @@ export function V1BuilderForm({
                 <Label>Tour Code</Label>
                 <Input
                   className="mt-1.5"
+                  placeholder="e.g. WRT049"
                   value={s.header.tour_code ?? ""}
-                  onChange={(e) => patchHeader({ tour_code: e.target.value || null })}
+                  onChange={(e) => {
+                    const raw = e.target.value.trim().toUpperCase();
+                    patchHeader({ tour_code: raw || null });
+                  }}
                 />
                 <p className="mt-1 text-xs text-stone-500">
-                  Auto-updates only when the selected itinerary package changes.
+                  {lastTourCodeTip
+                    ? `Tip: last itinerary number was ${lastTourCodeTip}. Enter a new WRT code.`
+                    : "Enter a tour code starting with WRT (e.g. WRT001)."}
                 </p>
               </div>
               <div className="sm:col-span-2">
@@ -1867,32 +1897,26 @@ export function V1BuilderForm({
             <div className="flex gap-2">
               <Select
                 className="flex-1"
-                value=""
-                onChange={(e) => {
-                  if (e.target.value) addVehicle(e.target.value);
-                  e.target.value = "";
-                }}
+                value={selectedVehicle}
+                onChange={(e) => setVehicle(e.target.value)}
               >
                 <option value="">Select Vehicle</option>
-                {vehicles
-                  .filter((v) => !vehicleList.includes(v))
-                  .map((v) => (
-                    <option key={v} value={v}>
-                      {v}
-                    </option>
-                  ))}
+                {vehicles.map((v) => (
+                  <option key={v} value={v}>
+                    {v}
+                  </option>
+                ))}
               </Select>
             </div>
-            <div className="mt-3 space-y-2">
-              {vehicleList.map((v) => (
+            {selectedVehicle ? (
+              <div className="mt-3">
                 <SelectedVehicleChip
-                  key={v}
-                  name={v}
-                  vehicle={findVehicleByName(vehicleCatalog, v)}
-                  onRemove={() => removeVehicle(v)}
+                  name={selectedVehicle}
+                  vehicle={findVehicleByName(vehicleCatalog, selectedVehicle)}
+                  onRemove={() => setVehicle("")}
                 />
-              ))}
-            </div>
+              </div>
+            ) : null}
             <div className="mt-4 space-y-4">
               <div>
                 <Label>Final Price</Label>

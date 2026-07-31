@@ -75,15 +75,15 @@ export function PoliciesMasterView() {
     try {
       if (editing) {
         await updateMasterPolicy(editing.id, title, currentMember);
-        show("Updated in Supabase");
+        show("Updated");
       } else {
         await createMasterPolicy(section, title, currentMember);
-        show("Created in Supabase");
+        show("Created");
       }
       setModalOpen(false);
       await refresh();
     } catch (err) {
-      show(err instanceof Error ? err.message : "Cloud save failed");
+      show(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }

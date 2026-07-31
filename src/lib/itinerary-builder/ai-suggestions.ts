@@ -382,16 +382,3 @@ export async function learnAiSuggestionFromDay(title: string, description: strin
     console.warn("[ai-suggestions] learn failed", err);
   }
 }
-
-/** How many browser-local suggestions are waiting to upload (for UI banner). */
-export function countPendingLocalAiSuggestions(): number {
-  if (typeof window === "undefined") return 0;
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return 0;
-    const parsed = JSON.parse(raw) as AiSuggestion[];
-    return Array.isArray(parsed) ? parsed.length : 0;
-  } catch {
-    return 0;
-  }
-}

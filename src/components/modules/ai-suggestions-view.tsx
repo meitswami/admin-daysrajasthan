@@ -13,7 +13,6 @@ import {
   deleteAiSuggestion,
   listAiSuggestions,
   updateAiSuggestion,
-  countPendingLocalAiSuggestions,
   type AiSuggestion,
 } from "@/lib/itinerary-builder/ai-suggestions";
 import { canCreateMasterData, createdByAttribution } from "@/lib/rbac/ownership";
@@ -25,7 +24,6 @@ export function AiSuggestionsView() {
   const [items, setItems] = useState<AiSuggestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [migratedCount, setMigratedCount] = useState<number | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
@@ -35,16 +33,10 @@ export function AiSuggestionsView() {
 
   async function refresh() {
     setLoading(true);
-    const pendingBefore = countPendingLocalAiSuggestions();
     try {
-      const list = await listAiSuggestions();
-      setItems(list);
-      if (pendingBefore > 0) {
-        setMigratedCount(pendingBefore);
-        show(`Synced ${pendingBefore} browser-local suggestion(s) to Supabase`);
-      }
+      setItems(await listAiSuggestions());
     } catch (err) {
-      show(err instanceof Error ? err.message : "Failed to load suggestions from cloud");
+      show(err instanceof Error ? err.message : "Failed to load suggestions");
     } finally {
       setLoading(false);
     }
@@ -88,7 +80,7 @@ export function AiSuggestionsView() {
     try {
       if (editId) {
         await updateAiSuggestion(editId, { title, description });
-        show("Suggestion updated in Supabase");
+        show("Suggestion updated");
       } else {
         await createAiSuggestion({
           title,
@@ -97,12 +89,12 @@ export function AiSuggestionsView() {
           created_by_id: currentMember.id,
           created_by_name: currentMember.name,
         });
-        show("Suggestion saved to Supabase");
+        show("Suggestion saved");
       }
       resetForm();
       await refresh();
     } catch (err) {
-      show(err instanceof Error ? err.message : "Cloud save failed");
+      show(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -112,10 +104,10 @@ export function AiSuggestionsView() {
     if (!confirm("Delete this suggestion?")) return;
     try {
       await deleteAiSuggestion(item.id);
-      show("Suggestion deleted from Supabase");
+      show("Suggestion deleted");
       await refresh();
     } catch (err) {
-      show(err instanceof Error ? err.message : "Cloud delete failed");
+      show(err instanceof Error ? err.message : "Delete failed");
     }
   }
 
@@ -132,18 +124,8 @@ export function AiSuggestionsView() {
           )}
         </PageToolbar>
 
-        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-          All suggestions are stored in Supabase (production). Open this page once on any device that
-          still has old browser-only entries — they upload automatically.
-          {migratedCount != null ? (
-            <span className="mt-1 block font-medium">
-              Last sync from this browser recovered local data into the cloud.
-            </span>
-          ) : null}
-        </div>
-
         {loading ? (
-          <p className="text-sm text-stone-500">Loading suggestions from cloud…</p>
+          <p className="text-sm text-stone-500">Loading suggestions…</p>
         ) : (
           <div className="space-y-3">
             {items.map((item) => {

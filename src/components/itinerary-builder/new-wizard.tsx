@@ -11,7 +11,6 @@ import {
   getPackageById,
   uniqueDurations,
   buildCategoryPricing,
-  nextTourCode,
   type PackageCatalogEntry,
 } from "@/lib/itinerary-builder/package-catalog";
 import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
@@ -19,6 +18,7 @@ import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import { emptySnapshot } from "@/lib/itinerary-builder/defaults";
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
+import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
@@ -108,16 +108,9 @@ export function NewItineraryWizard() {
       loadSiteSettings().adminGeneral.default_advance_percent
     );
     const clientDetails = opts?.preserveClient ?? client;
-    // Package pick → that package's tour code. Custom → next free code once.
-    // Never bump the number unless the selected package itself changed.
+    // Leave tour code blank — staff enter a WRT… code. Tip shows last number in the form.
     const tourCode =
-      opts?.preserveTourCode !== undefined
-        ? opts.preserveTourCode
-        : pkg?.tour_code ??
-          nextTourCode(
-            catalog.map((p) => p.tour_code),
-            "DR"
-          );
+      opts?.preserveTourCode !== undefined ? opts.preserveTourCode : null;
     return normalizeSnapshot({
       ...base,
       client: { ...base.client, ...clientDetails },
@@ -142,6 +135,21 @@ export function NewItineraryWizard() {
 
   function selectPackage(id: string) {
     setPackageId(id);
+    // Same package selected again → keep draft & tour code; only rebuild when package changes.
+    if (draft && draft.source_package_id === id) {
+      setDraft((d) =>
+        d
+          ? normalizeSnapshot({
+              ...d,
+              client: { ...d.client, ...client },
+            })
+          : d
+      );
+      setStep(2);
+      return;
+    }
+    setDraft(buildDraftFromPackage(id));
+    setStep(2);
   }
 
   /** Switch package from Step 3 title picker — updates tour code only when package id changes. */
@@ -185,8 +193,9 @@ export function NewItineraryWizard() {
       show("Phone number is required");
       return false;
     }
-    if (!client.travel_date?.trim()) {
-      show("Travel date is required");
+    const travelErr = travelDateValidationError(client.travel_date);
+    if (travelErr) {
+      show(travelErr);
       return false;
     }
     return true;
@@ -203,21 +212,7 @@ export function NewItineraryWizard() {
         show("Select a tour package or use Create Custom");
         return;
       }
-      // Same package selected again → keep draft & tour code; only rebuild when package changes.
-      if (draft && draft.source_package_id === packageId) {
-        setDraft((d) =>
-          d
-            ? normalizeSnapshot({
-                ...d,
-                client: { ...d.client, ...client },
-              })
-            : d
-        );
-        setStep(2);
-        return;
-      }
-      setDraft(buildDraftFromPackage(packageId));
-      setStep(2);
+      selectPackage(packageId);
     }
   }
 
@@ -237,6 +232,11 @@ export function NewItineraryWizard() {
     }
     if (!draft.client.travel_date?.trim()) {
       show("Travel date is required");
+      return;
+    }
+    const travelErr = travelDateValidationError(draft.client.travel_date);
+    if (travelErr) {
+      show(travelErr);
       return;
     }
     if (draft.category_pricing.length === 0) {
@@ -433,6 +433,7 @@ export function NewItineraryWizard() {
               <Input
                 type="date"
                 required
+                min={todayIsoDate()}
                 value={client.travel_date ?? ""}
                 onChange={(e) =>
                   setClient((c) => ({ ...c, travel_date: e.target.value || null }))

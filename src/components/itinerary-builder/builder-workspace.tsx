@@ -9,6 +9,7 @@ import { Sheet } from "@/components/ui/sheet";
 import { WorkflowStatusBadge } from "@/components/itinerary-builder/workflow-status-badge";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { applyCostToSnapshot, durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
+import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   buildCategoryPricing,
@@ -110,7 +111,8 @@ export function ItineraryBuilderWorkspace({
       header: {
         ...template.header,
         title: pkg.title,
-        tour_code: pkg.tour_code,
+        // Keep existing quote tour code (or blank) — do not copy package master code.
+        tour_code: snapshot.header.tour_code,
         duration_label: durationLabelFromDays(template.days),
         alternate_titles: template.header.alternate_titles ?? [],
       },
@@ -135,6 +137,11 @@ export function ItineraryBuilderWorkspace({
   }
 
   function handleSave(milestone?: string): ClientItineraryRecord | null {
+    const travelErr = travelDateValidationError(snapshot.client.travel_date);
+    if (travelErr) {
+      show(travelErr);
+      return null;
+    }
     const departureErr = lastDayDepartureError(snapshot.days);
     if (departureErr) {
       show(departureErr);
@@ -326,6 +333,7 @@ export function ItineraryBuilderWorkspace({
               <Label>Travel date</Label>
               <Input
                 type="date"
+                min={todayIsoDate()}
                 value={snapshot.client.travel_date ?? ""}
                 onChange={(e) =>
                   updateSnapshot({

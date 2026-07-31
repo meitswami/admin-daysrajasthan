@@ -162,14 +162,41 @@ export function parseTourCodeParts(
 }
 
 /**
- * Next free tour code for a letter prefix (e.g. DR → DR079).
- * Used for custom itineraries; package picks keep the package's own code.
+ * Highest existing tour code for a letter prefix (e.g. WRT → WRT048).
+ * Falls back to the highest numeric code of any prefix when none match.
+ */
+export function lastTourCodeAmong(
+  existingCodes: Array<string | null | undefined>,
+  preferredPrefix = "WRT"
+): string | null {
+  const prefix = preferredPrefix.trim().toUpperCase() || "WRT";
+  let bestPreferred: { number: number; code: string } | null = null;
+  let bestAny: { number: number; code: string } | null = null;
+  for (const raw of existingCodes) {
+    const parts = parseTourCodeParts(raw);
+    if (!parts) continue;
+    const code = `${parts.prefix}${String(parts.number).padStart(parts.width, "0")}`;
+    if (!bestAny || parts.number > bestAny.number) {
+      bestAny = { number: parts.number, code };
+    }
+    if (parts.prefix === prefix) {
+      if (!bestPreferred || parts.number > bestPreferred.number) {
+        bestPreferred = { number: parts.number, code };
+      }
+    }
+  }
+  return bestPreferred?.code ?? bestAny?.code ?? null;
+}
+
+/**
+ * Next free tour code for a letter prefix (e.g. WRT → WRT049).
+ * Used as a tip / when staff generate a code; package picks leave the field blank.
  */
 export function nextTourCode(
   existingCodes: Array<string | null | undefined>,
-  preferredPrefix = "DR"
+  preferredPrefix = "WRT"
 ): string {
-  const prefix = preferredPrefix.trim().toUpperCase() || "DR";
+  const prefix = preferredPrefix.trim().toUpperCase() || "WRT";
   let max = 0;
   let width = 3;
   for (const code of existingCodes) {
