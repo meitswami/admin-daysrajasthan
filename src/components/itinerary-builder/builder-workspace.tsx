@@ -11,6 +11,11 @@ import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { applyCostToSnapshot, durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
+import {
+  emailValidationError,
+  phoneValidationError,
+  sanitizePhoneDigits,
+} from "@/lib/itinerary-builder/client-contact";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   buildCategoryPricing,
@@ -138,6 +143,21 @@ export function ItineraryBuilderWorkspace({
   }
 
   function handleSave(milestone?: string): ClientItineraryRecord | null {
+    const phoneErr = phoneValidationError(snapshot.client.phone);
+    if (phoneErr) {
+      show(phoneErr);
+      return null;
+    }
+    const emailErr = emailValidationError(snapshot.client.email, { label: "email" });
+    if (emailErr) {
+      show(emailErr);
+      return null;
+    }
+    const email2Err = emailValidationError(snapshot.client.email2, { label: "second email" });
+    if (email2Err) {
+      show(email2Err);
+      return null;
+    }
     const travelErr = travelDateValidationError(snapshot.client.travel_date);
     if (travelErr) {
       show(travelErr);
@@ -276,6 +296,8 @@ export function ItineraryBuilderWorkspace({
             <Label>Email</Label>
             <Input
               type="email"
+              inputMode="email"
+              autoComplete="email"
               value={snapshot.client.email ?? ""}
               onChange={(e) =>
                 updateSnapshot({
@@ -289,11 +311,15 @@ export function ItineraryBuilderWorkspace({
           <div>
             <Label>Phone</Label>
             <Input
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              maxLength={10}
               value={snapshot.client.phone ?? ""}
               onChange={(e) =>
                 updateSnapshot({
                   ...snapshot,
-                  client: { ...snapshot.client, phone: e.target.value || null },
+                  client: { ...snapshot.client, phone: sanitizePhoneDigits(e.target.value) || null },
                 })
               }
               className="mt-1.5"
@@ -306,7 +332,6 @@ export function ItineraryBuilderWorkspace({
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(snapshot.client.adults)}
                 onChange={(e) => {
                   const parsed = parseGuestCount(e.target.value);
@@ -325,7 +350,6 @@ export function ItineraryBuilderWorkspace({
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(snapshot.client.rooms)}
                 onChange={(e) => {
                   const parsed = parseGuestCount(e.target.value);

@@ -20,6 +20,11 @@ import { emptyClientDetails, emptySnapshot } from "@/lib/itinerary-builder/defau
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
+import {
+  emailValidationError,
+  phoneValidationError,
+  sanitizePhoneDigits,
+} from "@/lib/itinerary-builder/client-contact";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
@@ -186,8 +191,19 @@ export function NewItineraryWizard() {
       show("Client name is required");
       return false;
     }
-    if (!client.phone?.trim()) {
-      show("Phone number is required");
+    const emailErr = emailValidationError(client.email, { label: "email" });
+    if (emailErr) {
+      show(emailErr);
+      return false;
+    }
+    const email2Err = emailValidationError(client.email2, { label: "second email" });
+    if (email2Err) {
+      show(email2Err);
+      return false;
+    }
+    const phoneErr = phoneValidationError(client.phone);
+    if (phoneErr) {
+      show(phoneErr);
       return false;
     }
     const travelErr = travelDateValidationError(client.travel_date);
@@ -219,8 +235,19 @@ export function NewItineraryWizard() {
       show("Customer name is required");
       return;
     }
-    if (!draft.client.phone?.trim()) {
-      show("Phone number is required");
+    const phoneErr = phoneValidationError(draft.client.phone);
+    if (phoneErr) {
+      show(phoneErr);
+      return;
+    }
+    const emailErr = emailValidationError(draft.client.email, { label: "email" });
+    if (emailErr) {
+      show(emailErr);
+      return;
+    }
+    const email2Err = emailValidationError(draft.client.email2, { label: "second email" });
+    if (email2Err) {
+      show(email2Err);
       return;
     }
     if (!draft.header.title.trim()) {
@@ -338,6 +365,8 @@ export function NewItineraryWizard() {
               <Label>Email Address</Label>
               <Input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 value={client.email ?? ""}
                 onChange={(e) => setClient((c) => ({ ...c, email: e.target.value || null }))}
                 placeholder="Enter email address"
@@ -348,6 +377,8 @@ export function NewItineraryWizard() {
               <Label>Email Address 2 (Optional)</Label>
               <Input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 value={client.email2 ?? ""}
                 onChange={(e) => setClient((c) => ({ ...c, email2: e.target.value || null }))}
                 placeholder="Enter second email address"
@@ -358,9 +389,14 @@ export function NewItineraryWizard() {
               <Label>Phone Number *</Label>
               <Input
                 type="tel"
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={10}
                 required
                 value={client.phone ?? ""}
-                onChange={(e) => setClient((c) => ({ ...c, phone: e.target.value || null }))}
+                onChange={(e) =>
+                  setClient((c) => ({ ...c, phone: sanitizePhoneDigits(e.target.value) || null }))
+                }
                 placeholder="Enter phone number"
                 className="mt-1.5"
               />
@@ -371,7 +407,6 @@ export function NewItineraryWizard() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(client.adults)}
                 onChange={(e) => setGuestCount(setClient, "adults", e.target.value)}
                 className="mt-1.5"
@@ -383,7 +418,6 @@ export function NewItineraryWizard() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(client.children_5_12)}
                 onChange={(e) => setGuestCount(setClient, "children_5_12", e.target.value)}
                 className="mt-1.5"
@@ -395,7 +429,6 @@ export function NewItineraryWizard() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(client.children_below_5)}
                 onChange={(e) => setGuestCount(setClient, "children_below_5", e.target.value)}
                 className="mt-1.5"
@@ -407,7 +440,6 @@ export function NewItineraryWizard() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(client.rooms)}
                 onChange={(e) => setGuestCount(setClient, "rooms", e.target.value)}
                 className="mt-1.5"
@@ -419,7 +451,6 @@ export function NewItineraryWizard() {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                placeholder="0–100"
                 value={guestCountInputValue(client.extra_beds)}
                 onChange={(e) => setGuestCount(setClient, "extra_beds", e.target.value)}
                 className="mt-1.5"

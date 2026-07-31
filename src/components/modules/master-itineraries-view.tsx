@@ -24,7 +24,6 @@ import {
 } from "@/lib/master-data/itinerary-store";
 import { listMasterContent, updateMasterContent } from "@/lib/master-data/content-store";
 import type { WebsiteContentItem } from "@/types/database";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { Toggle } from "@/components/ui/toggle";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
 
@@ -443,9 +442,10 @@ export function MasterItinerariesView() {
                     <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3">
                       <ImageThumbRow
-                        urls={collectDisplayImages(item.cover_image_url, item.gallery_urls)}
+                        urls={collectDisplayImages(item.cover_image_url, item.gallery_urls, 1)}
                         width={96}
                         height={64}
+                        objectFit="cover"
                         lightboxTitle={item.package_name}
                       />
                     </td>
@@ -460,14 +460,10 @@ export function MasterItinerariesView() {
                       {tourCodeOf(item)}
                     </td>
                     <td className="px-3 py-3">
-                      <div className="flex flex-col gap-2">
-                        <StatusBadge status={item.status} />
-                        <Toggle
-                          checked={item.status === "active"}
-                          onChange={(v) => void toggleActive(item, v)}
-                          label={item.status === "active" ? "Active" : "Inactive"}
-                        />
-                      </div>
+                      <Toggle
+                        checked={item.status === "active"}
+                        onChange={(v) => void toggleActive(item, v)}
+                      />
                     </td>
                     <td className="whitespace-nowrap px-3 py-3">
                       <TableRowActions>
