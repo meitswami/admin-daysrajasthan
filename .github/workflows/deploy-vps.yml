@@ -20,6 +20,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: ${{ secrets.VPS_SSH_PORT }}
+          # next build + tsc on the VPS often exceeds the 10m default
+          command_timeout: 30m
           script_stop: true
           script: |
             set -euo pipefail
