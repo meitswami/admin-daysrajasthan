@@ -177,11 +177,11 @@ export interface ClientDetails {
   email: string | null;
   email2: string | null;
   phone: string | null;
-  adults: number;
-  children_5_12: number;
-  children_below_5: number;
-  rooms: number;
-  extra_beds: number;
+  adults: number | null;
+  children_5_12: number | null;
+  children_below_5: number | null;
+  rooms: number | null;
+  extra_beds: number | null;
   travel_date: string | null;
   food_preference: string | null;
   special_requests: string | null;

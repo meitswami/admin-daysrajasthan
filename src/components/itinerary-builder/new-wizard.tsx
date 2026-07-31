@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/input";
@@ -16,9 +16,10 @@ import {
 import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
 import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
-import { emptySnapshot } from "@/lib/itinerary-builder/defaults";
+import { emptyClientDetails, emptySnapshot } from "@/lib/itinerary-builder/defaults";
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
+import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
@@ -29,6 +30,16 @@ import { useSystem } from "@/components/providers/system-provider";
 
 const STEPS = ["Client Details", "Select Itinerary", "Itinerary Builder"] as const;
 
+function setGuestCount(
+  setClient: Dispatch<SetStateAction<ClientDetails>>,
+  key: "adults" | "children_5_12" | "children_below_5" | "rooms" | "extra_beds",
+  raw: string,
+) {
+  const parsed = parseGuestCount(raw);
+  if (parsed === undefined) return;
+  setClient((c) => ({ ...c, [key]: parsed }));
+}
+
 export function NewItineraryWizard() {
   const router = useRouter();
   const { show } = useToast();
@@ -37,21 +48,7 @@ export function NewItineraryWizard() {
   const [durationFilter, setDurationFilter] = useState<number | "all">("all");
   const [search, setSearch] = useState("");
   const [tourCodeFilter, setTourCodeFilter] = useState("");
-  const [client, setClient] = useState<ClientDetails>({
-    title: "Mr",
-    client_name: "",
-    email: null,
-    email2: null,
-    phone: null,
-    adults: 2,
-    children_5_12: 0,
-    children_below_5: 0,
-    rooms: 1,
-    extra_beds: 0,
-    travel_date: null,
-    food_preference: null,
-    special_requests: null,
-  });
+  const [client, setClient] = useState<ClientDetails>(() => emptyClientDetails());
   const [packageId, setPackageId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ItinerarySnapshot | null>(null);
   const [catalog, setCatalog] = useState<PackageCatalogEntry[]>([]);
@@ -371,60 +368,60 @@ export function NewItineraryWizard() {
             <div>
               <Label>Number of Adults</Label>
               <Input
-                type="number"
-                min={1}
-                value={client.adults}
-                onChange={(e) =>
-                  setClient((c) => ({ ...c, adults: Number(e.target.value) || 1 }))
-                }
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(client.adults)}
+                onChange={(e) => setGuestCount(setClient, "adults", e.target.value)}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label>Kids (5–12 Years)</Label>
               <Input
-                type="number"
-                min={0}
-                value={client.children_5_12}
-                onChange={(e) =>
-                  setClient((c) => ({ ...c, children_5_12: Number(e.target.value) || 0 }))
-                }
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(client.children_5_12)}
+                onChange={(e) => setGuestCount(setClient, "children_5_12", e.target.value)}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label>Kids (Below 5 Years)</Label>
               <Input
-                type="number"
-                min={0}
-                value={client.children_below_5}
-                onChange={(e) =>
-                  setClient((c) => ({ ...c, children_below_5: Number(e.target.value) || 0 }))
-                }
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(client.children_below_5)}
+                onChange={(e) => setGuestCount(setClient, "children_below_5", e.target.value)}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label>Number of Rooms</Label>
               <Input
-                type="number"
-                min={1}
-                value={client.rooms}
-                onChange={(e) =>
-                  setClient((c) => ({ ...c, rooms: Number(e.target.value) || 1 }))
-                }
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(client.rooms)}
+                onChange={(e) => setGuestCount(setClient, "rooms", e.target.value)}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label>Extra mattress</Label>
               <Input
-                type="number"
-                min={0}
-                value={client.extra_beds}
-                onChange={(e) =>
-                  setClient((c) => ({ ...c, extra_beds: Number(e.target.value) || 0 }))
-                }
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(client.extra_beds)}
+                onChange={(e) => setGuestCount(setClient, "extra_beds", e.target.value)}
                 className="mt-1.5"
               />
             </div>

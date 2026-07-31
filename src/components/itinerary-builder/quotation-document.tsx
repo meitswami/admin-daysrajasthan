@@ -115,8 +115,8 @@ function ClientDetailsTable({
     ["Name", clientLabel],
     ["Email", client.email],
     ["Phone", client.phone],
-    ["Adults", client.adults != null ? String(client.adults).padStart(2, "0") : null],
-    ["Rooms", client.rooms != null ? String(client.rooms).padStart(2, "0") : null],
+    ["Adults", client.adults != null ? String(client.adults) : null],
+    ["Rooms", client.rooms != null ? String(client.rooms) : null],
     ["Travel Date", client.travel_date ? formatDate(client.travel_date) : null],
   ].filter(([, value]) => value);
 

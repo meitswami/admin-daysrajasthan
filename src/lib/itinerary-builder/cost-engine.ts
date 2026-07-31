@@ -130,7 +130,7 @@ export function getPricingHints(snapshot: ItinerarySnapshot): PricingHint[] {
       hints.push({
         kind: "active",
         day_number: day.day_number,
-        label: `Day ${day.day_number}: hotel (${day.room_category}) × ${Math.max(1, snapshot.client.rooms)} room(s)`,
+        label: `Day ${day.day_number}: hotel (${day.room_category}) × ${Math.max(1, snapshot.client.rooms ?? 0)} room(s)`,
       });
     }
     if (hasVehicle) {

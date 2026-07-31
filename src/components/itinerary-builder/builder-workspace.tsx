@@ -10,6 +10,7 @@ import { WorkflowStatusBadge } from "@/components/itinerary-builder/workflow-sta
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { applyCostToSnapshot, durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
+import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   buildCategoryPricing,
@@ -302,30 +303,38 @@ export function ItineraryBuilderWorkspace({
             <div>
               <Label>Adults</Label>
               <Input
-                type="number"
-                min={1}
-                value={snapshot.client.adults}
-                onChange={(e) =>
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(snapshot.client.adults)}
+                onChange={(e) => {
+                  const parsed = parseGuestCount(e.target.value);
+                  if (parsed === undefined) return;
                   updateSnapshot({
                     ...snapshot,
-                    client: { ...snapshot.client, adults: Number(e.target.value) || 1 },
-                  })
-                }
+                    client: { ...snapshot.client, adults: parsed },
+                  });
+                }}
                 className="mt-1.5"
               />
             </div>
             <div>
               <Label>Rooms</Label>
               <Input
-                type="number"
-                min={1}
-                value={snapshot.client.rooms}
-                onChange={(e) =>
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                placeholder="0–100"
+                value={guestCountInputValue(snapshot.client.rooms)}
+                onChange={(e) => {
+                  const parsed = parseGuestCount(e.target.value);
+                  if (parsed === undefined) return;
                   updateSnapshot({
                     ...snapshot,
-                    client: { ...snapshot.client, rooms: Number(e.target.value) || 1 },
-                  })
-                }
+                    client: { ...snapshot.client, rooms: parsed },
+                  });
+                }}
                 className="mt-1.5"
               />
             </div>
