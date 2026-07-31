@@ -105,6 +105,17 @@ export interface DayActivity {
   guide_required: boolean;
 }
 
+/** Per-category night hotel picks (one inventory per selected package tier). */
+export interface DayCategoryHotelPicks {
+  breakfast_hotels: [string | null, string | null];
+  lunch_hotels: [string | null, string | null];
+  dinner_hotels: [string | null, string | null];
+  epai_plan_only: boolean;
+  guest_self_booked_hotel: boolean;
+  hotel_name: string | null;
+  room_category: string | null;
+}
+
 export interface ItineraryDay {
   day_uuid: string;
   day_number: number;
@@ -126,12 +137,14 @@ export interface ItineraryDay {
   breakfast: boolean;
   lunch: boolean;
   dinner: boolean;
-  /** V1 night meal hotel picks (up to 2 each) */
+  /** V1 night meal hotel picks (up to 2 each) — mirrors primary category */
   breakfast_hotels: [string | null, string | null];
   lunch_hotels: [string | null, string | null];
   dinner_hotels: [string | null, string | null];
   epai_plan_only: boolean;
   guest_self_booked_hotel: boolean;
+  /** Hotel picks keyed by selected category (max 2 tiers) */
+  category_hotel_picks: Partial<Record<HotelCategoryKey, DayCategoryHotelPicks>>;
   vehicle_type: string | null;
   pickup_location: string | null;
   drop_location: string | null;

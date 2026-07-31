@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/input";
@@ -36,11 +35,22 @@ import {
   themeShellClass,
 } from "@/lib/itinerary-builder/preview-themes";
 import {
+  createClientItineraryFromSnapshot,
   getClientItinerary,
   getRevisions,
   saveSnapshotRevision,
 } from "@/lib/itinerary-builder/storage";
+import {
+  clearWizardDraft,
+  loadWizardDraft,
+  saveWizardDraft,
+} from "@/lib/itinerary-builder/wizard-draft";
 import type { ClientItineraryRecord, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
+import {
+  dayViewForCategory,
+  hotelLabelsForCategoryPicks,
+  getCategoryHotelPicks,
+} from "@/lib/itinerary-builder/category-hotels";
 import { formatDate, cn } from "@/lib/utils";
 import {
   Check,
@@ -346,13 +356,21 @@ function EditableBlocks({
 
 const THEMES = PREVIEW_THEMES;
 
-export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
+export function PreviewConfirmView({
+  itineraryId,
+  draftMode = false,
+}: {
+  itineraryId?: string;
+  /** Unsaved new-itinerary preview — does not appear in the list until Save. */
+  draftMode?: boolean;
+}) {
   const router = useRouter();
   const { show } = useToast();
   const { currentMember } = useSystem();
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
   const [snapshot, setSnapshot] = useState<ItinerarySnapshot | null>(null);
   const [allContacts, setAllContacts] = useState<PreviewContact[]>(PREVIEW_CONTACTS);
+  const [draftMissing, setDraftMissing] = useState(false);
 
   const contacts = useMemo(
     () => contactsVisibleToMember(allContacts, currentMember),
@@ -365,6 +383,20 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
   }, []);
 
   useEffect(() => {
+    if (draftMode) {
+      const draft = loadWizardDraft();
+      if (!draft) {
+        setDraftMissing(true);
+        setRecord(null);
+        setSnapshot(null);
+        return;
+      }
+      setDraftMissing(false);
+      setRecord(null);
+      setSnapshot(normalizeSnapshot(draft.snapshot));
+      return;
+    }
+    if (!itineraryId) return;
     const r = getClientItinerary(itineraryId);
     const revs = getRevisions(itineraryId);
     const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
@@ -372,7 +404,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
       setRecord(r);
       setSnapshot(normalizeSnapshot(current.snapshot));
     }
-  }, [itineraryId]);
+  }, [itineraryId, draftMode]);
 
   // Non-admins: lock selection to their own Structure contact.
   useEffect(() => {
@@ -389,7 +421,18 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     [snapshot?.preview_theme]
   );
 
-  if (!record || !snapshot) {
+  if (draftMode && draftMissing) {
+    return (
+      <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-4 text-center text-sm text-stone-500">
+        <p>No unsaved itinerary draft found.</p>
+        <Button type="button" variant="outline" onClick={() => router.push("/itinerary-builder/new")}>
+          Back to New Itinerary
+        </Button>
+      </div>
+    );
+  }
+
+  if (!snapshot || (!draftMode && !record)) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center text-sm text-stone-500">
         Loading preview…
@@ -397,24 +440,32 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     );
   }
 
+  const activeId = record?.id ?? itineraryId;
+  const quoteLabel = record?.quote_id ?? "Unsaved draft";
+
   function patch(partial: Partial<ItinerarySnapshot>) {
-    setSnapshot((prev) => (prev ? normalizeSnapshot({ ...prev, ...partial }) : prev));
+    setSnapshot((prev) => {
+      if (!prev) return prev;
+      const next = normalizeSnapshot({ ...prev, ...partial });
+      if (draftMode) {
+        const existing = loadWizardDraft();
+        saveWizardDraft({
+          snapshot: next,
+          packageId: existing?.packageId ?? next.source_package_id,
+        });
+      }
+      return next;
+    });
   }
 
-  async function handleSave() {
-    if (!snapshot) return;
-    const synced = normalizeSnapshot({
-      ...snapshot,
-      inclusions: contentBlocksToStrings(snapshot.inclusion_items),
-      exclusions: contentBlocksToStrings(snapshot.exclusion_items),
-    });
-    const result = saveSnapshotRevision(itineraryId, synced, {
+  async function persistExisting(synced: ItinerarySnapshot, id: string) {
+    const result = saveSnapshotRevision(id, synced, {
       save_type: "manual",
       milestone_label: "Preview & Confirm",
     });
     if (!result) {
       show("Failed to save");
-      return;
+      return null;
     }
     setRecord(result.record);
     setSnapshot(normalizeSnapshot(result.revision.snapshot));
@@ -427,7 +478,7 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     }
     show("Saved");
     try {
-      await fetch(`/api/public/quotation/${itineraryId}`, {
+      await fetch(`/api/public/quotation/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -445,17 +496,64 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
     return result;
   }
 
+  async function handleSave() {
+    if (!snapshot) return;
+    const synced = normalizeSnapshot({
+      ...snapshot,
+      inclusions: contentBlocksToStrings(snapshot.inclusion_items),
+      exclusions: contentBlocksToStrings(snapshot.exclusion_items),
+    });
+
+    if (draftMode && !record) {
+      try {
+        const created = createClientItineraryFromSnapshot(synced, {
+          created_by: currentMember.name,
+          owner_name: currentMember.name,
+        });
+        clearWizardDraft();
+        show(`Saved ${created.quote_id}`);
+        router.replace(`/itinerary-builder/${created.id}/preview-confirm`);
+        return {
+          record: created,
+          revision: getRevisions(created.id)[0]!,
+        };
+      } catch (err) {
+        show(err instanceof Error ? err.message : "Could not save itinerary");
+        return null;
+      }
+    }
+
+    if (!activeId) {
+      show("Failed to save");
+      return null;
+    }
+    return persistExisting(synced, activeId);
+  }
+
   async function handleNext() {
     const result = await handleSave();
     if (!result) return;
-    router.push(`/itinerary-builder/${itineraryId}/payment`);
+    router.push(`/itinerary-builder/${result.record.id}/payment`);
+  }
+
+  function handleBackToEdit() {
+    if (draftMode && snapshot) {
+      const existing = loadWizardDraft();
+      saveWizardDraft({
+        snapshot,
+        packageId: existing?.packageId ?? snapshot.source_package_id,
+      });
+      router.push("/itinerary-builder/new");
+      return;
+    }
+    if (activeId) router.push(`/itinerary-builder/${activeId}`);
   }
 
   async function handleDownloadPdf() {
     const result = await handleSave();
     if (result) {
       try {
-        await fetch(`/api/public/quotation/${itineraryId}`, {
+        await fetch(`/api/public/quotation/${result.record.id}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -471,10 +569,11 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         // Local open still works even if publish fails
       }
     }
+    const id = result?.record.id;
     const themeId =
       result?.revision.snapshot.preview_theme ?? snapshot?.preview_theme;
-    if (themeId == null) return;
-    window.open(publicQuotationUrl(itineraryId, null, themeId), "_blank", "noopener,noreferrer");
+    if (!id || themeId == null) return;
+    window.open(publicQuotationUrl(id, null, themeId), "_blank", "noopener,noreferrer");
   }
 
   /** Publish selected theme snapshot and open the public quotation URL. */
@@ -484,12 +583,12 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
 
     // Public share link on daysrajasthan.com/{id}/quotation?v=… (opaque theme lock).
     const publicUrl = publicQuotationUrl(
-      itineraryId,
+      result.record.id,
       null,
       result.revision.snapshot.preview_theme
     );
     try {
-      await fetch(`/api/public/quotation/${itineraryId}`, {
+      await fetch(`/api/public/quotation/${result.record.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -536,19 +635,20 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
               Preview & Confirm
             </p>
             <p className="font-semibold text-stone-900">
-              {record.quote_id} · {snapshot.header.title}
+              {quoteLabel} · {snapshot.header.title}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/itinerary-builder/${itineraryId}`}
+            <button
+              type="button"
+              onClick={handleBackToEdit}
               className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100"
             >
               Back to Edit
-            </Link>
-            <Button type="button" size="sm" className="bg-teal-800 hover:bg-teal-900" onClick={handleSave}>
+            </button>
+            <Button type="button" size="sm" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
               <Save className="h-4 w-4" />
-              Save to Draft
+              {draftMode && !record ? "Save Itinerary" : "Save to Draft"}
             </Button>
             <Button
               type="button"
@@ -642,10 +742,44 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
         <div className="grid gap-4 lg:grid-cols-[1fr_280px]">
           <div className="space-y-4">
             {snapshot.days.map((day) => {
-              const hotels = hotelLabelsForDay(day);
-              const categoryLabel =
-                snapshot.category_pricing[0]?.label ??
-                (day.epai_plan_only ? "Stay Only" : "Hotels");
+              const primaryKey = snapshot.category_pricing[0]?.category_key ?? null;
+              const tierHotelBlocks =
+                snapshot.category_pricing.length > 0
+                  ? snapshot.category_pricing.map((tier) => {
+                      const view = dayViewForCategory(
+                        day,
+                        tier.category_key,
+                        tier.room_category,
+                        primaryKey
+                      );
+                      const picks = getCategoryHotelPicks(
+                        day,
+                        tier.category_key,
+                        tier.room_category,
+                        primaryKey
+                      );
+                      return {
+                        key: tier.category_key,
+                        label: tier.label,
+                        view,
+                        hotels: hotelLabelsForCategoryPicks(picks),
+                        selfBooked: picks.guest_self_booked_hotel,
+                        epai: picks.epai_plan_only,
+                      };
+                    })
+                  : [
+                      {
+                        key: "legacy",
+                        label:
+                          day.epai_plan_only
+                            ? "Stay Only"
+                            : "Hotels",
+                        view: day,
+                        hotels: hotelLabelsForDay(day),
+                        selfBooked: day.guest_self_booked_hotel,
+                        epai: day.epai_plan_only,
+                      },
+                    ];
               return (
                 <article
                   key={day.day_uuid}
@@ -672,63 +806,79 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
                       {day.day_description && (
                         <p className="mt-2 text-sm text-stone-600 line-clamp-3">{day.day_description}</p>
                       )}
-                      {day.guest_self_booked_hotel ? (
-                        <div className="mt-3 rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600">
-                          <p>No hotels booked — guest arranging own accommodation.</p>
-                          <ul className="mt-1 list-disc pl-5 text-xs text-stone-500">
-                            <li>Guest Accommodation (own management)</li>
-                          </ul>
-                        </div>
-                      ) : hotels.length > 0 ? (
-                        <div className="mt-3 rounded-xl border border-stone-100 bg-stone-50 p-3">
-                          <p className="text-sm font-semibold text-stone-800">
-                            {categoryLabel}
-                            {day.epai_plan_only ? " - Stay Only" : ""}
-                          </p>
-                          <p className="mt-1 text-xs font-medium uppercase tracking-wide text-stone-500">
-                            Hotel Options
-                          </p>
-                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                            {hotels.slice(0, 4).map((label) => {
-                              const hotel = findHotelByOptionLabel(label);
-                              const bullets = hotelSelectionBullets(day, label);
-                              return (
-                                <div
-                                  key={label}
-                                  className="rounded-lg border border-stone-200 bg-white p-2"
-                                >
-                                  <div className="flex items-center gap-2">
-                                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                                    <img
-                                      src={hotel?.image_url ?? "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=100&q=80"}
-                                      alt=""
-                                      className="h-12 w-12 shrink-0 rounded object-cover"
-                                    />
-                                    <div className="min-w-0">
-                                      <p className="truncate text-sm font-medium text-stone-900">
-                                        {hotel?.name ?? label.split(" - ")[0]}
-                                      </p>
-                                      <p className="text-xs text-amber-600">
-                                        ★ {hotel?.rating?.toFixed(1) ?? "4.5"}{" "}
-                                        <span className="text-stone-400">
-                                          ({Math.round((hotel?.rating ?? 4.5) * 300)} reviews)
-                                        </span>
-                                      </p>
+                      <div className="mt-3 space-y-3">
+                        {tierHotelBlocks.map((block) =>
+                          block.selfBooked ? (
+                            <div
+                              key={block.key}
+                              className="rounded-xl bg-stone-50 px-3 py-2 text-sm text-stone-600"
+                            >
+                              <p className="font-semibold text-stone-800">{block.label}</p>
+                              <p className="mt-1">
+                                No hotels booked — guest arranging own accommodation.
+                              </p>
+                              <ul className="mt-1 list-disc pl-5 text-xs text-stone-500">
+                                <li>Guest Accommodation (own management)</li>
+                              </ul>
+                            </div>
+                          ) : block.hotels.length > 0 ? (
+                            <div
+                              key={block.key}
+                              className="rounded-xl border border-stone-100 bg-stone-50 p-3"
+                            >
+                              <p className="text-sm font-semibold text-stone-800">
+                                {block.label}
+                                {block.epai ? " - Stay Only" : ""}
+                              </p>
+                              <p className="mt-1 text-xs font-medium uppercase tracking-wide text-stone-500">
+                                Hotel Options
+                              </p>
+                              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                {block.hotels.slice(0, 4).map((label) => {
+                                  const hotel = findHotelByOptionLabel(label);
+                                  const bullets = hotelSelectionBullets(block.view, label);
+                                  return (
+                                    <div
+                                      key={`${block.key}-${label}`}
+                                      className="rounded-lg border border-stone-200 bg-white p-2"
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                                        <img
+                                          src={
+                                            hotel?.image_url ??
+                                            "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=100&q=80"
+                                          }
+                                          alt=""
+                                          className="h-12 w-12 shrink-0 rounded object-cover"
+                                        />
+                                        <div className="min-w-0">
+                                          <p className="truncate text-sm font-medium text-stone-900">
+                                            {hotel?.name ?? label.split(" - ")[0]}
+                                          </p>
+                                          <p className="text-xs text-amber-600">
+                                            ★ {hotel?.rating?.toFixed(1) ?? "4.5"}{" "}
+                                            <span className="text-stone-400">
+                                              ({Math.round((hotel?.rating ?? 4.5) * 300)} reviews)
+                                            </span>
+                                          </p>
+                                        </div>
+                                      </div>
+                                      {bullets.length > 0 && (
+                                        <ul className="mt-1.5 list-disc pl-4 text-[11px] text-stone-500">
+                                          {bullets.map((b) => (
+                                            <li key={b}>{b}</li>
+                                          ))}
+                                        </ul>
+                                      )}
                                     </div>
-                                  </div>
-                                  {bullets.length > 0 && (
-                                    <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[11px] leading-snug text-stone-600">
-                                      {bullets.map((b) => (
-                                        <li key={b}>{b}</li>
-                                      ))}
-                                    </ul>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : null}
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ) : null
+                        )}
+                      </div>
                     </div>
                   </div>
                 </article>
@@ -807,6 +957,24 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
             }
           />
         </div>
+
+        <section className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 sm:p-5">
+          <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-stone-900">
+            <Info className="h-5 w-5 text-blue-700" />
+            Note
+          </h2>
+          <Textarea
+            rows={3}
+            value={snapshot.public_notes || snapshot.internal_notes || ""}
+            onChange={(e) =>
+              patch({
+                public_notes: e.target.value,
+                internal_notes: e.target.value,
+              })
+            }
+            placeholder="Add a note for this itinerary…"
+          />
+        </section>
 
         {/* Fixed master policies */}
         <PolicyAccordion
@@ -945,14 +1113,14 @@ export function PreviewConfirmView({ itineraryId }: { itineraryId: string }) {
           <button
             type="button"
             className="text-sm font-medium text-stone-600 hover:text-stone-900"
-            onClick={() => router.push(`/itinerary-builder/${itineraryId}`)}
+            onClick={handleBackToEdit}
           >
             Back to Edit
           </button>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={handleSave}>
+            <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
               <Save className="h-4 w-4" />
-              Save to Draft
+              {draftMode && !record ? "Save Itinerary" : "Save to Draft"}
             </Button>
             <Button type="button" className="bg-sky-500 hover:bg-sky-600" onClick={() => void handleDownloadPdf()}>
               <Download className="h-4 w-4" />

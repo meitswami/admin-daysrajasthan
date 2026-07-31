@@ -14,7 +14,7 @@ import {
   type PackageCatalogEntry,
 } from "@/lib/itinerary-builder/package-catalog";
 import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
-import { createClientItineraryFromWizard } from "@/lib/itinerary-builder/storage";
+import { createClientItineraryFromSnapshot } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import { emptyClientDetails, emptySnapshot } from "@/lib/itinerary-builder/defaults";
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
@@ -27,6 +27,11 @@ import {
 } from "@/lib/itinerary-builder/client-contact";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { loadSiteSettings } from "@/lib/site-settings/storage";
+import {
+  clearWizardDraft,
+  loadWizardDraft,
+  saveWizardDraft,
+} from "@/lib/itinerary-builder/wizard-draft";
 import { V1BuilderForm } from "@/components/itinerary-builder/v1-builder-form";
 import { cn } from "@/lib/utils";
 import { Check, ChevronLeft, ChevronRight, Search, Wand2 } from "lucide-react";
@@ -58,6 +63,23 @@ export function NewItineraryWizard() {
   const [draft, setDraft] = useState<ItinerarySnapshot | null>(null);
   const [catalog, setCatalog] = useState<PackageCatalogEntry[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [draftHydrated, setDraftHydrated] = useState(false);
+
+  useEffect(() => {
+    const saved = loadWizardDraft();
+    if (saved) {
+      setDraft(saved.snapshot);
+      setClient(saved.snapshot.client);
+      setPackageId(saved.packageId);
+      setStep(2);
+    }
+    setDraftHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!draftHydrated || !draft || step !== 2) return;
+    saveWizardDraft({ snapshot: draft, packageId });
+  }, [draft, packageId, step, draftHydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +87,8 @@ export function NewItineraryWizard() {
     void listMasterItineraries()
       .then((items) => {
         if (cancelled) return;
-        setCatalog(catalogFromMasterItineraries(items, { includeInactive: true }));
+        // New quotes: only active master packages (inactive stay in Master Data only).
+        setCatalog(catalogFromMasterItineraries(items));
       })
       .catch(() => {
         if (!cancelled) setCatalog([]);
@@ -229,83 +252,48 @@ export function NewItineraryWizard() {
     }
   }
 
+  function validateDraftForPersist(): string | null {
+    if (!draft) return "Nothing to save";
+    if (!draft.client.client_name.trim()) return "Customer name is required";
+    const phoneErr = phoneValidationError(draft.client.phone);
+    if (phoneErr) return phoneErr;
+    const emailErr = emailValidationError(draft.client.email, { label: "email" });
+    if (emailErr) return emailErr;
+    const email2Err = emailValidationError(draft.client.email2, { label: "second email" });
+    if (email2Err) return email2Err;
+    if (!draft.header.title.trim()) return "Itinerary title is required";
+    if (!draft.client.travel_date?.trim()) return "Travel date is required";
+    const travelErr = travelDateValidationError(draft.client.travel_date);
+    if (travelErr) return travelErr;
+    if (draft.category_pricing.length === 0) return "Select at least one hotel category";
+    const departureErr = lastDayDepartureError(draft.days);
+    if (departureErr) return departureErr;
+    return null;
+  }
+
+  /** Only explicit Save adds the itinerary to the list. Preview keeps an unsaved session draft. */
   function persistDraft(after: "list" | "preview") {
     if (!draft) return;
-    if (!draft.client.client_name.trim()) {
-      show("Customer name is required");
+    const validationError = validateDraftForPersist();
+    if (validationError) {
+      show(validationError);
       return;
     }
-    const phoneErr = phoneValidationError(draft.client.phone);
-    if (phoneErr) {
-      show(phoneErr);
-      return;
-    }
-    const emailErr = emailValidationError(draft.client.email, { label: "email" });
-    if (emailErr) {
-      show(emailErr);
-      return;
-    }
-    const email2Err = emailValidationError(draft.client.email2, { label: "second email" });
-    if (email2Err) {
-      show(email2Err);
-      return;
-    }
-    if (!draft.header.title.trim()) {
-      show("Itinerary title is required");
-      return;
-    }
-    if (!draft.client.travel_date?.trim()) {
-      show("Travel date is required");
-      return;
-    }
-    const travelErr = travelDateValidationError(draft.client.travel_date);
-    if (travelErr) {
-      show(travelErr);
-      return;
-    }
-    if (draft.category_pricing.length === 0) {
-      show("Select at least one hotel category");
-      return;
-    }
-    const departureErr = lastDayDepartureError(draft.days);
-    if (departureErr) {
-      show(departureErr);
+
+    if (after === "preview") {
+      saveWizardDraft({ snapshot: draft, packageId });
+      router.push("/itinerary-builder/new/preview-confirm");
       return;
     }
 
     try {
-      const record = createClientItineraryFromWizard({
-        client: draft.client,
-        packageId: draft.source_package_id,
-        categoryKeys: draft.category_pricing.map((c) => c.category_key),
-        categoryDiscounts: Object.fromEntries(
-          draft.category_pricing.map((c) => [c.category_key, c.discount_price])
-        ),
-        packagePriceOverrides: Object.fromEntries(
-          draft.category_pricing.map((c) => [c.category_key, c.manual_override])
-        ),
-        title: draft.header.title,
-        tourCode: draft.header.tour_code,
-        alternateTitles: draft.header.alternate_titles,
-        days: draft.days,
-        vehicle_type: draft.vehicle_type,
-        price_basis: draft.price_basis,
-        final_price: draft.final_price,
-        optional_inclusion_keys: draft.optional_inclusion_keys,
-        inclusions: draft.inclusions,
-        internal_notes: draft.internal_notes,
-        public_notes: draft.public_notes,
-        category_pricing: draft.category_pricing,
+      const record = createClientItineraryFromSnapshot(draft, {
         created_by: currentMember.name,
         owner_name: currentMember.name,
       });
-
+      clearWizardDraft();
       show(`Saved ${record.quote_id}`);
-      if (after === "preview") {
-        router.push(`/itinerary-builder/${record.id}/preview-confirm`);
-      } else {
-        router.push("/itinerary-builder");
-      }
+      router.push("/itinerary-builder");
     } catch (err) {
       const message =
         err instanceof Error
@@ -621,23 +609,8 @@ export function NewItineraryWizard() {
           }}
           onSave={() => persistDraft("list")}
           onPreview={() => persistDraft("preview")}
-          onAddNote={() => {
-            const note = window.prompt("Add internal note");
-            if (note != null) {
-              setDraft((d) =>
-                d
-                  ? {
-                      ...d,
-                      internal_notes: d.internal_notes
-                        ? `${d.internal_notes}\n${note}`
-                        : note,
-                    }
-                  : d
-              );
-            }
-          }}
-          saveLabel="Save New Itinerary"
-          saveRequiresChanges
+          saveLabel="Save Itinerary"
+          saveRequiresChanges={false}
         />
       )}
 

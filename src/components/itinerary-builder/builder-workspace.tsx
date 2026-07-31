@@ -241,17 +241,6 @@ export function ItineraryBuilderWorkspace({
             router.push("/itinerary-builder");
           }}
           onPreview={saveAndPreview}
-          onAddNote={() => {
-            const note = window.prompt("Add internal note");
-            if (note != null) {
-              updateSnapshot({
-                ...snapshot,
-                internal_notes: snapshot.internal_notes
-                  ? `${snapshot.internal_notes}\n${note}`
-                  : note,
-              });
-            }
-          }}
           saveLabel="Save Itinerary"
         />
       </div>

@@ -65,7 +65,7 @@ export function resolveCategoryTierPricing(
     manual_override: number | null;
   },
   advanceRate = BOOKING_ADVANCE_RATE
-): { base_price: number; grand_total: number; booking_amount: number } {
+): { base_price: number; grand_total: number; booking_amount: number | null } {
   const base_price =
     tier.manual_override != null && tier.manual_override > 0
       ? tier.manual_override
@@ -76,7 +76,8 @@ export function resolveCategoryTierPricing(
   return {
     base_price,
     grand_total,
-    booking_amount: bookingAdvance(grand_total, advanceRate),
+    // Keep empty until there is a real final price (avoid sticky "0" in the form).
+    booking_amount: grand_total > 0 ? bookingAdvance(grand_total, advanceRate) : null,
   };
 }
 
@@ -325,6 +326,9 @@ export function applyCostToSnapshot(snapshot: ItinerarySnapshot): ItinerarySnaps
   };
 }
 
+/** Min itinerary length (02 Days / 01 Night with last day Departure). */
+export const MIN_ITINERARY_DAYS = 2;
+
 /** Max itinerary length staff can drive from the Duration field. */
 export const MAX_ITINERARY_DAYS = 60;
 
@@ -356,14 +360,14 @@ export function hotelBlockDaysFromItinerary(days: ItineraryDay[]): ItineraryDay[
   return days;
 }
 
-/** Format as `03 Days / 03 Nights` (or `03 Days / 02 Nights` when nights passed). */
+/** Format as `03 Days / 02 Nights` (defaults to days − 1 nights when nights omitted). */
 export function durationLabelFromDayCount(dayCount: number, nightCount?: number): string {
   const n = Math.max(0, Math.floor(dayCount));
   if (n <= 0) return "";
   const nights =
     nightCount != null && Number.isFinite(nightCount)
       ? Math.max(0, Math.floor(nightCount))
-      : n;
+      : Math.max(0, n - 1);
   const dd = String(n).padStart(2, "0");
   const nn = String(nights).padStart(2, "0");
   return `${dd} Day${n !== 1 ? "s" : ""} / ${nn} Night${nights !== 1 ? "s" : ""}`;
@@ -419,7 +423,10 @@ export function resizeDaysPreservingCache(
   cache: ItineraryDay[],
   createEmpty: (dayNumber: number) => ItineraryDay
 ): { days: ItineraryDay[]; cache: ItineraryDay[] } {
-  const target = Math.max(1, Math.min(MAX_ITINERARY_DAYS, Math.floor(targetCount)));
+  const target = Math.max(
+    MIN_ITINERARY_DAYS,
+    Math.min(MAX_ITINERARY_DAYS, Math.floor(targetCount))
+  );
   const nextCache = cache.slice();
   current.forEach((day, i) => {
     nextCache[i] = day;
@@ -437,6 +444,18 @@ export function resizeDaysPreservingCache(
       const empty = createEmpty(i + 1);
       days.push(empty);
       nextCache[i] = empty;
+    }
+  }
+
+  // Only the final day is Departure (drives 02 Days / 01 Night style labels).
+  for (let i = 0; i < days.length; i++) {
+    const isLast = i === days.length - 1;
+    if (isLast && !isDepartureLocation(days[i].location)) {
+      days[i] = { ...days[i], location: "Departure" };
+      nextCache[i] = days[i];
+    } else if (!isLast && isDepartureLocation(days[i].location)) {
+      days[i] = { ...days[i], location: null };
+      nextCache[i] = days[i];
     }
   }
 

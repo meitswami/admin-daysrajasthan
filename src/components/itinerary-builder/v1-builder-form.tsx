@@ -34,6 +34,7 @@ import {
   hotelBlockDaysFromItinerary,
   isDepartureLocation,
   lastDayDepartureError,
+  MIN_ITINERARY_DAYS,
   normalizeVehicleType,
   parseDayCountFromDurationInput,
   resizeDaysPreservingCache,
@@ -59,6 +60,11 @@ import {
   hotelsForLocation,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
+import {
+  applyCategoryDayUpdate,
+  dayViewForCategory,
+  pruneCategoryHotelPicks,
+} from "@/lib/itinerary-builder/category-hotels";
 import { listMasterContent, updateMasterContent, createMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
@@ -550,21 +556,25 @@ function SelectedHotelCard({
 
 function NightHotelCard({
   day,
-  dayIndex,
   nightNo,
   onChange,
   hotelCatalog,
+  categoryKey,
 }: {
   day: ItineraryDay;
-  dayIndex: number;
   nightNo: string;
   onChange: (updater: (d: ItineraryDay) => ItineraryDay) => void;
   hotelCatalog: HotelMasterItem[];
+  /** When set, dropdowns only list hotels in this master category */
+  categoryKey?: HotelCategoryKey;
 }) {
-  const locationHotels = useMemo(
-    () => hotelsForLocation(day.location, hotelCatalog),
-    [day.location, hotelCatalog]
-  );
+  const locationHotels = useMemo(() => {
+    const all = hotelsForLocation(day.location, hotelCatalog);
+    if (!categoryKey) return all;
+    const filtered = all.filter((h) => h.category_key === categoryKey);
+    // Fall back to location list if this tier has no inventory yet
+    return filtered.length ? filtered : all;
+  }, [day.location, hotelCatalog, categoryKey]);
 
   const breakfastSelected = [day.breakfast_hotels[0], day.breakfast_hotels[1]].filter(
     Boolean
@@ -664,7 +674,7 @@ function NightHotelCard({
     <div className="rounded-xl border border-stone-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
         <span className="rounded-full bg-blue-600 px-3 py-1 text-sm font-semibold text-white">
-          Night {nightNo}
+          Night - {nightNo}
         </span>
         <label className="inline-flex items-center gap-2 text-sm font-medium text-blue-700">
           <input
@@ -833,7 +843,6 @@ export function V1BuilderForm({
   onBack,
   onSave,
   onPreview,
-  onAddNote,
   saveLabel = "Save New Itinerary",
   saveRequiresChanges = false,
   packageCatalog = [],
@@ -845,7 +854,6 @@ export function V1BuilderForm({
   onBack?: () => void;
   onSave: () => void;
   onPreview: () => void;
-  onAddNote?: () => void;
   saveLabel?: string;
   /** When true, hide Save until title / description / location / day add-delete changes. */
   saveRequiresChanges?: boolean;
@@ -868,6 +876,9 @@ export function V1BuilderForm({
   const dayCacheRef = useRef<ItineraryDay[]>(s.days.map((d) => ({ ...d })));
   const [durationFocused, setDurationFocused] = useState(false);
   const [durationDraft, setDurationDraft] = useState("");
+  const itineraryNote = (s.public_notes || s.internal_notes || "").trim();
+  const [noteOpen, setNoteOpen] = useState(() => Boolean(itineraryNote));
+  const noteRef = useRef<HTMLTextAreaElement>(null);
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
     ensureDepartureInCatalog([])
   );
@@ -909,6 +920,10 @@ export function V1BuilderForm({
 
   /** Single selected vehicle (multi-select is not allowed). */
   const selectedVehicle = vehicleList[0] ?? "";
+
+  useEffect(() => {
+    if (itineraryNote) setNoteOpen(true);
+  }, [itineraryNote]);
 
   useEffect(() => {
     if (!isThreeDayTwoNight || s.price_basis === "whole_group") return;
@@ -1031,7 +1046,7 @@ export function V1BuilderForm({
   }
 
   function setDayCount(dayCount: number) {
-    if (!Number.isFinite(dayCount) || dayCount < 1) return;
+    if (!Number.isFinite(dayCount) || dayCount < MIN_ITINERARY_DAYS) return;
     if (dayCount === s.days.length) {
       patch({
         header: { ...s.header, duration_label: durationLabelFromDays(s.days) },
@@ -1060,7 +1075,7 @@ export function V1BuilderForm({
   function onDurationInputChange(raw: string) {
     setDurationDraft(raw);
     const parsed = parseDayCountFromDurationInput(raw);
-    if (parsed != null && parsed >= 1) {
+    if (parsed != null && parsed >= MIN_ITINERARY_DAYS) {
       setDayCount(parsed);
     }
   }
@@ -1072,7 +1087,10 @@ export function V1BuilderForm({
 
   function onDurationBlur() {
     const parsed = parseDayCountFromDurationInput(durationDraft);
-    const finalCount = parsed != null && parsed >= 1 ? parsed : s.days.length;
+    const finalCount =
+      parsed != null && parsed >= MIN_ITINERARY_DAYS
+        ? parsed
+        : Math.max(MIN_ITINERARY_DAYS, s.days.length);
     setDayCount(finalCount);
     setDurationFocused(false);
     setDurationDraft("");
@@ -1183,7 +1201,12 @@ export function V1BuilderForm({
     if (keys.includes(key)) keys = keys.filter((k) => k !== key);
     else if (keys.length >= 2) return;
     else keys = [...keys, key];
-    patch(pricingFrom(s, keys));
+    const days = s.days.map((d) => pruneCategoryHotelPicks(d, keys));
+    const next = { ...s, days };
+    patch({
+      days,
+      ...pricingFrom(next, keys),
+    });
   }
 
   function updateTier(
@@ -1392,6 +1415,7 @@ export function V1BuilderForm({
       lunch_hotels: [null, null],
       dinner_hotels: [null, null],
       hotel_name: null,
+      category_hotel_picks: {},
     }));
   }
 
@@ -1520,7 +1544,7 @@ export function V1BuilderForm({
                 <Input
                   className="mt-1.5"
                   inputMode="numeric"
-                  placeholder="e.g. 03 → 03 Days / 03 Nights"
+                  placeholder="e.g. 03 → 03 Days / 02 Nights"
                   value={
                     durationFocused
                       ? durationDraft
@@ -1533,24 +1557,19 @@ export function V1BuilderForm({
                   onBlur={onDurationBlur}
                   onChange={(e) => onDurationInputChange(e.target.value)}
                 />
-                <p className="mt-1.5 text-xs text-stone-500">
-                  Type days (e.g. 03). Drag day cards to reorder — numbers update automatically. The
-                  last day location must be Departure (drops one night, e.g. 03 Days / 02 Nights).
-                  {durationFocused &&
-                    (() => {
-                      const preview = parseDayCountFromDurationInput(durationDraft);
-                      if (preview == null || preview < 1) return null;
-                      return (
-                        <>
-                          {" "}
-                          →{" "}
-                          <span className="font-medium text-emerald-700">
-                            {durationLabelFromDayCount(preview)}
-                          </span>
-                        </>
-                      );
-                    })()}
-                </p>
+                {durationFocused &&
+                  (() => {
+                    const preview = parseDayCountFromDurationInput(durationDraft);
+                    if (preview == null || preview < MIN_ITINERARY_DAYS) return null;
+                    return (
+                      <p className="mt-1.5 text-xs text-stone-500">
+                        →{" "}
+                        <span className="font-medium text-emerald-700">
+                          {durationLabelFromDayCount(preview)}
+                        </span>
+                      </p>
+                    );
+                  })()}
               </div>
             </div>
           </section>
@@ -1829,6 +1848,7 @@ export function V1BuilderForm({
                   <Label>Package Price (Auto-filled from Itinerary)</Label>
                   <Input
                     type="number"
+                    min={0}
                     className="mt-1.5"
                     value={tier.package_price || ""}
                     onChange={(e) =>
@@ -1842,11 +1862,12 @@ export function V1BuilderForm({
                   <p className="mt-1 text-xs text-stone-500">Auto-filled from selected itinerary</p>
                 </div>
                 <div>
-                  <Label>Discount Amount (Optional)</Label>
+                  <Label>Discount Price (Optional)</Label>
                   <Input
                     type="number"
+                    min={0}
                     className="mt-1.5"
-                    value={tier.discount_price ?? 0}
+                    value={tier.discount_price || ""}
                     onChange={(e) =>
                       updateTier(
                         tier.category_key,
@@ -1863,31 +1884,36 @@ export function V1BuilderForm({
             ))}
           </section>
 
-          {s.category_pricing.map((tier) => (
-            <section
-              key={`book-${tier.category_key}`}
-              className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5"
-            >
+          {s.category_pricing.length > 0 && (
+            <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
               <h3 className="text-lg font-semibold text-blue-900">Booking Amount</h3>
-              <span className="mt-2 inline-block rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
-                For {tier.label}
-              </span>
-              <Input
-                type="number"
-                className="mt-3"
-                value={tier.booking_amount ?? 0}
-                onChange={(e) =>
-                  updateTier(
-                    tier.category_key,
-                    "booking_amount",
-                    e.target.value === "" ? null : Number(e.target.value)
-                  )
-                }
-                placeholder="0"
-              />
-              <p className="mt-1 text-xs text-stone-500">Auto: 20% of final price (editable)</p>
+              <div className="mt-3 space-y-4">
+                {s.category_pricing.map((tier) => (
+                  <div key={`book-${tier.category_key}`}>
+                    <span className="inline-block rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+                      For {tier.label}
+                    </span>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="mt-2"
+                      value={tier.booking_amount || ""}
+                      onChange={(e) =>
+                        updateTier(
+                          tier.category_key,
+                          "booking_amount",
+                          e.target.value === "" ? null : Number(e.target.value)
+                        )
+                      }
+                    />
+                    <p className="mt-1 text-xs text-stone-500">
+                      Auto: 20% of final price (editable)
+                    </p>
+                  </div>
+                ))}
+              </div>
             </section>
-          ))}
+          )}
 
           <section className="rounded-2xl border border-stone-200 bg-white p-4 sm:p-5">
             <div className="mb-3 flex items-center gap-2">
@@ -1932,14 +1958,14 @@ export function V1BuilderForm({
                   <Input
                     type="number"
                     className="mt-2 bg-stone-50"
-                    value={tier.grand_total}
+                    value={tier.grand_total || ""}
                     readOnly
                     tabIndex={-1}
                   />
                 </div>
               ))}
               {!s.category_pricing.length && (
-                <Input type="number" className="mt-1.5" value={0} readOnly tabIndex={-1} />
+                <Input type="number" className="mt-1.5" value="" readOnly tabIndex={-1} />
               )}
               <div className="flex flex-wrap gap-4 text-sm">
                 {priceBasisOptions.map(([value, label]) => (
@@ -1957,20 +1983,66 @@ export function V1BuilderForm({
             </div>
           </section>
 
-          {hotelBlockDays.map((day, nightIndex) => {
-            const dayIndex = s.days.findIndex((d) => d.day_uuid === day.day_uuid);
-            const nightNo = String(nightIndex + 1).padStart(2, "0");
-            return (
-              <NightHotelCard
-                key={day.day_uuid}
-                day={day}
-                dayIndex={dayIndex}
-                nightNo={nightNo}
-                hotelCatalog={hotelCatalog}
-                onChange={(updater) => updateDay(dayIndex, updater)}
-              />
-            );
-          })}
+          {s.category_pricing.length === 0 ? (
+            <section className="rounded-2xl border border-dashed border-stone-300 bg-stone-50 p-4 text-sm text-stone-600">
+              Select at least one hotel category above to configure night hotels.
+            </section>
+          ) : (
+            s.category_pricing.map((tier) => {
+              const primaryKey = s.category_pricing[0]?.category_key ?? null;
+              return (
+                <section
+                  key={`hotels-${tier.category_key}`}
+                  className="space-y-3 rounded-2xl border border-stone-200 bg-white p-4 sm:p-5"
+                >
+                  <div className="flex items-center gap-2">
+                    <Moon className="h-5 w-5 text-blue-600" />
+                    <h3 className="text-lg font-semibold text-stone-900">
+                      Hotels for {tier.label} Category
+                    </h3>
+                  </div>
+                  <div>
+                    <Label>Hotel Category</Label>
+                    <Select className="mt-1.5" value={tier.category_key} disabled>
+                      <option value={tier.category_key}>{tier.label}</option>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
+                    {hotelBlockDays.map((day, nightIndex) => {
+                      const dayIndex = s.days.findIndex((d) => d.day_uuid === day.day_uuid);
+                      const nightNo = String(nightIndex + 1).padStart(2, "0");
+                      const viewDay = dayViewForCategory(
+                        day,
+                        tier.category_key,
+                        tier.room_category,
+                        primaryKey
+                      );
+                      return (
+                        <NightHotelCard
+                          key={`${tier.category_key}-${day.day_uuid}`}
+                          day={viewDay}
+                          nightNo={nightNo}
+                          hotelCatalog={hotelCatalog}
+                          categoryKey={tier.category_key}
+                          onChange={(updater) =>
+                            updateDay(dayIndex, (d) =>
+                              applyCategoryDayUpdate(
+                                d,
+                                tier.category_key,
+                                tier.room_category,
+                                primaryKey,
+                                updater
+                              )
+                            )
+                          }
+                        />
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })
+          )}
           {isDepartureLocation(s.days[s.days.length - 1]?.location) ? (
               <p className="text-xs text-stone-500">
                 Last day is Departure — Night {String(s.days.length).padStart(2, "0")} is omitted.
@@ -2019,20 +2091,50 @@ export function V1BuilderForm({
         </div>
       </section>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onAddNote}
-          className="border-blue-200 text-blue-700"
-        >
-          <StickyNote className="h-4 w-4" />
-          Add Note
-        </Button>
-        <Button type="button" onClick={handlePreviewClick} className="bg-slate-800 hover:bg-slate-900">
-          <Eye className="h-4 w-4" />
-          Preview & Confirm
-        </Button>
+      <div className="space-y-3 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              setNoteOpen(true);
+              requestAnimationFrame(() => noteRef.current?.focus());
+            }}
+            className="border-blue-200 text-blue-700"
+          >
+            <StickyNote className="h-4 w-4" />
+            {itineraryNote ? "Edit Note" : "Add Note"}
+          </Button>
+          <Button type="button" onClick={handlePreviewClick} className="bg-slate-800 hover:bg-slate-900">
+            <Eye className="h-4 w-4" />
+            Preview & Confirm
+          </Button>
+        </div>
+        {noteOpen ? (
+          <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3">
+            <Label htmlFor="itinerary_public_notes" className="text-blue-900">
+              Note
+            </Label>
+            <p className="mt-0.5 text-xs text-stone-500">
+              Shown on Preview &amp; Confirm and the public itinerary link.
+            </p>
+            <Textarea
+              ref={noteRef}
+              id="itinerary_public_notes"
+              rows={3}
+              className="mt-2"
+              placeholder="Add a note for this itinerary…"
+              value={s.public_notes || s.internal_notes || ""}
+              onChange={(e) =>
+                onChange({
+                  ...s,
+                  public_notes: e.target.value,
+                  internal_notes: e.target.value,
+                })
+              }
+            />
+          </div>
+        ) : null}
       </div>
 
       {s.category_pricing[0] && (

@@ -1,10 +1,13 @@
 import type {
   ClientItineraryRecord,
+  DayCategoryHotelPicks,
+  HotelCategoryKey,
   ItineraryDay,
   ItineraryRevision,
   ItinerarySnapshot,
 } from "@/types/itinerary-builder";
-import { emptyCostSheet, emptyDay } from "@/lib/itinerary-builder/defaults";
+import { emptyCostSheet, emptyCustomItineraryDays } from "@/lib/itinerary-builder/defaults";
+import { normalizeCategoryHotelPicks } from "@/lib/itinerary-builder/category-hotels";
 import {
   DEFAULT_EXCLUSION_ITEMS,
   DEFAULT_INCLUSION_ITEMS,
@@ -24,6 +27,17 @@ function mealHotelPair(
     return [value[0] ?? null, null];
   }
   return [fallbackHotel, null];
+}
+
+function normalizeCategoryHotelPicksMap(
+  value: ItineraryDay["category_hotel_picks"] | null | undefined
+): Partial<Record<HotelCategoryKey, DayCategoryHotelPicks>> {
+  if (!value || typeof value !== "object") return {};
+  const out: Partial<Record<HotelCategoryKey, DayCategoryHotelPicks>> = {};
+  for (const [key, picks] of Object.entries(value)) {
+    out[key as HotelCategoryKey] = normalizeCategoryHotelPicks(picks);
+  }
+  return out;
 }
 
 function normalizeDay(day: ItineraryDay, index: number): ItineraryDay {
@@ -47,6 +61,7 @@ function normalizeDay(day: ItineraryDay, index: number): ItineraryDay {
     dinner_hotels: mealHotelPair(day.dinner_hotels, day.hotel_name),
     epai_plan_only: Boolean(day.epai_plan_only),
     guest_self_booked_hotel: Boolean(day.guest_self_booked_hotel),
+    category_hotel_picks: normalizeCategoryHotelPicksMap(day.category_hotel_picks),
     guide_required: Boolean(day.guide_required),
     completion_pct: day.completion_pct ?? 0,
     packing_tips: day.packing_tips ?? "",
@@ -83,7 +98,7 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
         food_preference: null,
         special_requests: null,
       },
-      days: [emptyDay(1)],
+      days: emptyCustomItineraryDays(),
       inclusions: [],
       exclusions: [],
       inclusion_items: DEFAULT_INCLUSION_ITEMS,
@@ -105,7 +120,7 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
     };
   }
 
-  const days = (snapshot.days?.length ? snapshot.days : [emptyDay(1)]).map(normalizeDay);
+  const days = (snapshot.days?.length ? snapshot.days : emptyCustomItineraryDays()).map(normalizeDay);
 
   return {
     ...snapshot,

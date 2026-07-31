@@ -325,6 +325,69 @@ export function createClientItineraryFromWizard(input: WizardCreateInput): Clien
   return record;
 }
 
+/** Persist a fully built wizard/preview snapshot as a new list itinerary. */
+export function createClientItineraryFromSnapshot(
+  snapshotInput: ItinerarySnapshot,
+  meta?: {
+    created_by?: string | null;
+    owner_name?: string | null;
+    lead_id?: string | null;
+    lead_source?: ClientItineraryRecord["lead_source"];
+    customer_id?: string | null;
+  }
+): ClientItineraryRecord {
+  const state = loadState();
+  const id = newUuid();
+  const quote_id = nextQuoteId(state.records);
+  const actorName = resolveActorName(meta?.owner_name ?? meta?.created_by);
+
+  const snapshot = applyCostToSnapshot(
+    normalizeSnapshot({
+      ...snapshotInput,
+      header: {
+        ...snapshotInput.header,
+        duration_label: durationLabelFromDays(snapshotInput.days),
+      },
+    })
+  );
+
+  const revision = createRevision({
+    itinerary_id: id,
+    version_number: 1,
+    parent_revision_id: null,
+    snapshot,
+    save_type: "manual",
+    milestone_label: snapshot.source_package_id ? "Created from catalog" : "Draft 1",
+    created_by: actorName,
+  });
+
+  const record = buildRecordFromSnapshot(id, quote_id, snapshot, revision, {
+    lead_id: meta?.lead_id ?? null,
+    lead_source: meta?.lead_source ?? null,
+    customer_id: meta?.customer_id ?? null,
+    created_by: actorName,
+    owner_name: actorName,
+  });
+  state.records.unshift(record);
+  state.revisions[id] = [revision];
+  saveState(state);
+
+  void import("@/lib/itinerary-builder/sync-real").then(({ syncRecordToSupabaseIfReal }) =>
+    syncRecordToSupabaseIfReal(record, revision)
+  );
+  void import("@/lib/system/activity-log").then(({ logActivity }) =>
+    logActivity({
+      action: "quote_create",
+      module: "itinerary_builder",
+      entity_type: "quote",
+      entity_id: id,
+      summary: `Created ${record.quote_id} for ${record.client_name}`,
+    })
+  );
+
+  return record;
+}
+
 export function saveSnapshotRevision(
   itineraryId: string,
   snapshot: ItinerarySnapshot,

@@ -81,11 +81,12 @@ export function CategoryPricingPanel({
                 <Label className="text-xs">Discount amount (optional)</Label>
                 <Input
                   type="number"
+                  min={0}
                   className="mt-0.5 h-8 text-xs"
-                  value={tier.discount_price ?? ""}
+                  value={tier.discount_price || ""}
                   onChange={(e) =>
                     updateTier(tier.category_key, {
-                      discount_price: e.target.value ? Number(e.target.value) : null,
+                      discount_price: e.target.value === "" ? null : Number(e.target.value),
                     })
                   }
                 />

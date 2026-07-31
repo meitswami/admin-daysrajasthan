@@ -35,7 +35,12 @@ import {
 } from "@/lib/itinerary-builder/payment-details";
 import { findHotelByOptionLabel } from "@/lib/itinerary-builder/hotel-master";
 import type { CompanyStructure } from "@/types/company-structure";
-import type { CategoryTotalSummary, ItineraryDay, ItinerarySnapshot } from "@/types/itinerary-builder";
+import type {
+  CategoryTotalSummary,
+  HotelCategoryKey,
+  ItineraryDay,
+  ItinerarySnapshot,
+} from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
 import { DocumentBrandFooter } from "@/components/branding/document-brand";
 import { QuotationThemeHero } from "@/components/itinerary-builder/quotation-theme-heroes";
@@ -910,6 +915,7 @@ export function QuotationDocument({
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
   const { inclusions, exclusions } = policyLinesFromSnapshot(snapshot);
+  const itineraryNote = (snapshot.public_notes || snapshot.internal_notes || "").trim();
   const inclusionItems = richPolicyItems(
     snapshot.inclusion_items,
     inclusions,
@@ -951,7 +957,24 @@ export function QuotationDocument({
   const destinationsSummary = formatDestinationsSummary(nightSegments);
   const coveringDestinations = formatCoveringDestinations(nightSegments);
   const packageVehicles = resolvePackageVehicles(snapshot);
-  const hotelPackageNights = buildHotelPackageNights(days, client.travel_date);
+  const primaryKey =
+    (category_pricing?.[0]?.category_key as HotelCategoryKey | undefined) ?? null;
+  const hotelPackages =
+    category_pricing && category_pricing.length > 0
+      ? category_pricing.map((tier) => ({
+          label: `${tier.label} Package`,
+          nights: buildHotelPackageNights(days, client.travel_date, {
+            categoryKey: tier.category_key,
+            roomCategory: tier.room_category,
+            primaryKey,
+          }),
+        }))
+      : [
+          {
+            label: "Travel Package",
+            nights: buildHotelPackageNights(days, client.travel_date),
+          },
+        ];
   const tierRows = tierRowsFromSnapshot(categoryTotals, category_pricing ?? []);
   const hasTiers = tierRows.length > 0;
   const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
@@ -1159,19 +1182,27 @@ export function QuotationDocument({
           </div>
         </section>
 
-        {isTheme2 && hotelPackageNights.some((n) => n.options.length > 0) && (
-          <Theme2HotelsPackage
-            packageLabel={primaryPackageLabel}
-            nights={hotelPackageNights}
-          />
-        )}
+        {isTheme2 &&
+          hotelPackages
+            .filter((pkg) => pkg.nights.some((n) => n.options.length > 0))
+            .map((pkg) => (
+              <Theme2HotelsPackage
+                key={pkg.label}
+                packageLabel={pkg.label}
+                nights={pkg.nights}
+              />
+            ))}
 
-        {isTheme3 && hotelPackageNights.some((n) => n.options.length > 0) && (
-          <Theme3HotelsPackage
-            packageLabel={primaryPackageLabel}
-            nights={hotelPackageNights}
-          />
-        )}
+        {isTheme3 &&
+          hotelPackages
+            .filter((pkg) => pkg.nights.some((n) => n.options.length > 0))
+            .map((pkg) => (
+              <Theme3HotelsPackage
+                key={pkg.label}
+                packageLabel={pkg.label}
+                nights={pkg.nights}
+              />
+            ))}
 
         {hasTiers && !isTheme2 && !isTheme3 && (
           <section className="break-inside-avoid">
@@ -1237,6 +1268,17 @@ export function QuotationDocument({
             />
           )
         )}
+
+        {itineraryNote && !isLegacyTheme ? (
+          <section className="break-inside-avoid rounded-xl border border-stone-200 bg-stone-50/50 p-4">
+            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
+              Note
+            </h2>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
+              {itineraryNote}
+            </p>
+          </section>
+        ) : null}
 
         {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && !usesRichPolicies && (
           <section className="break-inside-avoid">
@@ -1338,6 +1380,7 @@ export function QuotationDocument({
             inclusions={inclusions ?? []}
             exclusions={exclusions ?? []}
             companyName={coverBrand.companyName || "Rajasthan Touring"}
+            note={itineraryNote || undefined}
           />
           <QuotationLegacyAbout structure={structure} brand={coverBrand} />
           <QuotationLegacyPaymentSection

@@ -70,6 +70,7 @@ export function emptyDay(dayNumber: number): ItineraryDay {
     dinner_hotels: [null, null],
     epai_plan_only: false,
     guest_self_booked_hotel: false,
+    category_hotel_picks: {},
     vehicle_type: null,
     pickup_location: null,
     drop_location: null,
@@ -100,17 +101,25 @@ export function emptyCostSheet(): CostSheet {
   };
 }
 
+/** Default custom itinerary: 02 Days / 01 Night (last day is Departure). */
+export function emptyCustomItineraryDays(): ItineraryDay[] {
+  return [
+    emptyDay(1),
+    { ...emptyDay(2), location: "Departure" },
+  ];
+}
+
 export function emptySnapshot(overrides?: Partial<ItinerarySnapshot>): ItinerarySnapshot {
   return {
     header: {
       title: "New Client Itinerary",
       subtitle: null,
       tour_code: null,
-      duration_label: null,
+      duration_label: "02 Days / 01 Night",
       alternate_titles: [],
     },
     client: emptyClientDetails(),
-    days: [emptyDay(1)],
+    days: emptyCustomItineraryDays(),
     inclusions: ["Accommodation as per plan", "Private AC vehicle for sightseeing"],
     exclusions: ["Air fare / train fare", "Personal expenses", "Entry fees unless specified"],
     inclusion_items: [],

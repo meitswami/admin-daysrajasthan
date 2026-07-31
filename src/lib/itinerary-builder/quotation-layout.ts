@@ -1,6 +1,11 @@
-import type { CategoryPricingTier, ItineraryDay } from "@/types/itinerary-builder";
+import type {
+  CategoryPricingTier,
+  HotelCategoryKey,
+  ItineraryDay,
+} from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
 import { bookingAdvance } from "./cost-engine";
+import { dayViewForCategory } from "./category-hotels";
 
 export type NightSegment = {
   nightLabel: string;
@@ -193,13 +198,27 @@ export type HotelPackageNight = {
 /** Night-grouped hotel cards for Theme 2 (OR layout from breakfast hotel pair). */
 export function buildHotelPackageNights(
   days: ItineraryDay[],
-  travelDate: string | null
+  travelDate: string | null,
+  opts?: {
+    categoryKey?: HotelCategoryKey;
+    roomCategory?: string | null;
+    primaryKey?: HotelCategoryKey | null;
+  }
 ): HotelPackageNight[] {
   const segments = buildNightSegments(days, travelDate);
   return segments.map((segment) => {
-    const day =
-      days.find((d) => d.day_number === segment.startDay && d.hotel_name) ??
+    const rawDay =
+      days.find((d) => d.day_number === segment.startDay) ??
       days.find((d) => d.day_number >= segment.startDay && d.day_number <= segment.endDay);
+    const day =
+      rawDay && opts?.categoryKey
+        ? dayViewForCategory(
+            rawDay,
+            opts.categoryKey,
+            opts.roomCategory ?? null,
+            opts.primaryKey ?? opts.categoryKey
+          )
+        : rawDay;
     const pair = day
       ? [day.breakfast_hotels?.[0], day.breakfast_hotels?.[1]].filter(Boolean)
       : [];

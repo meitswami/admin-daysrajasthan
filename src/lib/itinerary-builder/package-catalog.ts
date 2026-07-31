@@ -11,7 +11,7 @@ import {
   durationLabelFromDays,
   resolveCategoryTierPricing,
 } from "./cost-engine";
-import { emptyDay, emptySnapshot } from "./defaults";
+import { emptyCustomItineraryDays, emptyDay, emptySnapshot } from "./defaults";
 
 export type PackageCatalogLocation = {
   name: string;
@@ -110,7 +110,7 @@ export function masterItineraryToCatalogEntry(item: Itinerary): PackageCatalogEn
       const builderDays =
         days.length > 0
           ? days.map((d, i) => masterDayToBuilderDay(d, i))
-          : [emptyDay(1)];
+          : emptyCustomItineraryDays();
       return applyCostToSnapshot(
         emptySnapshot({
           header: {
