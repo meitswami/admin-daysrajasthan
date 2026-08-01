@@ -31,13 +31,13 @@ function formatInrPlain(amount: number): string {
 function itineraryOptionsBlock(ctx: TemplateRenderContext): string {
   const tiers = ctx.category_totals ?? [];
   if (tiers.length === 0) {
-    return `Itinerary: ${ctx.itinerary_title}\nTour code: ${ctx.tour_code ?? "Custom"}\nDuration: ${ctx.duration_label ?? "—"}`;
+    return `Itinerary: ${ctx.itinerary_title}\nDuration: ${ctx.duration_label ?? "—"}`;
   }
   return tiers
     .map(
       (t, i) =>
         `Option ${i + 1} — ${t.label}: ${formatInrPlain(t.grand_total)}\n` +
-        `   ${ctx.itinerary_title} · ${ctx.duration_label ?? ""} · ${ctx.tour_code ?? ""}`.trim()
+        `   ${ctx.itinerary_title}${ctx.duration_label ? ` · ${ctx.duration_label}` : ""}`.trim()
     )
     .join("\n\n");
 }

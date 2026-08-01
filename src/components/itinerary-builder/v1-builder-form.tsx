@@ -1523,7 +1523,7 @@ export function V1BuilderForm({
                 />
               </div>
               <div>
-                <Label>Tour Code</Label>
+                <Label>Tour Code <span className="font-normal text-stone-400">(optional, internal)</span></Label>
                 <Input
                   className="mt-1.5"
                   placeholder="e.g. WRT049"
@@ -1535,8 +1535,8 @@ export function V1BuilderForm({
                 />
                 <p className="mt-1 text-xs text-stone-500">
                   {lastTourCodeTip
-                    ? `Tip: last itinerary number was ${lastTourCodeTip}. Enter a new WRT code.`
-                    : "Enter a tour code starting with WRT (e.g. WRT001)."}
+                    ? `Internal only — leave blank to auto-assign after ${lastTourCodeTip} on save.`
+                    : "Internal only — leave blank to auto-assign WRT001 on save."}
                 </p>
               </div>
               <div className="sm:col-span-2">

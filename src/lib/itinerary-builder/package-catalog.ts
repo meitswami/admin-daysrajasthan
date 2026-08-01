@@ -90,7 +90,7 @@ export function durationMatchesQuery(duration: string | null | undefined, query:
 export function masterDayToBuilderDay(plan: ItineraryDayPlan, index: number): ItineraryDay {
   const day = emptyDay(plan.day_number || index + 1);
   const location = (plan.location ?? "").trim() || null;
-  day.day_title = plan.title?.trim() || day.day_title;
+  day.day_title = plan.title?.trim() || "";
   day.alternate_day_titles = (plan.alternate_titles ?? []).map((t) => t.trim()).filter(Boolean);
   day.day_description = plan.description?.trim() || "";
   day.location = location;
@@ -236,6 +236,17 @@ export function nextTourCode(
     if (parts.width > width) width = parts.width;
   }
   return `${prefix}${String(max + 1).padStart(width, "0")}`;
+}
+
+/** Keep a staff-entered code; otherwise assign the next WRT… number. */
+export function resolveTourCodeOnSave(
+  current: string | null | undefined,
+  existingCodes: Array<string | null | undefined>,
+  preferredPrefix = "WRT"
+): string {
+  const trimmed = (current ?? "").trim().toUpperCase();
+  if (trimmed) return trimmed;
+  return nextTourCode(existingCodes, preferredPrefix);
 }
 
 export function filterPackages(

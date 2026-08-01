@@ -104,14 +104,12 @@ function richPolicyItems(
 function ClientDetailsTable({
   clientLabel,
   client,
-  header,
   accent,
   title = "Client Details",
   variant = "default",
 }: {
   clientLabel: string;
   client: ItinerarySnapshot["client"];
-  header: ItinerarySnapshot["header"];
   accent: string;
   title?: string;
   variant?: "default" | "theme2" | "theme3";
@@ -136,14 +134,6 @@ function ClientDetailsTable({
             </p>
           ))}
         </div>
-        {header.tour_code && (
-          <p className="mt-3 text-sm text-gray-500">
-            Tour Code:{" "}
-            <span className="font-semibold" style={{ color: accent }}>
-              {header.tour_code}
-            </span>
-          </p>
-        )}
       </section>
     );
   }
@@ -160,14 +150,6 @@ function ClientDetailsTable({
             </div>
           ))}
         </div>
-        {header.tour_code && (
-          <p className="mt-3 text-xs text-gray-500">
-            Tour Code:{" "}
-            <span className="font-semibold" style={{ color: accent }}>
-              {header.tour_code}
-            </span>
-          </p>
-        )}
       </section>
     );
   }
@@ -187,14 +169,6 @@ function ClientDetailsTable({
           ))}
         </tbody>
       </table>
-      {header.tour_code && (
-        <p className="mt-3 text-xs text-stone-500">
-          Tour Code:{" "}
-          <span className="font-semibold" style={{ color: accent }}>
-            {header.tour_code}
-          </span>
-        </p>
-      )}
     </section>
   );
 }
@@ -1047,7 +1021,6 @@ export function QuotationDocument({
             <ClientDetailsTable
               clientLabel={clientLabel}
               client={client}
-              header={header}
               accent={theme.accent}
             />
 
@@ -1059,12 +1032,6 @@ export function QuotationDocument({
                 Covering Destinations:{" "}
                 <span className="font-medium text-stone-900">{destinationsSummary}</span>
               </p>
-              {header.tour_code && (
-                <p className="mt-1 text-sm" style={{ color: theme.accent }}>
-                  Tour Code:{" "}
-                  <span className="font-semibold underline underline-offset-2">{header.tour_code}</span>
-                </p>
-              )}
               {!hasTiers && (
                 <div
                   className="mt-4 rounded-xl border p-4"
@@ -1094,7 +1061,6 @@ export function QuotationDocument({
             <ClientDetailsTable
               clientLabel={clientLabel}
               client={client}
-              header={header}
               accent={theme.accent}
               variant="theme2"
             />
@@ -1112,7 +1078,6 @@ export function QuotationDocument({
             <ClientDetailsTable
               clientLabel={clientLabel}
               client={client}
-              header={header}
               accent={theme.accent}
               title="Your Information"
               variant="theme3"
@@ -1148,11 +1113,6 @@ export function QuotationDocument({
               <p className="mt-1 text-sm text-stone-500">
                 Covering Destinations • {destinationsSummary}
               </p>
-              {header.tour_code && (
-                <p className="mt-1 text-sm font-medium underline" style={{ color: theme.accent }}>
-                  Tour Code: {header.tour_code}
-                </p>
-              )}
             </div>
           )}
           <div

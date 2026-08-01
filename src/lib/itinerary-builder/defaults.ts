@@ -49,7 +49,7 @@ export function emptyDay(dayNumber: number): ItineraryDay {
   return {
     day_uuid: newUuid(),
     day_number: dayNumber,
-    day_title: `Day ${dayNumber}`,
+    day_title: "",
     alternate_day_titles: [],
     day_subtitle: null,
     day_theme: null,

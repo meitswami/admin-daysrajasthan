@@ -102,6 +102,11 @@ function ThumbImage({
 }) {
   const preferred = thumbnailSrc(src, requestEdge, objectFit);
   const [current, setCurrent] = useState(preferred);
+
+  useEffect(() => {
+    setCurrent(thumbnailSrc(src, requestEdge, objectFit));
+  }, [src, requestEdge, objectFit]);
+
   const unoptimized =
     thumbNeedsUnoptimized(current) ||
     current !== src; /* already resized at the CDN */
@@ -119,6 +124,7 @@ function ThumbImage({
       aria-label={onOpen ? "View image" : undefined}
     >
       <Image
+        key={current}
         src={current}
         alt=""
         width={width}
@@ -271,21 +277,31 @@ export function ImageThumbCarousel({
 
   return (
     <>
-      <div className={cn("relative", className)} style={{ width, height }}>
-        <ThumbImage
-          src={current}
-          width={width}
-          height={height}
-          requestEdge={requestEdge}
-          objectFit={objectFit}
-          onOpen={
-            enableLightbox
-              ? () => {
-                  setLightboxOpen(true);
-                }
-              : undefined
-          }
-        />
+      <div className={cn("relative overflow-hidden", className)} style={{ width, height }}>
+        {list.map((src, i) => (
+          <div
+            key={`${src}-${i}`}
+            className={cn(
+              "absolute inset-0 transition-opacity duration-500",
+              i === index ? "opacity-100" : "pointer-events-none opacity-0",
+            )}
+          >
+            <ThumbImage
+              src={src}
+              width={width}
+              height={height}
+              requestEdge={requestEdge}
+              objectFit={objectFit}
+              onOpen={
+                enableLightbox && i === index
+                  ? () => {
+                      setLightboxOpen(true);
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        ))}
         {list.length > 1 ? (
           <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 flex -translate-x-1/2 gap-0.5">
             {list.map((_, i) => (

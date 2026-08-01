@@ -23,7 +23,10 @@ import {
   primaryGrandTotal,
 } from "@/lib/itinerary-builder/cost-engine";
 import { emptySnapshot, newUuid } from "@/lib/itinerary-builder/defaults";
-import { buildCategoryPricing } from "@/lib/itinerary-builder/package-catalog";
+import {
+  buildCategoryPricing,
+  resolveTourCodeOnSave,
+} from "@/lib/itinerary-builder/package-catalog";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { logPricingChange } from "@/lib/itinerary-builder/pricing-log";
 import { cloneSnapshot, createRevision } from "@/lib/itinerary-builder/revisions";
@@ -97,6 +100,25 @@ function syncRecordFromSnapshot(
     margin_pct: normalized.cost_sheet.margin_pct,
     source_package_id: normalized.source_package_id,
   };
+}
+
+function peekMasterTourCodes(): Array<string | null> {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem("td-master-itineraries-v1");
+    if (!raw) return [];
+    const items = JSON.parse(raw) as Array<{ tour_code?: string | null }>;
+    return Array.isArray(items) ? items.map((i) => i.tour_code ?? null) : [];
+  } catch {
+    return [];
+  }
+}
+
+function existingTourCodes(excludeId?: string): Array<string | null> {
+  const fromQuotes = loadState()
+    .records.filter((r) => r.type === "client_itinerary" && r.id !== excludeId)
+    .map((r) => r.tour_code);
+  return [...fromQuotes, ...peekMasterTourCodes()];
 }
 
 export function listClientItineraries(opts?: {
@@ -244,12 +266,17 @@ export function createClientItineraryFromWizard(input: WizardCreateInput): Clien
     loadSiteSettings().adminGeneral.default_advance_percent
   );
 
+  const tourCode = resolveTourCodeOnSave(
+    input.tourCode !== undefined ? input.tourCode : snapshot.header.tour_code,
+    existingTourCodes()
+  );
+
   snapshot = normalizeSnapshot({
     ...snapshot,
     header: {
       ...snapshot.header,
       title: primaryTitle,
-      tour_code: input.tourCode !== undefined ? input.tourCode : snapshot.header.tour_code,
+      tour_code: tourCode,
       alternate_titles: input.alternateTitles ?? [],
     },
     client: {
@@ -341,11 +368,17 @@ export function createClientItineraryFromSnapshot(
   const quote_id = nextQuoteId(state.records);
   const actorName = resolveActorName(meta?.owner_name ?? meta?.created_by);
 
+  const tourCode = resolveTourCodeOnSave(
+    snapshotInput.header.tour_code,
+    existingTourCodes()
+  );
+
   const snapshot = applyCostToSnapshot(
     normalizeSnapshot({
       ...snapshotInput,
       header: {
         ...snapshotInput.header,
+        tour_code: tourCode,
         duration_label: durationLabelFromDays(snapshotInput.days),
       },
     })
@@ -406,11 +439,17 @@ export function saveSnapshotRevision(
   const prevSnapshot = prevRev?.snapshot ? normalizeSnapshot(prevRev.snapshot) : null;
   const nextVersion = (prevRev?.version_number ?? 0) + 1;
 
+  const tourCode = resolveTourCodeOnSave(
+    snapshot.header.tour_code,
+    existingTourCodes(itineraryId)
+  );
+
   const normalized = applyCostToSnapshot(
     normalizeSnapshot({
       ...snapshot,
       header: {
         ...snapshot.header,
+        tour_code: tourCode,
         duration_label: durationLabelFromDays(snapshot.days),
       },
     })
