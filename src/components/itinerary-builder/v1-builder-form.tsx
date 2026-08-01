@@ -570,11 +570,16 @@ function NightHotelCard({
   categoryKey?: HotelCategoryKey;
 }) {
   const locationHotels = useMemo(() => {
-    const all = hotelsForLocation(day.location, hotelCatalog);
-    if (!categoryKey) return all;
-    const filtered = all.filter((h) => h.category_key === categoryKey);
-    // Fall back to location list if this tier has no inventory yet
-    return filtered.length ? filtered : all;
+    const byLocation = hotelsForLocation(day.location, hotelCatalog);
+    // No day location yet — still populate meal dropdowns from category / full catalog.
+    const pool = byLocation.length
+      ? byLocation
+      : categoryKey
+        ? hotelCatalog.filter((h) => h.category_key === categoryKey)
+        : hotelCatalog;
+    if (!categoryKey) return pool;
+    const filtered = pool.filter((h) => h.category_key === categoryKey);
+    return filtered.length ? filtered : pool;
   }, [day.location, hotelCatalog, categoryKey]);
 
   const breakfastSelected = [day.breakfast_hotels[0], day.breakfast_hotels[1]].filter(
@@ -693,14 +698,6 @@ function NightHotelCard({
         <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-medium text-stone-700">
           No hotels will be booked for this day. Guest will arrange their own accommodation.
         </div>
-      ) : !day.location ? (
-        <div className="mb-3 rounded-xl border border-dashed border-stone-300 bg-stone-50 px-4 py-6 text-center text-sm text-stone-500">
-          Select a location on Day {day.day_number} to load hotels for this block.
-        </div>
-      ) : locationHotels.length === 0 ? (
-        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-6 text-center text-sm text-amber-900">
-          No hotels found for &quot;{day.location}&quot;. Try another location or add hotels in Master Data.
-        </div>
       ) : day.epai_plan_only ? (
         <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
           <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
@@ -721,7 +718,6 @@ function NightHotelCard({
                   key={slot}
                   value={day.breakfast_hotels[slot as 0 | 1] ?? ""}
                   onChange={(e) => setStayHotel(slot as 0 | 1, e.target.value)}
-                  disabled={!day.location}
                 >
                   <option value="">Hotel {slot + 1}</option>
                   {opts.map((h) => (
@@ -750,7 +746,7 @@ function NightHotelCard({
         <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
           <div className="mb-3 flex items-center gap-1 text-sm font-medium text-stone-700">
             <MapPin className="h-3.5 w-3.5 text-blue-600" />
-            {day.location || "Select location on the day card first"}
+            {day.location || "Select location on the day card"}
           </div>
           {(
             [
@@ -773,7 +769,6 @@ function NightHotelCard({
                       key={slot}
                       value={day[field][slot as 0 | 1] ?? ""}
                       onChange={(e) => setMeal(field, slot as 0 | 1, e.target.value)}
-                      disabled={!day.location}
                     >
                       <option value="">
                         {label} {slot + 1}
