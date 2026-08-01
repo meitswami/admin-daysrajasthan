@@ -2,6 +2,12 @@ import type { TeamMember } from "@/types/rbac";
 import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
+import {
+  DEFAULT_EXCLUSION_ITEMS,
+  DEFAULT_INCLUSION_ITEMS,
+  stringsToContentBlocks,
+  type ContentBlockItem,
+} from "@/lib/itinerary-builder/policy-master";
 
 function useSupabaseMaster(): boolean {
   return useCloudMaster();
@@ -37,50 +43,10 @@ function mapRow(row: Record<string, unknown>): InclusionExclusionItem {
   };
 }
 
-function seed(): InclusionExclusionItem[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: crypto.randomUUID(),
-      kind: "inclusion",
-      text: "Accommodation as per plan",
-      description: "",
-      image_url: null,
-      created_at: now,
-      created_by_id: "tm-info",
-      created_by_name: "Travel Days Admin",
-    },
-    {
-      id: crypto.randomUUID(),
-      kind: "inclusion",
-      text: "Private AC vehicle for sightseeing",
-      description: "",
-      image_url: null,
-      created_at: now,
-      created_by_id: "tm-info",
-      created_by_name: "Travel Days Admin",
-    },
-    {
-      id: crypto.randomUUID(),
-      kind: "exclusion",
-      text: "Air fare / train fare",
-      description: "",
-      image_url: null,
-      created_at: now,
-      created_by_id: "tm-info",
-      created_by_name: "Travel Days Admin",
-    },
-    {
-      id: crypto.randomUUID(),
-      kind: "exclusion",
-      text: "Personal expenses",
-      description: "",
-      image_url: null,
-      created_at: now,
-      created_by_id: "tm-info",
-      created_by_name: "Travel Days Admin",
-    },
-  ];
+function sortByCreatedAsc(items: InclusionExclusionItem[]): InclusionExclusionItem[] {
+  return [...items].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
 }
 
 function readLocal(): InclusionExclusionItem[] {
@@ -88,18 +54,19 @@ function readLocal(): InclusionExclusionItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
-      const s = seed();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-      return s;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
+      return [];
     }
     const parsed = JSON.parse(raw) as InclusionExclusionItem[];
-    return parsed.map((item) => ({
-      ...item,
-      description: item.description ?? "",
-      image_url: item.image_url ?? null,
-    }));
+    return sortByCreatedAsc(
+      parsed.map((item) => ({
+        ...item,
+        description: item.description ?? "",
+        image_url: item.image_url ?? null,
+      }))
+    );
   } catch {
-    return seed();
+    return [];
   }
 }
 
@@ -116,15 +83,107 @@ export async function listInclusionExclusions(): Promise<InclusionExclusionItem[
       const { data, error } = await supabase
         .from("td_master_inclusions_exclusions")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: true });
       if (!error && data) {
-        return data.map((row) => mapRow(row as Record<string, unknown>));
+        return sortByCreatedAsc(data.map((row) => mapRow(row as Record<string, unknown>)));
       }
     } catch {
       // fall through
     }
   }
   return readLocal();
+}
+
+/** Master library → content blocks used on preview / public quotation. */
+export function masterToContentBlocks(
+  master: InclusionExclusionItem[],
+  kind: InclusionExclusionKind
+): ContentBlockItem[] {
+  return master
+    .filter((row) => row.kind === kind && row.text.trim())
+    .map((row) => ({
+      id: row.id,
+      title: row.text.trim(),
+      description: (row.description ?? "").trim(),
+      images: row.image_url ? [row.image_url] : [],
+    }));
+}
+
+/** Hardcoded demo blocks from policy-master (not Master Data). */
+export function isHardcodedPolicyDefaults(
+  items: ContentBlockItem[] | null | undefined,
+  kind: InclusionExclusionKind
+): boolean {
+  if (!items?.length) return true;
+  const defaults = kind === "inclusion" ? DEFAULT_INCLUSION_ITEMS : DEFAULT_EXCLUSION_ITEMS;
+  if (items.length !== defaults.length) return false;
+  const defaultTitles = new Set(defaults.map((d) => d.title.trim().toLowerCase()));
+  return items.every((i) => defaultTitles.has(i.title.trim().toLowerCase()));
+}
+
+/** Fill missing description / images from Master Data by title match. */
+export function enrichContentBlocksFromMaster(
+  items: ContentBlockItem[],
+  master: InclusionExclusionItem[],
+  kind: InclusionExclusionKind
+): ContentBlockItem[] {
+  const byTitle = new Map<string, InclusionExclusionItem>();
+  for (const row of master) {
+    if (row.kind !== kind) continue;
+    byTitle.set(row.text.trim().toLowerCase(), row);
+  }
+  return items.map((item) => {
+    const hit = byTitle.get(item.title.trim().toLowerCase());
+    if (!hit) return item;
+    const description = item.description?.trim() || hit.description?.trim() || "";
+    const images =
+      item.images?.some(Boolean)
+        ? item.images.filter(Boolean)
+        : hit.image_url
+          ? [hit.image_url]
+          : [];
+    return { ...item, description, images };
+  });
+}
+
+/**
+ * Resolve real inclusion/exclusion cards for display:
+ * prefer itinerary items (enriched from master); if empty/hardcoded defaults, use Master Data.
+ * Never invent demo/default rows when Master Data is empty.
+ */
+export function resolvePolicyContentBlocks(
+  items: ContentBlockItem[] | null | undefined,
+  lines: string[] | null | undefined,
+  master: InclusionExclusionItem[],
+  kind: InclusionExclusionKind
+): ContentBlockItem[] {
+  const masterBlocks = masterToContentBlocks(master, kind);
+  const fromItems = (items ?? []).filter((i) => i.title.trim());
+  if (fromItems.length > 0 && !isHardcodedPolicyDefaults(fromItems, kind)) {
+    return enrichContentBlocksFromMaster(fromItems, master, kind);
+  }
+  const fromLines = (lines ?? []).map((t) => t.trim()).filter(Boolean);
+  if (fromLines.length > 0 && !isHardcodedPolicyDefaults(stringsToContentBlocks(fromLines), kind)) {
+    return enrichContentBlocksFromMaster(stringsToContentBlocks(fromLines), master, kind);
+  }
+  return masterBlocks;
+}
+
+/** Snapshot fields hydrated from Master Data (for new drafts / empty defaults). */
+export function policyFieldsFromMaster(master: InclusionExclusionItem[]): {
+  inclusion_items: ContentBlockItem[];
+  exclusion_items: ContentBlockItem[];
+  inclusions: string[];
+  exclusions: string[];
+} {
+  const inclusion_items = masterToContentBlocks(master, "inclusion");
+  const exclusion_items = masterToContentBlocks(master, "exclusion");
+  return {
+    inclusion_items,
+    exclusion_items,
+    inclusions: inclusion_items.map((i) => i.title),
+    exclusions: exclusion_items.map((i) => i.title),
+  };
 }
 
 export async function createInclusionExclusion(
@@ -174,8 +233,8 @@ export async function createInclusionExclusion(
   if (!persisted) {
     if (useSupabaseMaster() && lastError) throw new Error(lastError);
     const list = readLocal();
-    list.unshift(item);
-    writeLocal(list);
+    list.push(item);
+    writeLocal(sortByCreatedAsc(list));
   }
 
   logMasterDataChange({

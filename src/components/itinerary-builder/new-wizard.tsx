@@ -20,7 +20,14 @@ import {
   clearPlaceholderDayTitles,
   emptyClientDetails,
   emptySnapshot,
+  mergeOptionalIntoInclusionItems,
 } from "@/lib/itinerary-builder/defaults";
+import {
+  isHardcodedPolicyDefaults,
+  listInclusionExclusions,
+  policyFieldsFromMaster,
+} from "@/lib/master-data/inclusions-store";
+import { contentBlocksToStrings } from "@/lib/itinerary-builder/policy-master";
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
@@ -92,6 +99,60 @@ export function NewItineraryWizard() {
     if (!draftHydrated || !draft || step !== 2) return;
     saveWizardDraft({ snapshot: draft, packageId });
   }, [draft, packageId, step, draftHydrated]);
+
+  /** Fill empty / demo inclusions–exclusions from Master Data (real library). */
+  useEffect(() => {
+    if (!draft) return;
+    const needsInc =
+      !draft.inclusion_items.length ||
+      isHardcodedPolicyDefaults(draft.inclusion_items, "inclusion");
+    const needsExc =
+      !draft.exclusion_items.length ||
+      isHardcodedPolicyDefaults(draft.exclusion_items, "exclusion");
+    if (!needsInc && !needsExc) return;
+
+    let cancelled = false;
+    void listInclusionExclusions().then((master) => {
+      if (cancelled || !master.length) return;
+      const fields = policyFieldsFromMaster(master);
+      setDraft((prev) => {
+        if (!prev) return prev;
+        const stillNeedsInc =
+          !prev.inclusion_items.length ||
+          isHardcodedPolicyDefaults(prev.inclusion_items, "inclusion");
+        const stillNeedsExc =
+          !prev.exclusion_items.length ||
+          isHardcodedPolicyDefaults(prev.exclusion_items, "exclusion");
+        if (!stillNeedsInc && !stillNeedsExc) return prev;
+        const inclusion_items = stillNeedsInc
+          ? mergeOptionalIntoInclusionItems(
+              fields.inclusion_items,
+              prev.optional_inclusion_keys
+            )
+          : prev.inclusion_items;
+        return normalizeSnapshot({
+          ...prev,
+          ...(stillNeedsInc
+            ? {
+                inclusion_items,
+                inclusions: contentBlocksToStrings(inclusion_items),
+              }
+            : {}),
+          ...(stillNeedsExc
+            ? {
+                exclusion_items: fields.exclusion_items,
+                exclusions: fields.exclusions,
+              }
+            : {}),
+        });
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Re-run when draft appears or package changes — not on every field edit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional
+  }, [Boolean(draft), draft?.source_package_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -626,7 +687,7 @@ export function NewItineraryWizard() {
           }}
           onSave={() => persistDraft("list")}
           onPreview={() => persistDraft("preview")}
-          saveLabel="Save Itinerary"
+          saveLabel="Save"
           saveRequiresChanges={false}
         />
       )}

@@ -132,8 +132,8 @@ export function emptySnapshot(overrides?: Partial<ItinerarySnapshot>): Itinerary
     },
     client: emptyClientDetails(),
     days: emptyCustomItineraryDays(),
-    inclusions: ["Accommodation as per plan", "Private AC vehicle for sightseeing"],
-    exclusions: ["Air fare / train fare", "Personal expenses", "Entry fees unless specified"],
+    inclusions: [],
+    exclusions: [],
     inclusion_items: [],
     exclusion_items: [],
     terms: "50% advance to confirm. Balance due 7 days before travel. Cancellation as per company policy.",
@@ -212,3 +212,26 @@ export const OPTIONAL_INCLUSIONS = [
     description: "Desert stay including camel rides, bonfire, dinner, and cultural programs.",
   },
 ] as const;
+
+export function optionalInclusionBlocks(
+  keys: string[] | null | undefined
+): { id: string; title: string; description: string; images: string[] }[] {
+  const selected = new Set(keys ?? []);
+  return OPTIONAL_INCLUSIONS.filter((o) => selected.has(o.key)).map((o) => ({
+    id: `optional-${o.key}`,
+    title: o.label,
+    description: o.description,
+    images: [],
+  }));
+}
+
+/** Keep base inclusion cards, then append checked optional inclusions. */
+export function mergeOptionalIntoInclusionItems<
+  T extends { id: string; title: string; description: string; images: string[] },
+>(items: T[], keys: string[] | null | undefined): T[] {
+  const optionalLabels = new Set(
+    OPTIONAL_INCLUSIONS.map((o) => o.label.trim().toLowerCase())
+  );
+  const base = items.filter((i) => !optionalLabels.has(i.title.trim().toLowerCase()));
+  return [...base, ...(optionalInclusionBlocks(keys) as T[])];
+}

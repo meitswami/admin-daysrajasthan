@@ -27,6 +27,15 @@ import {
   contactsVisibleToMember,
 } from "@/lib/itinerary-builder/quotation-contacts";
 import { getCompanyStructure } from "@/lib/master-data/structure-store";
+import {
+  OPTIONAL_INCLUSIONS,
+  mergeOptionalIntoInclusionItems,
+} from "@/lib/itinerary-builder/defaults";
+import {
+  isHardcodedPolicyDefaults,
+  listInclusionExclusions,
+  policyFieldsFromMaster,
+} from "@/lib/master-data/inclusions-store";
 import { publicQuotationUrl } from "@/lib/admin-public-url";
 import { useSystem } from "@/components/providers/system-provider";
 import {
@@ -55,9 +64,7 @@ import { formatDate, cn } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
-  Download,
   ExternalLink,
   Eye,
   Info,
@@ -111,6 +118,10 @@ function travelerCount(client: ItinerarySnapshot["client"]): number {
     (client.children_5_12 || 0) +
     (client.children_below_5 || 0)
   );
+}
+
+function countLabel(value: number | null | undefined): string {
+  return value == null ? "—" : String(value);
 }
 
 function PolicyAccordion({
@@ -406,6 +417,66 @@ export function PreviewConfirmView({
     }
   }, [itineraryId, draftMode]);
 
+  /** Ensure preview / public-bound snapshot uses real Master Data inclusions–exclusions. */
+  useEffect(() => {
+    if (!snapshot) return;
+    const needsInc =
+      !snapshot.inclusion_items.length ||
+      isHardcodedPolicyDefaults(snapshot.inclusion_items, "inclusion");
+    const needsExc =
+      !snapshot.exclusion_items.length ||
+      isHardcodedPolicyDefaults(snapshot.exclusion_items, "exclusion");
+    if (!needsInc && !needsExc) return;
+
+    let cancelled = false;
+    void listInclusionExclusions().then((master) => {
+      if (cancelled || !master.length) return;
+      const fields = policyFieldsFromMaster(master);
+      setSnapshot((prev) => {
+        if (!prev) return prev;
+        const stillNeedsInc =
+          !prev.inclusion_items.length ||
+          isHardcodedPolicyDefaults(prev.inclusion_items, "inclusion");
+        const stillNeedsExc =
+          !prev.exclusion_items.length ||
+          isHardcodedPolicyDefaults(prev.exclusion_items, "exclusion");
+        if (!stillNeedsInc && !stillNeedsExc) return prev;
+        const inclusion_items = stillNeedsInc
+          ? mergeOptionalIntoInclusionItems(
+              fields.inclusion_items,
+              prev.optional_inclusion_keys
+            )
+          : prev.inclusion_items;
+        const next = normalizeSnapshot({
+          ...prev,
+          ...(stillNeedsInc
+            ? {
+                inclusion_items,
+                inclusions: contentBlocksToStrings(inclusion_items),
+              }
+            : {}),
+          ...(stillNeedsExc
+            ? {
+                exclusion_items: fields.exclusion_items,
+                exclusions: fields.exclusions,
+              }
+            : {}),
+        });
+        if (draftMode) {
+          const existing = loadWizardDraft();
+          saveWizardDraft({
+            snapshot: next,
+            packageId: existing?.packageId ?? next.source_package_id,
+          });
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [snapshot, draftMode]);
+
   // Non-admins: lock selection to their own Structure contact.
   useEffect(() => {
     if (!snapshot || canPickAnyContact || contacts.length === 0) return;
@@ -441,7 +512,8 @@ export function PreviewConfirmView({
   }
 
   const activeId = record?.id ?? itineraryId;
-  const quoteLabel = record?.quote_id ?? "Unsaved draft";
+  /** Quote ID (QRT…) only after an explicit Save — never invent one for drafts. */
+  const quoteLabel = record?.quote_id ?? null;
 
   function patch(partial: Partial<ItinerarySnapshot>) {
     setSnapshot((prev) => {
@@ -530,58 +602,16 @@ export function PreviewConfirmView({
     return persistExisting(synced, activeId);
   }
 
-  async function handleNext() {
-    const result = await handleSave();
-    if (!result) return;
-    router.push(`/itinerary-builder/${result.record.id}/payment`);
-  }
-
-  function handleBackToEdit() {
-    if (draftMode && snapshot) {
-      const existing = loadWizardDraft();
-      saveWizardDraft({
-        snapshot,
-        packageId: existing?.packageId ?? snapshot.source_package_id,
-      });
-      router.push("/itinerary-builder/new");
+  /** Public URL needs a saved itinerary so QRT is only allotted after Save. */
+  async function handlePreviewPublic() {
+    if (!record) {
+      show("Save the itinerary first to get a quote ID and public preview link.");
       return;
     }
-    if (activeId) router.push(`/itinerary-builder/${activeId}`);
-  }
-
-  async function handleDownloadPdf() {
-    const result = await handleSave();
-    if (result) {
-      try {
-        await fetch(`/api/public/quotation/${result.record.id}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            quote_id: result.record.quote_id,
-            version_number: result.revision.version_number,
-            revision_id: result.revision.id,
-            client_name: result.record.client_name,
-            snapshot: result.revision.snapshot,
-            category_totals: result.record.category_totals ?? [],
-          }),
-        });
-      } catch {
-        // Local open still works even if publish fails
-      }
-    }
-    const id = result?.record.id;
-    const themeId =
-      result?.revision.snapshot.preview_theme ?? snapshot?.preview_theme;
-    if (!id || themeId == null) return;
-    window.open(publicQuotationUrl(id, null, themeId), "_blank", "noopener,noreferrer");
-  }
-
-  /** Publish selected theme snapshot and open the public quotation URL. */
-  async function handlePreviewPublic() {
     const result = await handleSave();
     if (!result) return;
 
-    // Public share link on daysrajasthan.com/{id}/quotation?v=… (opaque theme lock).
+    // Public share link on admin host /{id}/quotation?v=… (opaque theme lock).
     const publicUrl = publicQuotationUrl(
       result.record.id,
       null,
@@ -635,29 +665,14 @@ export function PreviewConfirmView({
               Preview & Confirm
             </p>
             <p className="font-semibold text-stone-900">
-              {quoteLabel} · {snapshot.header.title}
+              {quoteLabel ? `${quoteLabel} · ` : ""}
+              {snapshot.header.title || "New Itinerary"}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={handleBackToEdit}
-              className="inline-flex items-center rounded-lg px-3 py-2 text-sm text-stone-600 hover:bg-stone-100"
-            >
-              Back to Edit
-            </button>
             <Button type="button" size="sm" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
               <Save className="h-4 w-4" />
-              {draftMode && !record ? "Save Itinerary" : "Save to Draft"}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-sky-500 hover:bg-sky-600"
-              onClick={() => void handleDownloadPdf()}
-            >
-              <Download className="h-4 w-4" />
-              Download PDF
+              Save
             </Button>
             <Button
               type="button"
@@ -670,15 +685,6 @@ export function PreviewConfirmView({
               <Eye className="h-4 w-4" />
               Preview
               <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
-              onClick={handleNext}
-            >
-              Continue Payment Details
-              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -694,14 +700,31 @@ export function PreviewConfirmView({
                 [
                   ["Name", clientLabel || "—"],
                   ["Email", snapshot.client.email?.trim() || "—"],
+                  ["Email 2", snapshot.client.email2?.trim() || "—"],
                   ["Phone", snapshot.client.phone?.trim() || "—"],
+                  ["Adults", countLabel(snapshot.client.adults)],
+                  ["Kids (5–12 Years)", countLabel(snapshot.client.children_5_12)],
+                  ["Kids (Below 5 Years)", countLabel(snapshot.client.children_below_5)],
+                  [
+                    "Total Travelers",
+                    travelerCount(snapshot.client) > 0
+                      ? String(travelerCount(snapshot.client))
+                      : "—",
+                  ],
+                  ["Rooms", countLabel(snapshot.client.rooms)],
+                  ["Extra Mattress", countLabel(snapshot.client.extra_beds)],
                   [
                     "Travel Date",
                     snapshot.client.travel_date
                       ? formatDate(snapshot.client.travel_date)
                       : "—",
                   ],
-                  ["Travelers", String(travelerCount(snapshot.client) || "—")],
+                  ...(snapshot.client.food_preference?.trim()
+                    ? ([["Food Preference", snapshot.client.food_preference.trim()]] as const)
+                    : []),
+                  ...(snapshot.client.special_requests?.trim()
+                    ? ([["Special Requests", snapshot.client.special_requests.trim()]] as const)
+                    : []),
                 ] as const
               ).map(([label, value]) => (
                 <div key={label} className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0">
@@ -937,7 +960,10 @@ export function PreviewConfirmView({
           <EditableBlocks
             title="Inclusions"
             tone="green"
-            items={snapshot.inclusion_items}
+            items={mergeOptionalIntoInclusionItems(
+              snapshot.inclusion_items,
+              snapshot.optional_inclusion_keys
+            )}
             onChange={(inclusion_items) =>
               patch({
                 inclusion_items,
@@ -957,6 +983,24 @@ export function PreviewConfirmView({
             }
           />
         </div>
+
+        {snapshot.optional_inclusion_keys.length > 0 && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/40 p-4 sm:p-5">
+            <h2 className="text-base font-bold text-amber-900">Optional Inclusions</h2>
+            <ul className="mt-3 space-y-2 text-sm text-stone-800">
+              {OPTIONAL_INCLUSIONS.filter((o) =>
+                snapshot.optional_inclusion_keys.includes(o.key)
+              ).map((o) => (
+                <li key={o.key} className="rounded-lg border border-amber-100 bg-white px-3 py-2">
+                  <p className="font-semibold">{o.label}</p>
+                  {o.description ? (
+                    <p className="mt-0.5 text-xs text-stone-600">{o.description}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 sm:p-5">
           <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-stone-900">
@@ -1109,39 +1153,22 @@ export function PreviewConfirmView({
           </div>
         </section>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-stone-200 pb-8 pt-4 print:hidden">
-          <button
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-200 pb-8 pt-4 print:hidden">
+          <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
+            <Save className="h-4 w-4" />
+            Save
+          </Button>
+          <Button
             type="button"
-            className="text-sm font-medium text-stone-600 hover:text-stone-900"
-            onClick={handleBackToEdit}
+            variant="outline"
+            className="border-teal-700 text-teal-800 hover:bg-teal-50"
+            onClick={() => void handlePreviewPublic()}
+            title="Open public URL with the selected theme"
           >
-            Back to Edit
-          </button>
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
-              <Save className="h-4 w-4" />
-              {draftMode && !record ? "Save Itinerary" : "Save to Draft"}
-            </Button>
-            <Button type="button" className="bg-sky-500 hover:bg-sky-600" onClick={() => void handleDownloadPdf()}>
-              <Download className="h-4 w-4" />
-              Download PDF
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="border-teal-700 text-teal-800 hover:bg-teal-50"
-              onClick={() => void handlePreviewPublic()}
-              title="Open public URL with the selected theme"
-            >
-              <Eye className="h-4 w-4" />
-              Preview
-              <ExternalLink className="h-3.5 w-3.5 opacity-70" />
-            </Button>
-            <Button type="button" className="bg-[#7B1E2E] hover:bg-[#5C0F1A]" onClick={handleNext}>
-              Continue Payment Details
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+            <Eye className="h-4 w-4" />
+            Preview
+            <ExternalLink className="h-3.5 w-3.5 opacity-70" />
+          </Button>
         </div>
       </div>
     </div>

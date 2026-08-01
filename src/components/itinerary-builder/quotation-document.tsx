@@ -1,5 +1,14 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
 import type { ReportBrand } from "@/lib/branding/report-brand";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
+import { mergeOptionalIntoInclusionItems } from "@/lib/itinerary-builder/defaults";
+import {
+  listInclusionExclusions,
+  resolvePolicyContentBlocks,
+  type InclusionExclusionItem,
+} from "@/lib/master-data/inclusions-store";
 import {
   bookingAmount,
   buildHotelPackageNights,
@@ -20,11 +29,8 @@ import {
   type PreviewTheme,
 } from "@/lib/itinerary-builder/preview-themes";
 import {
-  DEFAULT_EXCLUSION_ITEMS,
-  DEFAULT_INCLUSION_ITEMS,
   PREVIEW_CONTACTS,
   contentBlocksToStrings,
-  stringsToContentBlocks,
   type ContentBlockItem,
   type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
@@ -70,35 +76,6 @@ function brandWithSelectedContact(
     phone: contact.phone || brand.phone,
     email: contact.email || brand.email,
   };
-}
-
-function policyLinesFromSnapshot(snapshot: ItinerarySnapshot): {
-  inclusions: string[];
-  exclusions: string[];
-} {
-  const inclusions =
-    snapshot.inclusions?.length > 0
-      ? snapshot.inclusions
-      : contentBlocksToStrings(snapshot.inclusion_items ?? []);
-  const exclusions =
-    snapshot.exclusions?.length > 0
-      ? snapshot.exclusions
-      : contentBlocksToStrings(snapshot.exclusion_items ?? []);
-  return { inclusions, exclusions };
-}
-
-function richPolicyItems(
-  items: ContentBlockItem[] | undefined,
-  fallbackLines: string[],
-  defaults: ContentBlockItem[]
-): ContentBlockItem[] {
-  if (items && items.length > 0) {
-    return items.filter((i) => i.title.trim());
-  }
-  if (fallbackLines.length > 0) {
-    return stringsToContentBlocks(fallbackLines);
-  }
-  return defaults.map((i) => ({ ...i }));
 }
 
 function ClientDetailsTable({
@@ -888,18 +865,49 @@ export function QuotationDocument({
   structure?: CompanyStructure | null;
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
-  const { inclusions, exclusions } = policyLinesFromSnapshot(snapshot);
   const itineraryNote = (snapshot.public_notes || snapshot.internal_notes || "").trim();
-  const inclusionItems = richPolicyItems(
-    snapshot.inclusion_items,
-    inclusions,
-    DEFAULT_INCLUSION_ITEMS
+  const [masterLibrary, setMasterLibrary] = useState<InclusionExclusionItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listInclusionExclusions().then((rows) => {
+      if (!cancelled) setMasterLibrary(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const inclusionItems = useMemo(
+    () =>
+      mergeOptionalIntoInclusionItems(
+        resolvePolicyContentBlocks(
+          snapshot.inclusion_items,
+          snapshot.inclusions,
+          masterLibrary,
+          "inclusion"
+        ),
+        snapshot.optional_inclusion_keys
+      ),
+    [
+      snapshot.inclusion_items,
+      snapshot.inclusions,
+      snapshot.optional_inclusion_keys,
+      masterLibrary,
+    ]
   );
-  const exclusionItems = richPolicyItems(
-    snapshot.exclusion_items,
-    exclusions,
-    DEFAULT_EXCLUSION_ITEMS
+  const exclusionItems = useMemo(
+    () =>
+      resolvePolicyContentBlocks(
+        snapshot.exclusion_items,
+        snapshot.exclusions,
+        masterLibrary,
+        "exclusion"
+      ),
+    [snapshot.exclusion_items, snapshot.exclusions, masterLibrary]
   );
+  const inclusions = useMemo(() => contentBlocksToStrings(inclusionItems), [inclusionItems]);
+  const exclusions = useMemo(() => contentBlocksToStrings(exclusionItems), [exclusionItems]);
   const theme = getPreviewTheme(snapshot.preview_theme);
   const isLegacyTheme = theme.id === 1;
   const isTheme2 = theme.id === 2;

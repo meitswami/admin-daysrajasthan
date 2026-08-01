@@ -25,6 +25,7 @@ import { useToast } from "@/components/ui/toast";
 import {
   emptyDay,
   OPTIONAL_INCLUSIONS,
+  mergeOptionalIntoInclusionItems,
   VEHICLE_TYPES,
 } from "@/lib/itinerary-builder/defaults";
 import {
@@ -1294,8 +1295,13 @@ export function V1BuilderForm({
     const optional_inclusion_keys = has
       ? s.optional_inclusion_keys.filter((k) => k !== key)
       : [...s.optional_inclusion_keys, key];
+    const inclusion_items = mergeOptionalIntoInclusionItems(
+      s.inclusion_items,
+      optional_inclusion_keys
+    );
     patch({
       optional_inclusion_keys,
+      inclusion_items,
       inclusions: mergeOptionalInclusions(s.inclusions, optional_inclusion_keys),
     });
   }

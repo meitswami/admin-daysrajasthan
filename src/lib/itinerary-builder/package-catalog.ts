@@ -13,6 +13,7 @@ import {
   resolveCategoryTierPricing,
 } from "./cost-engine";
 import { emptyCustomItineraryDays, emptyDay, emptySnapshot } from "./defaults";
+import { stringsToContentBlocks } from "./policy-master";
 
 export type PackageCatalogLocation = {
   name: string;
@@ -149,8 +150,18 @@ export function masterItineraryToCatalogEntry(item: Itinerary): PackageCatalogEn
             alternate_titles: item.alternate_titles ?? [],
           },
           days: builderDays,
-          ...(item.inclusions?.length ? { inclusions: item.inclusions } : {}),
-          ...(item.exclusions?.length ? { exclusions: item.exclusions } : {}),
+          ...(item.inclusions?.length
+            ? {
+                inclusions: item.inclusions,
+                inclusion_items: stringsToContentBlocks(item.inclusions),
+              }
+            : {}),
+          ...(item.exclusions?.length
+            ? {
+                exclusions: item.exclusions,
+                exclusion_items: stringsToContentBlocks(item.exclusions),
+              }
+            : {}),
           source_package_id: item.id,
         })
       );

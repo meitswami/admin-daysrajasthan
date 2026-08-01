@@ -12,11 +12,7 @@ import {
   emptyCustomItineraryDays,
 } from "@/lib/itinerary-builder/defaults";
 import { normalizeCategoryHotelPicks } from "@/lib/itinerary-builder/category-hotels";
-import {
-  DEFAULT_EXCLUSION_ITEMS,
-  DEFAULT_INCLUSION_ITEMS,
-  stringsToContentBlocks,
-} from "@/lib/itinerary-builder/policy-master";
+import { stringsToContentBlocks } from "@/lib/itinerary-builder/policy-master";
 import { clampAdvancePercent } from "@/lib/itinerary-builder/payment-details";
 import { clampPreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 
@@ -105,8 +101,8 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
       days: emptyCustomItineraryDays(),
       inclusions: [],
       exclusions: [],
-      inclusion_items: DEFAULT_INCLUSION_ITEMS,
-      exclusion_items: DEFAULT_EXCLUSION_ITEMS,
+      inclusion_items: [],
+      exclusion_items: [],
       terms: "",
       internal_notes: "",
       public_notes: "",
@@ -164,13 +160,13 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
         ? snapshot.inclusion_items
         : snapshot.inclusions?.length
           ? stringsToContentBlocks(snapshot.inclusions)
-          : DEFAULT_INCLUSION_ITEMS.map((i) => ({ ...i })),
+          : [],
     exclusion_items:
       snapshot.exclusion_items?.length
         ? snapshot.exclusion_items
         : snapshot.exclusions?.length
           ? stringsToContentBlocks(snapshot.exclusions)
-          : DEFAULT_EXCLUSION_ITEMS.map((i) => ({ ...i })),
+          : [],
     terms: snapshot.terms ?? "",
     internal_notes: snapshot.internal_notes ?? "",
     public_notes: snapshot.public_notes ?? "",

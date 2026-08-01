@@ -8,7 +8,6 @@ import {
   type PreviewThemeId,
 } from "@/lib/itinerary-builder/preview-themes";
 import { encodeThemeToken } from "@/lib/itinerary-builder/theme-token";
-import { getPublicWebsiteOrigin } from "@/lib/website-url";
 
 function stripTrailingSlash(url: string): string {
   return url.replace(/\/$/, "");
@@ -53,16 +52,19 @@ export function getAdminPublicOrigin(explicit?: string | null): string {
 }
 
 /**
- * Client-shareable quotation URL on the marketing site:
- * https://daysrajasthan.com/{id}/quotation?v=…
- * (`origin` is ignored — quotations always use the public website host.)
+ * Client-shareable quotation URL (served by this admin app, not the marketing site):
+ * https://admin.daysrajasthan.com/{id}/quotation?v=…
+ *
+ * The marketing host (daysrajasthan.com) is a separate Next app and has no
+ * `/{id}/quotation` route — linking there 404s. Prefer `origin` when provided
+ * (e.g. request host from email send); otherwise use the admin public origin.
  */
 export function publicQuotationUrl(
   itineraryId: string,
-  _origin?: string | null,
+  origin?: string | null,
   themeId?: PreviewThemeId | null
 ): string {
-  const base = `${getPublicWebsiteOrigin()}/${itineraryId}/quotation`;
+  const base = `${getAdminPublicOrigin(origin)}/${itineraryId}/quotation`;
   if (themeId == null) return base;
   const token = encodeThemeToken(clampPreviewTheme(themeId));
   return `${base}?v=${encodeURIComponent(token)}`;

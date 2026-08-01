@@ -244,7 +244,7 @@ export function ItineraryBuilderWorkspace({
             router.push("/itinerary-builder");
           }}
           onPreview={saveAndPreview}
-          saveLabel="Save Itinerary"
+          saveLabel="Save"
         />
       </div>
 

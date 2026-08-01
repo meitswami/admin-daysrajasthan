@@ -12,6 +12,7 @@ import {
 import { GOOGLE_REVIEWS_URL } from "@/lib/itinerary-builder/review-links";
 import {
   listInclusionExclusions,
+  resolvePolicyContentBlocks,
   type InclusionExclusionItem,
 } from "@/lib/master-data/inclusions-store";
 import type { CompanyStructure } from "@/types/company-structure";
@@ -33,31 +34,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-/** Fill missing description / images from the master inclusion–exclusion library. */
-function enrichPolicyFromMaster(
-  items: ContentBlockItem[],
-  master: InclusionExclusionItem[],
-  kind: "inclusion" | "exclusion"
-): ContentBlockItem[] {
-  const byTitle = new Map<string, InclusionExclusionItem>();
-  for (const row of master) {
-    if (row.kind !== kind) continue;
-    byTitle.set(row.text.trim().toLowerCase(), row);
-  }
-  return items.map((item) => {
-    const hit = byTitle.get(item.title.trim().toLowerCase());
-    if (!hit) return item;
-    const description = item.description?.trim() || hit.description?.trim() || "";
-    const images =
-      item.images?.some(Boolean)
-        ? item.images.filter(Boolean)
-        : hit.image_url
-          ? [hit.image_url]
-          : [];
-    return { ...item, description, images };
-  });
-}
 
 const THEME2_ACCENT = "#56AB2F";
 const THEME3_ACCENT = "#7F1D1D"; // red-900
@@ -205,13 +181,15 @@ export function Theme2TourPolicies({
   }, []);
 
   const panels = useMemo(() => {
-    const inclusions = enrichPolicyFromMaster(
-      inclusionItems.filter((i) => i.title.trim()),
+    const inclusions = resolvePolicyContentBlocks(
+      inclusionItems,
+      null,
       masterLibrary,
       "inclusion"
     );
-    const exclusions = enrichPolicyFromMaster(
-      exclusionItems.filter((i) => i.title.trim()),
+    const exclusions = resolvePolicyContentBlocks(
+      exclusionItems,
+      null,
       masterLibrary,
       "exclusion"
     );
