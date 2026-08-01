@@ -177,9 +177,17 @@ async function fetchRemote(): Promise<AiSuggestion[]> {
   const { data, error } = await supabase
     .from("td_ai_suggestions")
     .select("*")
-    .order("updated_at", { ascending: false });
+    .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
+function sortByCreatedAsc(list: AiSuggestion[]): AiSuggestion[] {
+  return [...list].sort((a, b) => {
+    const byTime = a.created_at.localeCompare(b.created_at);
+    if (byTime !== 0) return byTime;
+    return a.id.localeCompare(b.id);
+  });
 }
 
 /**
@@ -215,7 +223,7 @@ export async function listAiSuggestions(): Promise<AiSuggestion[]> {
   if (!useCloudMaster()) {
     // Dev without Supabase only — never invent production data paths here.
     const local = readLocalRaw();
-    return local.length ? local : seedList();
+    return sortByCreatedAsc(local.length ? local : seedList());
   }
 
   let remote = await fetchRemote();
@@ -237,14 +245,15 @@ export async function listAiSuggestions(): Promise<AiSuggestion[]> {
     remote = await uploadMissingLocal(remote);
   }
 
-  writeLocalCache(remote);
-  return remote;
+  const sorted = sortByCreatedAsc(remote);
+  writeLocalCache(sorted);
+  return sorted;
 }
 
 export async function searchAiSuggestions(query: string): Promise<AiSuggestion[]> {
   const q = query.trim().toLowerCase();
   const all = await listAiSuggestions();
-  if (!q) return all.slice(0, 20);
+  if (!q) return [...all].reverse().slice(0, 20);
   return all.filter(
     (s) =>
       s.title.toLowerCase().includes(q) || s.description.toLowerCase().includes(q)
@@ -277,8 +286,8 @@ export async function createAiSuggestion(input: {
   if (error) throw new Error(error.message);
 
   const cache = readLocalRaw().filter((s) => s.id !== item.id);
-  cache.unshift(item);
-  writeLocalCache(cache);
+  cache.push(item);
+  writeLocalCache(sortByCreatedAsc(cache));
 
   if (item.source === "manual") {
     logMasterDataChange({
