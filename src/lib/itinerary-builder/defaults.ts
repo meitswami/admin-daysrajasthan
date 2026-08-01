@@ -112,7 +112,7 @@ export function emptyCustomItineraryDays(): ItineraryDay[] {
 export function emptySnapshot(overrides?: Partial<ItinerarySnapshot>): ItinerarySnapshot {
   return {
     header: {
-      title: "New Client Itinerary",
+      title: "",
       subtitle: null,
       tour_code: null,
       duration_label: "02 Days / 01 Night",

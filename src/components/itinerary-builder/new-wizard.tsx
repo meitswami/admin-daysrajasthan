@@ -141,7 +141,7 @@ export function NewItineraryWizard() {
       client: { ...base.client, ...clientDetails },
       header: {
         ...base.header,
-        title: pkg?.title || base.header.title || `Quote for ${clientDetails.client_name}`,
+        title: pkg?.title || base.header.title || "",
         tour_code: tourCode,
         duration_label: durationLabelFromDays(base.days),
         alternate_titles: base.header.alternate_titles?.length
@@ -492,7 +492,7 @@ export function NewItineraryWizard() {
             <div className="relative min-w-[200px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
               <Input
-                placeholder="Search by title or location…"
+                placeholder="Search title, location, duration (e.g. 01)…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"

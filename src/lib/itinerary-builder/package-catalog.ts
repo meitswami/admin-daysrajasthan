@@ -9,6 +9,7 @@ import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 import {
   applyCostToSnapshot,
   durationLabelFromDays,
+  isDepartureLocation,
   resolveCategoryTierPricing,
 } from "./cost-engine";
 import { emptyCustomItineraryDays, emptyDay, emptySnapshot } from "./defaults";
@@ -50,12 +51,39 @@ export function locationsFromDayPlans(days: ItineraryDayPlan[]): PackageCatalogL
   const segments: PackageCatalogLocation[] = [];
   for (const day of days) {
     const name = (day.location ?? "").trim();
-    if (!name) continue;
+    if (!name || isDepartureLocation(name)) continue;
     const last = segments[segments.length - 1];
     if (last && last.name.toLowerCase() === name.toLowerCase()) last.nights += 1;
     else segments.push({ name, nights: 1 });
   }
   return segments;
+}
+
+/** Sort WRT001 → WRT002 → … (numeric suffix asc; unknown codes last). */
+export function compareTourCodesAsc(a: string | null | undefined, b: string | null | undefined): number {
+  const pa = parseTourCodeParts(a);
+  const pb = parseTourCodeParts(b);
+  if (pa && pb) {
+    const byPrefix = pa.prefix.localeCompare(pb.prefix);
+    if (byPrefix !== 0) return byPrefix;
+    if (pa.number !== pb.number) return pa.number - pb.number;
+    return pa.width - pb.width;
+  }
+  if (pa && !pb) return -1;
+  if (!pa && pb) return 1;
+  return (a ?? "").localeCompare(b ?? "", undefined, { sensitivity: "base" });
+}
+
+/** Match duration search like "01" against "01 Night", "1 Night", "07 Nights / 08 Days", etc. */
+export function durationMatchesQuery(duration: string | null | undefined, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q || !duration?.trim()) return false;
+  const label = duration.toLowerCase();
+  if (label.includes(q)) return true;
+  if (!/^\d+$/.test(q)) return false;
+  const qNum = Number(q);
+  const nums = [...duration.matchAll(/\d+/g)].map((m) => Number(m[0]));
+  return nums.some((n) => n === qNum);
 }
 
 /** Map a master-data day plan into a builder day, preserving Location for hotel filtering */
@@ -137,7 +165,9 @@ export function catalogFromMasterItineraries(
   const list = opts?.includeInactive
     ? items
     : items.filter((i) => i.status !== "inactive");
-  return list.map(masterItineraryToCatalogEntry);
+  return list
+    .map(masterItineraryToCatalogEntry)
+    .sort((a, b) => compareTourCodesAsc(a.tour_code, b.tour_code));
 }
 
 export function listPackageCatalog(catalog: PackageCatalogEntry[]) {
@@ -230,10 +260,11 @@ export function filterPackages(
       (p) =>
         p.title.toLowerCase().includes(q) ||
         p.tour_code.toLowerCase().includes(q) ||
+        durationMatchesQuery(p.duration_label, q) ||
         p.locations.some((l) => l.name.toLowerCase().includes(q))
     );
   }
-  return list;
+  return list.sort((a, b) => compareTourCodesAsc(a.tour_code, b.tour_code));
 }
 
 export function uniqueDurations(catalog: PackageCatalogEntry[]) {

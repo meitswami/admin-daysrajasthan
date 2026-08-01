@@ -7,7 +7,7 @@ import { Input, Label, Select, Textarea } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import {
   GalleryImagesField,
-  ImageThumbRow,
+  ImageThumbCarousel,
   collectDisplayImages,
 } from "@/components/ui/gallery-images-field";
 import { RichTextToolbar } from "@/components/ui/rich-text-toolbar";
@@ -26,6 +26,11 @@ import { listMasterContent, updateMasterContent } from "@/lib/master-data/conten
 import type { WebsiteContentItem } from "@/types/database";
 import { Toggle } from "@/components/ui/toggle";
 import { Minus, Plus, Search, Trash2 } from "lucide-react";
+import {
+  compareTourCodesAsc,
+  durationMatchesQuery,
+} from "@/lib/itinerary-builder/package-catalog";
+import { isDepartureLocation } from "@/lib/itinerary-builder/cost-engine";
 
 type StatusFilter = "active" | "inactive" | "all";
 
@@ -82,7 +87,7 @@ function locationsCountOf(item: Itinerary): string {
   for (const day of days) {
     const names = [day.location, ...(day.locations ?? [])]
       .map((n) => n.trim())
-      .filter(Boolean);
+      .filter((n) => Boolean(n) && !isDepartureLocation(n));
     for (const name of names.length ? [names[0]] : []) {
       const last = segments[segments.length - 1];
       if (last && last.name === name) last.nights += 1;
@@ -93,6 +98,15 @@ function locationsCountOf(item: Itinerary): string {
     return segments.map((s) => `${s.name} ${s.nights}-N`).join(", ");
   }
   return item.destination?.trim() || "—";
+}
+
+function packageDisplayImages(item: Itinerary): string[] {
+  const dayUrls = (item.days ?? []).flatMap((d) => d.image_urls ?? []);
+  return collectDisplayImages(
+    item.cover_image_url,
+    [...(item.gallery_urls ?? []), ...dayUrls],
+    6,
+  );
 }
 
 function dayTitleList(day: ItineraryDayPlan): string[] {
@@ -153,8 +167,8 @@ export function MasterItinerariesView() {
   );
 
   const filtered = useMemo(() => {
-    const q = search.toLowerCase();
-    return items.filter((i) => {
+    const q = search.trim().toLowerCase();
+    const list = items.filter((i) => {
       if (statusFilter === "active" && i.status !== "active") return false;
       if (statusFilter === "inactive" && i.status === "active") return false;
       if (!q) return true;
@@ -162,7 +176,7 @@ export function MasterItinerariesView() {
         i.package_name.toLowerCase().includes(q) ||
         (i.alternate_titles ?? []).some((t) => t.toLowerCase().includes(q)) ||
         (i.destination?.toLowerCase().includes(q) ?? false) ||
-        (i.package_duration?.toLowerCase().includes(q) ?? false) ||
+        durationMatchesQuery(i.package_duration, q) ||
         tourCodeOf(i).toLowerCase().includes(q) ||
         (i.days ?? []).some(
           (d) =>
@@ -172,6 +186,7 @@ export function MasterItinerariesView() {
         )
       );
     });
+    return list.sort((a, b) => compareTourCodesAsc(tourCodeOf(a), tourCodeOf(b)));
   }, [items, search, statusFilter]);
 
   function resetForm() {
@@ -382,7 +397,7 @@ export function MasterItinerariesView() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
             <Input
               className="h-10 pl-9"
-              placeholder="Search packages…"
+              placeholder="Search title, tour code, duration (e.g. 01)…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -441,8 +456,8 @@ export function MasterItinerariesView() {
                   >
                     <td className="px-3 py-3 tabular-nums text-stone-500">{index + 1}</td>
                     <td className="px-3 py-3">
-                      <ImageThumbRow
-                        urls={collectDisplayImages(item.cover_image_url, item.gallery_urls, 1)}
+                      <ImageThumbCarousel
+                        urls={packageDisplayImages(item)}
                         width={96}
                         height={64}
                         objectFit="cover"

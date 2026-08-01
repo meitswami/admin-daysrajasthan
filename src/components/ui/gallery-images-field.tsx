@@ -4,7 +4,7 @@ import Image from "next/image";
 import { Label } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Loader2, Plus, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useToast } from "@/components/ui/toast";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 import { ImageLightbox } from "@/components/ui/image-lightbox";
@@ -211,6 +211,100 @@ export function ImageThumbRow({
           open={lightboxOpen}
           urls={urls}
           startIndex={lightboxIndex}
+          onClose={() => setLightboxOpen(false)}
+          title={lightboxTitle}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** Fixed-size auto-scrolling image carousel for table cells (same footprint as a thumb). */
+export function ImageThumbCarousel({
+  urls,
+  className,
+  width = 96,
+  height = 64,
+  max = MAX_GALLERY_IMAGES,
+  intervalMs = 2800,
+  objectFit = "cover",
+  enableLightbox = true,
+  lightboxTitle = "Images",
+}: {
+  urls: string[];
+  className?: string;
+  width?: number;
+  height?: number;
+  max?: number;
+  intervalMs?: number;
+  objectFit?: "cover" | "contain";
+  enableLightbox?: boolean;
+  lightboxTitle?: string;
+}) {
+  const list = urls.filter(Boolean).slice(0, max);
+  const requestEdge = Math.min(320, Math.max(96, Math.max(width, height) * 2));
+  const [index, setIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [list.join("|")]);
+
+  useEffect(() => {
+    if (list.length <= 1) return;
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % list.length);
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [list.length, intervalMs]);
+
+  if (list.length === 0) {
+    return (
+      <div
+        className={cn("rounded border border-dashed border-stone-200 bg-stone-50", className)}
+        style={{ width, height }}
+      />
+    );
+  }
+
+  const current = list[Math.min(index, list.length - 1)]!;
+
+  return (
+    <>
+      <div className={cn("relative", className)} style={{ width, height }}>
+        <ThumbImage
+          src={current}
+          width={width}
+          height={height}
+          requestEdge={requestEdge}
+          objectFit={objectFit}
+          onOpen={
+            enableLightbox
+              ? () => {
+                  setLightboxOpen(true);
+                }
+              : undefined
+          }
+        />
+        {list.length > 1 ? (
+          <div className="pointer-events-none absolute bottom-1 left-1/2 z-10 flex -translate-x-1/2 gap-0.5">
+            {list.map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  "h-1 w-1 rounded-full shadow-sm",
+                  i === index ? "bg-white" : "bg-white/50",
+                )}
+              />
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {enableLightbox ? (
+        <ImageLightbox
+          open={lightboxOpen}
+          urls={list}
+          startIndex={index}
           onClose={() => setLightboxOpen(false)}
           title={lightboxTitle}
         />
