@@ -16,7 +16,11 @@ import {
 import { listMasterItineraries } from "@/lib/master-data/itinerary-store";
 import { createClientItineraryFromSnapshot } from "@/lib/itinerary-builder/storage";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
-import { emptyClientDetails, emptySnapshot } from "@/lib/itinerary-builder/defaults";
+import {
+  clearPlaceholderDayTitles,
+  emptyClientDetails,
+  emptySnapshot,
+} from "@/lib/itinerary-builder/defaults";
 import { durationLabelFromDays, lastDayDepartureError } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import { guestCountInputValue, parseGuestCount } from "@/lib/itinerary-builder/guest-count";
@@ -68,8 +72,16 @@ export function NewItineraryWizard() {
   useEffect(() => {
     const saved = loadWizardDraft();
     if (saved) {
-      setDraft(saved.snapshot);
-      setClient(saved.snapshot.client);
+      const snapshot =
+        saved.packageId || saved.snapshot.source_package_id
+          ? saved.snapshot
+          : normalizeSnapshot({
+              ...saved.snapshot,
+              source_package_id: null,
+              days: clearPlaceholderDayTitles(saved.snapshot.days),
+            });
+      setDraft(snapshot);
+      setClient(snapshot.client);
       setPackageId(saved.packageId);
       setStep(2);
     }
@@ -136,14 +148,16 @@ export function NewItineraryWizard() {
     // Leave tour code blank — staff enter a WRT… code. Tip shows last number in the form.
     const tourCode =
       opts?.preserveTourCode !== undefined ? opts.preserveTourCode : null;
+    const days = pkg ? base.days : clearPlaceholderDayTitles(base.days);
     return normalizeSnapshot({
       ...base,
+      days,
       client: { ...base.client, ...clientDetails },
       header: {
         ...base.header,
         title: pkg?.title || base.header.title || "",
         tour_code: tourCode,
-        duration_label: durationLabelFromDays(base.days),
+        duration_label: durationLabelFromDays(days),
         alternate_titles: base.header.alternate_titles?.length
           ? base.header.alternate_titles
           : [],
@@ -190,7 +204,10 @@ export function NewItineraryWizard() {
       draft.category_pricing.map((c) => [c.category_key, c.discount_price])
     );
     const prevOverrides = Object.fromEntries(
-      draft.category_pricing.map((c) => [c.category_key, c.manual_override])
+      draft.category_pricing.map((c) => [
+        c.category_key,
+        c.manual_override != null ? c.manual_override : c.package_price,
+      ])
     );
     setPackageId(nextPackageId);
     const next = buildDraftFromPackage(nextPackageId, {

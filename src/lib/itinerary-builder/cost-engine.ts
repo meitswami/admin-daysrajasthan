@@ -276,24 +276,22 @@ export function primaryGrandTotal(snapshot: ItinerarySnapshot): number {
 
 export function recalculateCategoryPricing(snapshot: ItinerarySnapshot): CategoryPricingTier[] {
   return (snapshot.category_pricing ?? []).map((tier) => {
-    const priced = calculateCostSheet({
-      ...snapshot,
-      days: (snapshot.days ?? []).map((d) => ({
-        ...d,
-        room_category: d.hotel_name ? tier.room_category : d.room_category,
-      })),
-    });
-    const package_price = priced.grand_total;
+    // Keep staff-entered per-category package prices; do not overwrite from cost sheet.
+    const package_price =
+      tier.manual_override != null && tier.manual_override > 0
+        ? tier.manual_override
+        : Math.max(0, tier.package_price || 0);
     const { grand_total, booking_amount } = resolveCategoryTierPricing({
       package_price,
       discount_price: tier.discount_price,
-      manual_override: tier.manual_override,
+      manual_override: null,
     });
     return {
       ...tier,
       package_price,
       grand_total,
       booking_amount,
+      manual_override: package_price > 0 ? package_price : null,
     };
   });
 }

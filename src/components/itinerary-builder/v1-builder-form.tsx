@@ -38,6 +38,7 @@ import {
   normalizeVehicleType,
   parseDayCountFromDurationInput,
   resizeDaysPreservingCache,
+  resolveCategoryTierPricing,
 } from "@/lib/itinerary-builder/cost-engine";
 import { todayIsoDate, travelDateValidationError } from "@/lib/itinerary-builder/travel-date";
 import {
@@ -1002,8 +1003,10 @@ export function V1BuilderForm({
       if (nextDiscounts[tier.category_key] === undefined) {
         nextDiscounts[tier.category_key] = tier.discount_price;
       }
-      if (nextOverrides[tier.category_key] === undefined && tier.manual_override != null) {
-        nextOverrides[tier.category_key] = tier.manual_override;
+      // Preserve each category's own package price independently (including 0).
+      if (nextOverrides[tier.category_key] === undefined) {
+        nextOverrides[tier.category_key] =
+          tier.manual_override != null ? tier.manual_override : tier.package_price;
       }
     }
     const category_pricing = buildCategoryPricing(base, keys, nextDiscounts, nextOverrides);
@@ -1222,11 +1225,35 @@ export function V1BuilderForm({
       });
       return;
     }
-    const discounts: Partial<Record<HotelCategoryKey, number | null>> = {};
-    const overrides: Partial<Record<HotelCategoryKey, number | null>> = {};
-    if (field === "discount_price") discounts[categoryKey] = value;
-    if (field === "package_price") overrides[categoryKey] = value;
-    patch(pricingFrom(s, selectedKeys, discounts, overrides));
+    // Update only the targeted category so Deluxe / Super Deluxe prices stay independent.
+    if (field === "package_price") {
+      const package_price =
+        value != null && Number.isFinite(value) ? Math.max(0, value) : 0;
+      const category_pricing = s.category_pricing.map((t) => {
+        if (t.category_key !== categoryKey) return t;
+        const { grand_total, booking_amount } = resolveCategoryTierPricing({
+          package_price,
+          discount_price: t.discount_price,
+          manual_override: null,
+        });
+        return {
+          ...t,
+          package_price,
+          manual_override: package_price > 0 ? package_price : null,
+          grand_total,
+          booking_amount,
+        };
+      });
+      patch({
+        category_pricing,
+        final_price: category_pricing[0]?.grand_total ?? null,
+      });
+      return;
+    }
+    const discounts: Partial<Record<HotelCategoryKey, number | null>> = {
+      [categoryKey]: value,
+    };
+    patch(pricingFrom(s, selectedKeys, discounts));
   }
 
   function syncVehicles(vehicle_types: string[]) {
@@ -1845,7 +1872,7 @@ export function V1BuilderForm({
                   For {tier.label}
                 </span>
                 <div>
-                  <Label>Package Price (Auto-filled from Itinerary)</Label>
+                  <Label>Package Price</Label>
                   <Input
                     type="number"
                     min={0}
@@ -1859,7 +1886,9 @@ export function V1BuilderForm({
                       )
                     }
                   />
-                  <p className="mt-1 text-xs text-stone-500">Auto-filled from selected itinerary</p>
+                  <p className="mt-1 text-xs text-stone-500">
+                    Enter separately for each category · Starts at 0
+                  </p>
                 </div>
                 <div>
                   <Label>Discount Price (Optional)</Label>

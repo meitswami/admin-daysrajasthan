@@ -101,6 +101,18 @@ export function emptyCostSheet(): CostSheet {
   };
 }
 
+/** True for auto-filled labels like "Day 1" / "Day 2" (not real titles). */
+export function isPlaceholderDayTitle(title: string | null | undefined): boolean {
+  return /^day\s*\d+$/i.test((title ?? "").trim());
+}
+
+/** Clear generic Day N titles so custom itineraries start blank. */
+export function clearPlaceholderDayTitles(days: ItineraryDay[]): ItineraryDay[] {
+  return days.map((day) =>
+    isPlaceholderDayTitle(day.day_title) ? { ...day, day_title: "" } : day
+  );
+}
+
 /** Default custom itinerary: 02 Days / 01 Night (last day is Departure). */
 export function emptyCustomItineraryDays(): ItineraryDay[] {
   return [

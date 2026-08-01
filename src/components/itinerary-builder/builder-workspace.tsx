@@ -106,7 +106,10 @@ export function ItineraryBuilderWorkspace({
       snapshot.category_pricing.map((c) => [c.category_key, c.discount_price])
     );
     const prevOverrides = Object.fromEntries(
-      snapshot.category_pricing.map((c) => [c.category_key, c.manual_override])
+      snapshot.category_pricing.map((c) => [
+        c.category_key,
+        c.manual_override != null ? c.manual_override : c.package_price,
+      ])
     );
     const keys: HotelCategoryKey[] = (
       prevKeys.length ? prevKeys : (["deluxe_hotels"] as HotelCategoryKey[])

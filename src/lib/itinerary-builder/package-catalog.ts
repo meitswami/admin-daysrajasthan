@@ -308,14 +308,15 @@ export function buildCategoryPricing(
   discounts: Partial<Record<HotelCategoryKey, number | null>> = {},
   packageOverrides: Partial<Record<HotelCategoryKey, number | null>> = {}
 ): CategoryPricingTier[] {
+  void snapshot;
   return selectedKeys.slice(0, 2).map((key) => {
     const opt = HOTEL_CATEGORY_OPTIONS.find((o) => o.key === key)!;
-    const priced = snapshotForCategoryPreview(snapshot, opt.room_category);
-    const autoPrice = priced.cost_sheet.grand_total;
     const override = packageOverrides[key];
-    const package_price = override != null && override > 0 ? override : autoPrice;
+    // Per-category prices start at 0 and stay independent — never auto-fill from itinerary cost.
+    const package_price =
+      override != null && Number.isFinite(override) ? Math.max(0, override) : 0;
     const discount_price = discounts[key] ?? null;
-    const manual_override = override != null && override > 0 ? override : null;
+    const manual_override = package_price > 0 ? package_price : null;
     // package_price already includes override; pass manual_override null to avoid double-applying
     const { grand_total, booking_amount } = resolveCategoryTierPricing({
       package_price,

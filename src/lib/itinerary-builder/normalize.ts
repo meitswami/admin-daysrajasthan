@@ -6,7 +6,11 @@ import type {
   ItineraryRevision,
   ItinerarySnapshot,
 } from "@/types/itinerary-builder";
-import { emptyCostSheet, emptyCustomItineraryDays } from "@/lib/itinerary-builder/defaults";
+import {
+  clearPlaceholderDayTitles,
+  emptyCostSheet,
+  emptyCustomItineraryDays,
+} from "@/lib/itinerary-builder/defaults";
 import { normalizeCategoryHotelPicks } from "@/lib/itinerary-builder/category-hotels";
 import {
   DEFAULT_EXCLUSION_ITEMS,
@@ -44,7 +48,7 @@ function normalizeDay(day: ItineraryDay, index: number): ItineraryDay {
   return {
     ...day,
     day_number: day.day_number ?? index + 1,
-    day_title: day.day_title ?? `Day ${index + 1}`,
+    day_title: day.day_title ?? "",
     alternate_day_titles: day.alternate_day_titles ?? [],
     day_subtitle: day.day_subtitle ?? null,
     day_theme: day.day_theme ?? null,
@@ -120,7 +124,13 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
     };
   }
 
-  const days = (snapshot.days?.length ? snapshot.days : emptyCustomItineraryDays()).map(normalizeDay);
+  const normalizedDays = (snapshot.days?.length ? snapshot.days : emptyCustomItineraryDays()).map(
+    normalizeDay
+  );
+  // Custom builds should never keep auto-filled "Day 1" / "Day 2" labels.
+  const days = snapshot.source_package_id
+    ? normalizedDays
+    : clearPlaceholderDayTitles(normalizedDays);
 
   return {
     ...snapshot,
