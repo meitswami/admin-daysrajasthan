@@ -190,21 +190,37 @@ function sortByCreatedAsc(list: AiSuggestion[]): AiSuggestion[] {
   });
 }
 
+function hasMigratedLocal(): boolean {
+  if (typeof window === "undefined") return true;
+  return Boolean(localStorage.getItem(MIGRATED_FLAG));
+}
+
+function markMigratedLocal() {
+  if (typeof window !== "undefined") {
+    localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
+  }
+}
+
 /**
- * Upload any browser-local suggestions missing from Supabase.
- * Recovers 50+ entries that were previously saved only to localStorage.
+ * One-time recovery: upload browser-local suggestions missing from Supabase.
+ * Must not run on every list — that resurrects intentionally deleted rows.
  */
 async function uploadMissingLocal(remote: AiSuggestion[]): Promise<AiSuggestion[]> {
   const local = readLocalRaw();
-  if (!local.length) return remote;
+  if (!local.length) {
+    markMigratedLocal();
+    return remote;
+  }
 
   const remoteIds = new Set(remote.map((r) => r.id));
   const missing = local.filter((l) => l.title.trim() && !remoteIds.has(l.id));
-  if (!missing.length) return remote;
+  if (!missing.length) {
+    markMigratedLocal();
+    return remote;
+  }
 
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
-  // Chunk upserts to avoid payload limits.
   const chunkSize = 50;
   for (let i = 0; i < missing.length; i += chunkSize) {
     const chunk = missing.slice(i, i + chunkSize).map(toRow);
@@ -212,10 +228,7 @@ async function uploadMissingLocal(remote: AiSuggestion[]): Promise<AiSuggestion[
     if (error) throw new Error(`Failed to migrate AI suggestions to cloud: ${error.message}`);
   }
 
-  if (typeof window !== "undefined") {
-    localStorage.setItem(MIGRATED_FLAG, new Date().toISOString());
-  }
-
+  markMigratedLocal();
   return fetchRemote();
 }
 
@@ -228,23 +241,28 @@ export async function listAiSuggestions(): Promise<AiSuggestion[]> {
 
   let remote = await fetchRemote();
 
-  // Prefer recovering local production data before seeding empty cloud.
-  if (remote.length === 0) {
-    const local = readLocalRaw();
-    if (local.length > 0) {
-      remote = await uploadMissingLocal([]);
+  if (!hasMigratedLocal()) {
+    if (remote.length === 0) {
+      const local = readLocalRaw();
+      if (local.length > 0) {
+        // One-time recovery when cloud is empty and browser still has local data.
+        remote = await uploadMissingLocal([]);
+      } else {
+        const seeded = seedList();
+        const { createClient } = await import("@/lib/supabase/client");
+        const supabase = createClient();
+        const { error } = await supabase.from("td_ai_suggestions").insert(seeded.map(toRow));
+        if (error) throw new Error(error.message);
+        markMigratedLocal();
+        remote = seeded;
+      }
     } else {
-      const seeded = seedList();
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_ai_suggestions").insert(seeded.map(toRow));
-      if (error) throw new Error(error.message);
-      remote = seeded;
+      // Cloud already has data — never re-upload local orphans (that resurrects deletes).
+      markMigratedLocal();
     }
-  } else {
-    remote = await uploadMissingLocal(remote);
   }
 
+  // Cloud is source of truth — overwrite local so deletes stay deleted.
   const sorted = sortByCreatedAsc(remote);
   writeLocalCache(sorted);
   return sorted;
@@ -350,9 +368,17 @@ export async function updateAiSuggestion(
 
 export async function deleteAiSuggestion(id: string): Promise<boolean> {
   requireCloudMaster();
-  const list = await listAiSuggestions();
-  const existing = list.find((s) => s.id === id);
-  if (!existing) return false;
+  const cached = readLocalRaw().find((s) => s.id === id);
+  const existing = cached ?? (await fetchRemote()).find((s) => s.id === id);
+  if (!existing) {
+    // Still try cloud delete + local purge in case cache is stale.
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { error } = await supabase.from("td_ai_suggestions").delete().eq("id", id);
+    if (error) throw new Error(error.message);
+    writeLocalCache(readLocalRaw().filter((s) => s.id !== id));
+    return true;
+  }
 
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
@@ -360,6 +386,7 @@ export async function deleteAiSuggestion(id: string): Promise<boolean> {
   if (error) throw new Error(error.message);
 
   writeLocalCache(readLocalRaw().filter((s) => s.id !== id));
+  markMigratedLocal();
 
   logMasterDataChange({
     entityType: "ai_suggestion",
