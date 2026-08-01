@@ -582,15 +582,26 @@ function NightHotelCard({
     return filtered.length ? filtered : pool;
   }, [day.location, hotelCatalog, categoryKey]);
 
-  const breakfastSelected = [day.breakfast_hotels[0], day.breakfast_hotels[1]].filter(
-    Boolean
-  ) as string[];
+  const breakfastHotel1 = day.breakfast_hotels[0];
+  const breakfastHotel2 = day.breakfast_hotels[1];
 
-  /** Lunch/dinner only show breakfast picks once both (or any) breakfast hotels chosen */
-  const mealCascadeOptions =
-    breakfastSelected.length > 0
-      ? locationHotels.filter((h) => breakfastSelected.includes(formatHotelOption(h)))
-      : locationHotels;
+  /**
+   * Lunch/dinner options follow Breakfast selection order (Hotel 1, then Hotel 2),
+   * not master-catalog order — so order is consistent across devices.
+   */
+  const mealCascadeOptions = useMemo(() => {
+    const breakfastSelected = [breakfastHotel1, breakfastHotel2].filter(Boolean) as string[];
+    if (breakfastSelected.length === 0) return locationHotels;
+    const byLabel = new Map(locationHotels.map((h) => [formatHotelOption(h), h]));
+    const ordered: HotelMasterItem[] = [];
+    for (const label of breakfastSelected) {
+      const fromCatalog = byLabel.get(label) ?? findHotelByOptionLabel(label, hotelCatalog);
+      if (fromCatalog && !ordered.some((h) => h.id === fromCatalog.id)) {
+        ordered.push(fromCatalog);
+      }
+    }
+    return ordered.length ? ordered : locationHotels;
+  }, [breakfastHotel1, breakfastHotel2, locationHotels, hotelCatalog]);
 
   function hotelSelectOptions(
     list: HotelMasterItem[],
