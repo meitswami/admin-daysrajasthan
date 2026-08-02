@@ -29,8 +29,54 @@ else
 fi
 
 cd "$WEB_DIR"
+
+# Stop the running app first — open file handles cause flaky deletes during rebuild.
+pm2 stop daysrajasthan-web >/dev/null 2>&1 || true
+pm2 delete daysrajasthan-web >/dev/null 2>&1 || true
+sleep 1
+
+remove_tree() {
+  local target="$1"
+  [[ -e "$target" ]] || return 0
+  local trash="${target}.__trash_$$"
+  mv "$target" "$trash"
+  chmod -R u+w "$trash" 2>/dev/null || true
+  rm -rf "$trash" 2>/dev/null || true
+  if [[ -e "$trash" ]]; then
+    find "$trash" -mindepth 1 -delete 2>/dev/null || true
+    rm -rf "$trash" 2>/dev/null || true
+  fi
+  if [[ -e "$trash" ]]; then
+    echo "WARN: could not fully delete $trash — leaving for later cleanup" >&2
+  fi
+}
+
+# Keep previous build until the new one succeeds (failed builds must not wipe production).
+remove_tree .next.prev
+if [[ -d .next ]]; then
+  mv .next .next.prev
+fi
+
 npm ci || npm install
-npm run build
+
+if ! npm run build; then
+  echo "WEB_BUILD_FAILED — restoring previous .next" >&2
+  remove_tree .next
+  if [[ -d .next.prev ]]; then
+    mv .next.prev .next
+  fi
+  # Bring the previous build back online even when the new build fails.
+  cat > /opt/daysrajasthan/env/web.env <<EENV
+PORT=${WEB_PORT}
+NODE_ENV=production
+HOSTNAME=127.0.0.1
+EENV
+  pm2 start npm --name daysrajasthan-web --cwd "$WEB_DIR" -- start -- -p "$WEB_PORT" -H 127.0.0.1
+  pm2 save
+  exit 1
+fi
+
+remove_tree .next.prev
 
 cat > /opt/daysrajasthan/env/web.env <<EENV
 PORT=${WEB_PORT}
@@ -40,7 +86,6 @@ EENV
 
 chown -R deploy:deploy "$WEB_DIR" 2>/dev/null || true
 
-pm2 delete daysrajasthan-web >/dev/null 2>&1 || true
 pm2 start npm --name daysrajasthan-web --cwd "$WEB_DIR" -- start -- -p "$WEB_PORT" -H 127.0.0.1
 pm2 save
 echo "WEB_DEPLOY_OK on port $WEB_PORT sha=$(git -C "$WEB_DIR" rev-parse --short HEAD)"
