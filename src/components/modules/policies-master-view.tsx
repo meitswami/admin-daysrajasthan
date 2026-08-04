@@ -40,8 +40,14 @@ export function PoliciesMasterView() {
 
   async function refresh() {
     setLoading(true);
-    setItems(await listMasterPolicies());
-    setLoading(false);
+    try {
+      setItems(await listMasterPolicies());
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to load policies");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
@@ -91,9 +97,13 @@ export function PoliciesMasterView() {
 
   async function remove(item: MasterPolicyLine) {
     if (!confirm("Delete this policy line?")) return;
-    await deleteMasterPolicy(item.id, currentMember);
-    show("Deleted");
-    await refresh();
+    try {
+      await deleteMasterPolicy(item.id, currentMember);
+      show("Deleted");
+      await refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Delete failed");
+    }
   }
 
   return (

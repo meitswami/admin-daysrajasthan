@@ -92,11 +92,22 @@ async function fetchRemote(): Promise<MasterPolicyLine[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
+function policyKey(section: string, title: string): string {
+  return `${section}::${title.trim().toLowerCase()}`;
+}
+
+/** Upload browser-local rows that are not already in the cloud (by id OR section+title). */
 async function uploadMissingLocal(remote: MasterPolicyLine[]): Promise<MasterPolicyLine[]> {
   const local = readLocalRaw();
   if (!local.length) return remote;
   const remoteIds = new Set(remote.map((r) => r.id));
-  const missing = local.filter((l) => l.title.trim() && !remoteIds.has(l.id));
+  const remoteKeys = new Set(remote.map((r) => policyKey(r.section, r.title)));
+  const missing = local.filter(
+    (l) =>
+      l.title.trim() &&
+      !remoteIds.has(l.id) &&
+      !remoteKeys.has(policyKey(l.section, l.title))
+  );
   if (!missing.length) return remote;
 
   const { createClient } = await import("@/lib/supabase/client");
@@ -128,6 +139,7 @@ export async function listMasterPolicies(): Promise<MasterPolicyLine[]> {
       remote = seeded;
     }
   } else {
+    // Only migrate truly new local drafts — never re-upload seed clones with new UUIDs
     remote = await uploadMissingLocal(remote);
   }
 
@@ -153,7 +165,12 @@ export async function createMasterPolicy(
   const { createClient } = await import("@/lib/supabase/client");
   const supabase = createClient();
   const { error } = await supabase.from("td_master_policies").insert(toRow(item));
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "23505" || /duplicate|unique/i.test(error.message)) {
+      throw new Error("A policy with this text already exists in this section.");
+    }
+    throw new Error(error.message);
+  }
 
   logMasterDataChange({
     entityType: "policy",

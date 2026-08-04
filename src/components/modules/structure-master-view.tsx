@@ -106,6 +106,8 @@ export function StructureMasterView() {
     try {
       const next = await getCompanyStructure();
       setData(next);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to load structure");
     } finally {
       setLoading(false);
     }
@@ -199,12 +201,14 @@ export function StructureMasterView() {
   function applyModalSave() {
     if (!data || !editKind) return;
 
+    let next: CompanyStructure | null = null;
+
     if (editKind === "logo") {
-      setData({ ...data, logo_url: draftLogo });
+      next = { ...data, logo_url: draftLogo };
     } else if (editKind === "support") {
-      setData({ ...data, support_number: draftSupport.trim() });
+      next = { ...data, support_number: draftSupport.trim() };
     } else if (editKind === "social") {
-      setData({ ...data, social_links: { ...draftSocial } });
+      next = { ...data, social_links: { ...draftSocial } };
     } else if (editKind === "staff") {
       if (!draftStaff.name.trim()) {
         show("Name is required");
@@ -213,7 +217,7 @@ export function StructureMasterView() {
       const list = [...data.staff_contacts];
       if (editIndex === null) list.push({ ...draftStaff });
       else list[editIndex] = { ...draftStaff };
-      setData({ ...data, staff_contacts: list });
+      next = { ...data, staff_contacts: list };
     } else if (editKind === "address") {
       if (!draftAddress.street.trim() && !draftAddress.city.trim()) {
         show("Street or city is required");
@@ -222,7 +226,7 @@ export function StructureMasterView() {
       const list = [...data.addresses];
       if (editIndex === null) list.push({ ...draftAddress });
       else list[editIndex] = { ...draftAddress };
-      setData({ ...data, addresses: list });
+      next = { ...data, addresses: list };
     } else if (editKind === "bank") {
       if (!draftBank.bank_name.trim() || !draftBank.account_number.trim()) {
         show("Bank name and account number are required");
@@ -231,7 +235,7 @@ export function StructureMasterView() {
       const list = [...data.bank_accounts];
       if (editIndex === null) list.push({ ...draftBank });
       else list[editIndex] = { ...draftBank };
-      setData({ ...data, bank_accounts: list });
+      next = { ...data, bank_accounts: list };
     } else if (editKind === "payment") {
       if (!draftPayment.upi_id.trim()) {
         show("UPI ID / Value is required");
@@ -240,7 +244,7 @@ export function StructureMasterView() {
       const list = [...data.payment_methods];
       if (editIndex === null) list.push({ ...draftPayment });
       else list[editIndex] = { ...draftPayment };
-      setData({ ...data, payment_methods: list });
+      next = { ...data, payment_methods: list };
     } else if (editKind === "achievement") {
       if (!draftAchievement.name.trim()) {
         show("Achievement name is required");
@@ -253,69 +257,93 @@ export function StructureMasterView() {
       };
       if (editIndex === null) list.push(nextItem);
       else list[editIndex] = nextItem;
-      setData({ ...data, achievements: list });
+      next = { ...data, achievements: list };
     }
 
+    if (!next) return;
     setEditKind(null);
     setEditIndex(null);
+    void persistStructure(next, "Saved");
   }
 
-  function removeStaff(index: number) {
-    if (!data || !confirm("Delete this contact?")) return;
-    setData({
-      ...data,
-      staff_contacts: data.staff_contacts.filter((_, i) => i !== index),
-    });
-  }
-
-  function removeAddress(index: number) {
-    if (!data || !confirm("Delete this address?")) return;
-    setData({
-      ...data,
-      addresses: data.addresses.filter((_, i) => i !== index),
-    });
-  }
-
-  function removeBank(index: number) {
-    if (!data || !confirm("Delete this bank account?")) return;
-    setData({
-      ...data,
-      bank_accounts: data.bank_accounts.filter((_, i) => i !== index),
-    });
-  }
-
-  function removePayment(index: number) {
-    if (!data || !confirm("Delete this payment method?")) return;
-    setData({
-      ...data,
-      payment_methods: data.payment_methods.filter((_, i) => i !== index),
-    });
-  }
-
-  function removeAchievement(index: number) {
-    if (!data || !confirm("Delete this achievement?")) return;
-    setData({
-      ...data,
-      achievements: data.achievements.filter((_, i) => i !== index),
-    });
-  }
-
-  async function saveAll() {
-    if (!data) return;
+  async function persistStructure(next: CompanyStructure, successMessage: string) {
     if (!canEdit) {
       show("You do not have permission to save structure");
       return;
     }
+    setData(next);
     setSaving(true);
     try {
-      const saved = await saveCompanyStructure(data, currentMember);
+      const saved = await saveCompanyStructure(next, currentMember);
       setData(saved);
-      show("Structure saved");
-    } catch {
-      show("Failed to save structure");
+      show(successMessage);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save structure");
+      // Reload cloud truth so this PC does not keep unsaved local-only edits
+      await refresh();
     } finally {
       setSaving(false);
     }
+  }
+
+  function removeStaff(index: number) {
+    if (!data || !confirm("Delete this contact?")) return;
+    void persistStructure(
+      {
+        ...data,
+        staff_contacts: data.staff_contacts.filter((_, i) => i !== index),
+      },
+      "Contact deleted"
+    );
+  }
+
+  function removeAddress(index: number) {
+    if (!data || !confirm("Delete this address?")) return;
+    void persistStructure(
+      {
+        ...data,
+        addresses: data.addresses.filter((_, i) => i !== index),
+      },
+      "Address deleted"
+    );
+  }
+
+  function removeBank(index: number) {
+    if (!data || !confirm("Delete this bank account?")) return;
+    void persistStructure(
+      {
+        ...data,
+        bank_accounts: data.bank_accounts.filter((_, i) => i !== index),
+      },
+      "Bank account deleted"
+    );
+  }
+
+  function removePayment(index: number) {
+    if (!data || !confirm("Delete this payment method?")) return;
+    void persistStructure(
+      {
+        ...data,
+        payment_methods: data.payment_methods.filter((_, i) => i !== index),
+      },
+      "Payment method deleted"
+    );
+  }
+
+  function removeAchievement(index: number) {
+    if (!data || !confirm("Delete this achievement?")) return;
+    void persistStructure(
+      {
+        ...data,
+        achievements: data.achievements.filter((_, i) => i !== index),
+      },
+      "Achievement deleted"
+    );
+  }
+
+  async function saveAll() {
+    if (!data) return;
+    await persistStructure(data, "Structure saved");
   }
 
   const modalTitle =
@@ -1003,9 +1031,11 @@ export function StructureMasterView() {
             <Button
               type="button"
               className="bg-blue-600 text-white hover:bg-blue-700"
+              disabled={saving}
               onClick={applyModalSave}
             >
-              Apply
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Save
             </Button>
           </div>
         </div>

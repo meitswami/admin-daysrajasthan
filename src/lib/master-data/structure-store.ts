@@ -213,28 +213,35 @@ function writeLocal(data: CompanyStructure) {
 
 export async function getCompanyStructure(): Promise<CompanyStructure> {
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("td_company_structure")
-        .select("*")
-        .eq("id", ROW_ID)
-        .maybeSingle();
-      if (!error && data) {
-        const mapped = mapRow(data as Record<string, unknown>);
-        if (
-          mapped.staff_contacts.length === 0 &&
-          mapped.bank_accounts.length === 0 &&
-          !mapped.support_number
-        ) {
-          return defaultCompanyStructure();
-        }
-        return mapped;
-      }
-    } catch {
-      // fall through
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("td_company_structure")
+      .select("*")
+      .eq("id", ROW_ID)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (data) {
+      // Always return the cloud row — never replace empty/partial rows with hardcoded defaults
+      // (that looked like permanent "dummy mode").
+      return mapRow(data as Record<string, unknown>);
     }
+    // First-time: seed the singleton row into the cloud so every PC sees the same data.
+    const seed = defaultCompanyStructure();
+    const { error: insertError } = await supabase.from("td_company_structure").upsert({
+      id: ROW_ID,
+      logo_url: seed.logo_url,
+      staff_contacts: seed.staff_contacts,
+      addresses: seed.addresses,
+      social_links: seed.social_links,
+      support_number: seed.support_number,
+      bank_accounts: seed.bank_accounts,
+      payment_methods: seed.payment_methods,
+      achievements: seed.achievements,
+      updated_at: seed.updated_at,
+    });
+    if (insertError) throw new Error(insertError.message);
+    return seed;
   }
   return readLocal();
 }
@@ -279,13 +286,12 @@ export async function saveCompanyStructure(
     updated_at: new Date().toISOString(),
   };
 
-  let persisted = false;
-  let lastError: string | null = null;
   if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_company_structure").upsert({
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("td_company_structure")
+      .upsert({
         id: ROW_ID,
         logo_url: next.logo_url,
         staff_contacts: next.staff_contacts,
@@ -298,18 +304,31 @@ export async function saveCompanyStructure(
         updated_at: next.updated_at,
         updated_by: actor?.id ?? null,
         updated_by_name: actor?.name ?? null,
-      });
-      if (!error) persisted = true;
-      else lastError = error.message;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : "Failed to save structure";
+      })
+      .select("*")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    // RLS can "succeed" with 0 rows — treat that as failure so we never fake a save.
+    if (!data) {
+      throw new Error(
+        "Structure save was blocked (no row returned). Check database permissions and try again."
+      );
     }
+    const saved = mapRow(data as Record<string, unknown>);
+    writeLocal(saved);
+    logMasterDataChange({
+      entityType: "company_structure",
+      entityId: ROW_ID,
+      action: "update",
+      summary: "Updated company structure",
+      before: { ...before },
+      after: { ...saved },
+      actor,
+    });
+    return saved;
   }
 
-  if (!persisted) {
-    if (useSupabaseMaster() && lastError) throw new Error(lastError);
-    writeLocal(next);
-  }
+  writeLocal(next);
 
   logMasterDataChange({
     entityType: "company_structure",
