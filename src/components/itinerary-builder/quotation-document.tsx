@@ -865,7 +865,6 @@ export function QuotationDocument({
   structure?: CompanyStructure | null;
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
-  const itineraryNote = (snapshot.public_notes || snapshot.internal_notes || "").trim();
   const [masterLibrary, setMasterLibrary] = useState<InclusionExclusionItem[]>([]);
 
   useEffect(() => {
@@ -1237,17 +1236,6 @@ export function QuotationDocument({
           )
         )}
 
-        {itineraryNote && !isLegacyTheme ? (
-          <section className="break-inside-avoid rounded-xl border border-stone-200 bg-stone-50/50 p-4">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-              Note
-            </h2>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
-              {itineraryNote}
-            </p>
-          </section>
-        ) : null}
-
         {!hasTiers && cost_sheet.line_items.length > 0 && !isLegacyTheme && !usesRichPolicies && (
           <section className="break-inside-avoid">
             <h2 className="text-sm font-bold uppercase text-stone-800">Pricing Summary</h2>
@@ -1348,7 +1336,6 @@ export function QuotationDocument({
             inclusions={inclusions ?? []}
             exclusions={exclusions ?? []}
             companyName={coverBrand.companyName || "Rajasthan Touring"}
-            note={itineraryNote || undefined}
           />
           <QuotationLegacyAbout structure={structure} brand={coverBrand} />
           <QuotationLegacyPaymentSection

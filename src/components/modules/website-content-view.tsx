@@ -102,7 +102,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [googleMapsUrl, setGoogleMapsUrl] = useState("");
   const [vehicleType, setVehicleType] = useState("");
   const [capacity, setCapacity] = useState("");
+  const [providerCompany, setProviderCompany] = useState("");
+  const [contactPerson, setContactPerson] = useState("");
+  const [contactPhone1, setContactPhone1] = useState("");
+  const [contactPhone2, setContactPhone2] = useState("");
   const [pricePerKm, setPricePerKm] = useState("");
+  const [pricePerDay, setPricePerDay] = useState("");
   const [hotelCategory, setHotelCategory] = useState("");
   const [hotelLocation, setHotelLocation] = useState("");
   const [priceDescription, setPriceDescription] = useState("");
@@ -180,7 +185,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   function resetVehicleFields() {
     setVehicleType("");
     setCapacity("");
+    setProviderCompany("");
+    setContactPerson("");
+    setContactPhone1("");
+    setContactPhone2("");
     setPricePerKm("");
+    setPricePerDay("");
   }
 
   function openAdd() {
@@ -205,7 +215,13 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
     setVehicleType(item.vehicle_type ?? "");
     setCapacity(item.capacity ?? "");
     const existing = normalizeVehicleProviders(item);
-    setPricePerKm(existing[0]?.price_per_km?.trim() || item.price_per_km?.trim() || "");
+    const primary = existing[0];
+    setProviderCompany(primary?.provider_company_name?.trim() || item.provider_company_name?.trim() || "");
+    setContactPerson(primary?.contact_person_name?.trim() || item.contact_person_name?.trim() || "");
+    setContactPhone1(primary?.contact_phone_1?.trim() || item.contact_phone_1?.trim() || "");
+    setContactPhone2(primary?.contact_phone_2?.trim() || item.contact_phone_2?.trim() || "");
+    setPricePerKm(primary?.price_per_km?.trim() || item.price_per_km?.trim() || "");
+    setPricePerDay(primary?.price_per_day?.trim() || item.price_per_day?.trim() || "");
     setHotelCategory(item.category ?? "");
     setHotelLocation(item.location ?? "");
     setPriceDescription(item.price_description ?? "");
@@ -258,7 +274,12 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
             providers: [
               {
                 ...emptyVehicleProvider(),
+                provider_company_name: providerCompany.trim(),
+                contact_person_name: contactPerson.trim() || null,
+                contact_phone_1: contactPhone1.trim() || null,
+                contact_phone_2: contactPhone2.trim() || null,
                 price_per_km: pricePerKm.trim() || null,
+                price_per_day: pricePerDay.trim() || null,
               },
             ],
           }
@@ -758,16 +779,72 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
                   />
                 </div>
               </div>
-              <div>
-                <Label htmlFor="md-price-km">Price — per km cost</Label>
-                <Input
-                  id="md-price-km"
-                  className="mt-1.5"
-                  value={pricePerKm}
-                  onChange={(e) => setPricePerKm(e.target.value)}
-                  placeholder="e.g., 18"
-                />
-                <p className="mt-1 text-xs text-stone-500">Optional · shown as ₹ on the list</p>
+              <div className="space-y-3 rounded-xl border border-stone-200 bg-stone-50 p-3">
+                <p className="text-sm font-medium text-stone-800">Provider details (optional)</p>
+                <div>
+                  <Label htmlFor="md-provider">Provider company</Label>
+                  <Input
+                    id="md-provider"
+                    className="mt-1.5"
+                    value={providerCompany}
+                    onChange={(e) => setProviderCompany(e.target.value)}
+                    placeholder="e.g., Days Rajasthan Transport"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="md-contact">Contact person</Label>
+                  <Input
+                    id="md-contact"
+                    className="mt-1.5"
+                    value={contactPerson}
+                    onChange={(e) => setContactPerson(e.target.value)}
+                    placeholder="e.g., Ramesh Kumar"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="md-phone-1">Phone 1</Label>
+                    <Input
+                      id="md-phone-1"
+                      className="mt-1.5"
+                      value={contactPhone1}
+                      onChange={(e) => setContactPhone1(e.target.value)}
+                      placeholder="Primary phone"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="md-phone-2">Phone 2</Label>
+                    <Input
+                      id="md-phone-2"
+                      className="mt-1.5"
+                      value={contactPhone2}
+                      onChange={(e) => setContactPhone2(e.target.value)}
+                      placeholder="Optional"
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="md-price-km">Price per km</Label>
+                    <Input
+                      id="md-price-km"
+                      className="mt-1.5"
+                      value={pricePerKm}
+                      onChange={(e) => setPricePerKm(e.target.value)}
+                      placeholder="e.g., 18"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="md-price-day">Price per day</Label>
+                    <Input
+                      id="md-price-day"
+                      className="mt-1.5"
+                      value={pricePerDay}
+                      onChange={(e) => setPricePerDay(e.target.value)}
+                      placeholder="e.g., 3500"
+                    />
+                  </div>
+                </div>
               </div>
               <GalleryImagesField
                 label="Vehicle images (up to 6)"

@@ -687,7 +687,7 @@ export function NewItineraryWizard() {
           }}
           onSave={() => persistDraft("list")}
           onPreview={() => persistDraft("preview")}
-          saveLabel="Save"
+          saveLabel="Save Itinerary"
           saveRequiresChanges={false}
         />
       )}

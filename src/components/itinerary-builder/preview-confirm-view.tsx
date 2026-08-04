@@ -39,7 +39,7 @@ import {
 import { publicQuotationUrl } from "@/lib/admin-public-url";
 import { useSystem } from "@/components/providers/system-provider";
 import {
-  PREVIEW_THEMES,
+  SELECTABLE_PREVIEW_THEMES,
   themeCardLabel,
   themeShellClass,
 } from "@/lib/itinerary-builder/preview-themes";
@@ -62,6 +62,7 @@ import {
 } from "@/lib/itinerary-builder/category-hotels";
 import { formatDate, cn } from "@/lib/utils";
 import {
+  ArrowLeft,
   Check,
   ChevronDown,
   ChevronUp,
@@ -365,7 +366,7 @@ function EditableBlocks({
   );
 }
 
-const THEMES = PREVIEW_THEMES;
+const THEMES = SELECTABLE_PREVIEW_THEMES;
 
 export function PreviewConfirmView({
   itineraryId,
@@ -670,6 +671,23 @@ export function PreviewConfirmView({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                router.push(
+                  draftMode
+                    ? "/itinerary-builder/new"
+                    : activeId
+                      ? `/itinerary-builder/${activeId}`
+                      : "/itinerary-builder"
+                )
+              }
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </Button>
             <Button type="button" size="sm" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
               <Save className="h-4 w-4" />
               Save
@@ -1002,24 +1020,6 @@ export function PreviewConfirmView({
           </section>
         )}
 
-        <section className="rounded-2xl border border-blue-100 bg-blue-50/30 p-4 sm:p-5">
-          <h2 className="mb-2 flex items-center gap-2 text-lg font-semibold text-stone-900">
-            <Info className="h-5 w-5 text-blue-700" />
-            Note
-          </h2>
-          <Textarea
-            rows={3}
-            value={snapshot.public_notes || snapshot.internal_notes || ""}
-            onChange={(e) =>
-              patch({
-                public_notes: e.target.value,
-                internal_notes: e.target.value,
-              })
-            }
-            placeholder="Add a note for this itinerary…"
-          />
-        </section>
-
         {/* Fixed master policies */}
         <PolicyAccordion
           title="Terms & Conditions"
@@ -1050,9 +1050,9 @@ export function PreviewConfirmView({
             After selecting a theme, use <span className="font-semibold text-teal-800">Preview</span> to
             open the public itinerary URL before continuing to payment.
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {THEMES.map((theme) => {
-              const selected = (snapshot.preview_theme ?? 1) === theme.id;
+              const selected = (snapshot.preview_theme ?? 2) === theme.id;
               const label = themeCardLabel(theme, {
                 title: snapshot.header.title,
                 durationLabel: snapshot.header.duration_label,
@@ -1154,6 +1154,22 @@ export function PreviewConfirmView({
         </section>
 
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-200 pb-8 pt-4 print:hidden">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              router.push(
+                draftMode
+                  ? "/itinerary-builder/new"
+                  : activeId
+                    ? `/itinerary-builder/${activeId}`
+                    : "/itinerary-builder"
+              )
+            }
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
           <Button type="button" className="bg-teal-800 hover:bg-teal-900" onClick={() => void handleSave()}>
             <Save className="h-4 w-4" />
             Save

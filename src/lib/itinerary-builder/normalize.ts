@@ -114,7 +114,7 @@ export function normalizeSnapshot(snapshot: ItinerarySnapshot | null | undefined
       price_basis: "whole_group",
       final_price: null,
       optional_inclusion_keys: [],
-      preview_theme: 1,
+      preview_theme: 2,
       advance_percent: 20,
       selected_contact_id: null,
     };

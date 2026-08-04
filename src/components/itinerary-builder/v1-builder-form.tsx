@@ -26,7 +26,6 @@ import {
   emptyDay,
   OPTIONAL_INCLUSIONS,
   mergeOptionalIntoInclusionItems,
-  VEHICLE_TYPES,
 } from "@/lib/itinerary-builder/defaults";
 import {
   durationLabelFromDayCount,
@@ -36,7 +35,6 @@ import {
   isDepartureLocation,
   lastDayDepartureError,
   MIN_ITINERARY_DAYS,
-  normalizeVehicleType,
   parseDayCountFromDurationInput,
   resizeDaysPreservingCache,
   resolveCategoryTierPricing,
@@ -57,9 +55,11 @@ import {
 import {
   findHotelByOptionLabel,
   formatHotelOption,
+  groupHotelsByCategory,
   hotelFromWebsiteItem,
   hotelPriceDescription,
   hotelsForLocation,
+  sortHotelsByCategory,
   type HotelMasterItem,
 } from "@/lib/itinerary-builder/hotel-master";
 import {
@@ -71,11 +71,7 @@ import { listMasterContent, updateMasterContent, createMasterContent } from "@/l
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
 import { uploadMasterImage } from "@/lib/supabase/storage-upload";
 import { PLACEHOLDER_IMAGES } from "@/lib/constants/placeholder-images";
-import { vehicles as seedVehicles } from "@/lib/data/website-content";
-import {
-  normalizeVehicleProviders,
-  vehicleProviderDetailBlocks,
-} from "@/lib/master-data/vehicle-providers";
+import { vehicleDetailBlocks } from "@/lib/master-data/vehicle-providers";
 import type { WebsiteContentItem } from "@/types/database";
 import { useSystem } from "@/components/providers/system-provider";
 import {
@@ -174,14 +170,14 @@ function SortableDayCard({
   );
 }
 
-function vehicleOptions(catalog: WebsiteContentItem[] = seedVehicles): string[] {
-  const names = new Set<string>([
-    ...VEHICLE_TYPES,
-    "Tempo Traveller 17 Seater",
-    "Tempo Traveller 12 Seater",
-  ]);
-  catalog.forEach((v) => names.add(v.name));
-  return Array.from(names);
+/** Real master-data vehicle names only (no hardcoded category dummies). */
+function vehicleOptions(catalog: WebsiteContentItem[]): string[] {
+  const names = new Set<string>();
+  for (const v of catalog) {
+    const name = v.name?.trim();
+    if (name) names.add(name);
+  }
+  return Array.from(names).sort((a, b) => a.localeCompare(b));
 }
 
 function findVehicleByName(
@@ -390,9 +386,7 @@ function SelectedVehicleChip({
 }) {
   const [infoOpen, setInfoOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
-  const blocks = vehicleProviderDetailBlocks(
-    vehicle ? normalizeVehicleProviders(vehicle) : []
-  );
+  const blocks = vehicleDetailBlocks(vehicle);
 
   useEffect(() => {
     if (!infoOpen) return;
@@ -556,32 +550,52 @@ function SelectedHotelCard({
   );
 }
 
+function HotelSelectOptions({
+  hotels,
+  excludeLabel,
+}: {
+  hotels: HotelMasterItem[];
+  excludeLabel: string | null;
+}) {
+  const groups = useMemo(() => {
+    const list = excludeLabel
+      ? hotels.filter((h) => formatHotelOption(h) !== excludeLabel)
+      : hotels;
+    return groupHotelsByCategory(list);
+  }, [hotels, excludeLabel]);
+
+  return (
+    <>
+      {groups.map((group) => (
+        <optgroup key={group.key} label={group.label}>
+          {group.hotels.map((h) => (
+            <option key={h.id} value={formatHotelOption(h)}>
+              {formatHotelOption(h)}
+            </option>
+          ))}
+        </optgroup>
+      ))}
+    </>
+  );
+}
+
 function NightHotelCard({
   day,
   nightNo,
   onChange,
   hotelCatalog,
-  categoryKey,
 }: {
   day: ItineraryDay;
   nightNo: string;
   onChange: (updater: (d: ItineraryDay) => ItineraryDay) => void;
   hotelCatalog: HotelMasterItem[];
-  /** When set, dropdowns only list hotels in this master category */
-  categoryKey?: HotelCategoryKey;
 }) {
+  /** All location hotels — every category (Deluxe → Luxury), not limited to the package tier. */
   const locationHotels = useMemo(() => {
     const byLocation = hotelsForLocation(day.location, hotelCatalog);
-    // No day location yet — still populate meal dropdowns from category / full catalog.
-    const pool = byLocation.length
-      ? byLocation
-      : categoryKey
-        ? hotelCatalog.filter((h) => h.category_key === categoryKey)
-        : hotelCatalog;
-    if (!categoryKey) return pool;
-    const filtered = pool.filter((h) => h.category_key === categoryKey);
-    return filtered.length ? filtered : pool;
-  }, [day.location, hotelCatalog, categoryKey]);
+    const pool = byLocation.length ? byLocation : hotelCatalog;
+    return sortHotelsByCategory(pool);
+  }, [day.location, hotelCatalog]);
 
   const breakfastHotel1 = day.breakfast_hotels[0];
   const breakfastHotel2 = day.breakfast_hotels[1];
@@ -603,13 +617,6 @@ function NightHotelCard({
     }
     return ordered.length ? ordered : locationHotels;
   }, [breakfastHotel1, breakfastHotel2, locationHotels, hotelCatalog]);
-
-  function hotelSelectOptions(
-    list: HotelMasterItem[],
-    excludeLabel: string | null
-  ): HotelMasterItem[] {
-    return list.filter((h) => formatHotelOption(h) !== excludeLabel);
-  }
 
   function setMeal(
     field: "breakfast_hotels" | "lunch_hotels" | "dinner_hotels",
@@ -683,11 +690,6 @@ function NightHotelCard({
     });
   }
 
-  const stayOptions = hotelSelectOptions(
-    locationHotels,
-    null
-  );
-
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-3">
@@ -724,7 +726,6 @@ function NightHotelCard({
           <div className="space-y-2">
             {[0, 1].map((slot) => {
               const other = day.breakfast_hotels[(slot === 0 ? 1 : 0) as 0 | 1];
-              const opts = hotelSelectOptions(stayOptions, other);
               return (
                 <Select
                   key={slot}
@@ -732,11 +733,7 @@ function NightHotelCard({
                   onChange={(e) => setStayHotel(slot as 0 | 1, e.target.value)}
                 >
                   <option value="">Hotel {slot + 1}</option>
-                  {opts.map((h) => (
-                    <option key={h.id} value={formatHotelOption(h)}>
-                      {formatHotelOption(h)}
-                    </option>
-                  ))}
+                  <HotelSelectOptions hotels={locationHotels} excludeLabel={other} />
                 </Select>
               );
             })}
@@ -775,7 +772,6 @@ function NightHotelCard({
               <div className="grid gap-2 sm:grid-cols-2">
                 {[0, 1].map((slot) => {
                   const other = day[field][(slot === 0 ? 1 : 0) as 0 | 1];
-                  const filtered = hotelSelectOptions(opts, other);
                   return (
                     <Select
                       key={slot}
@@ -785,11 +781,7 @@ function NightHotelCard({
                       <option value="">
                         {label} {slot + 1}
                       </option>
-                      {filtered.map((h) => (
-                        <option key={h.id} value={formatHotelOption(h)}>
-                          {formatHotelOption(h)}
-                        </option>
-                      ))}
+                      <HotelSelectOptions hotels={opts} excludeLabel={other} />
                     </Select>
                   );
                 })}
@@ -884,14 +876,14 @@ export function V1BuilderForm({
   const dayCacheRef = useRef<ItineraryDay[]>(s.days.map((d) => ({ ...d })));
   const [durationFocused, setDurationFocused] = useState(false);
   const [durationDraft, setDurationDraft] = useState("");
-  const itineraryNote = (s.public_notes || s.internal_notes || "").trim();
+  const itineraryNote = (s.internal_notes || "").trim();
   const [noteOpen, setNoteOpen] = useState(() => Boolean(itineraryNote));
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const [locationCatalog, setLocationCatalog] = useState<LocationCatalogEntry[]>(() =>
     ensureDepartureInCatalog([])
   );
   const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>([]);
-  const [vehicleCatalog, setVehicleCatalog] = useState<WebsiteContentItem[]>(seedVehicles);
+  const [vehicleCatalog, setVehicleCatalog] = useState<WebsiteContentItem[]>([]);
   const [uploadingDayImage, setUploadingDayImage] = useState<number | null>(null);
   const locs = useMemo(
     () => locationCatalog.map((e) => e.name),
@@ -982,12 +974,21 @@ export function V1BuilderForm({
     let cancelled = false;
     void listMasterContent("vehicles").then((items) => {
       if (cancelled) return;
-      setVehicleCatalog(items.length ? items : seedVehicles);
+      setVehicleCatalog(items);
     });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  /** Drop legacy category aliases (Sedan/SUV/…) that are no longer in master data. */
+  useEffect(() => {
+    if (!vehicleCatalog.length || !selectedVehicle) return;
+    const names = new Set(vehicleCatalog.map((v) => v.name.trim().toLowerCase()));
+    if (names.has(selectedVehicle.trim().toLowerCase())) return;
+    setVehicle("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear once when catalog arrives
+  }, [vehicleCatalog]);
 
   function patch(partial: Partial<ItinerarySnapshot>) {
     onChange(normalizeSnapshot({ ...s, ...partial }));
@@ -1265,12 +1266,12 @@ export function V1BuilderForm({
 
   function syncVehicles(vehicle_types: string[]) {
     // Single vehicle only — keep the first entry if multiple are passed.
+    // Store the master-data vehicle name (not a category alias).
     const unique = vehicle_types.filter(Boolean).slice(0, 1);
     const primary = unique[0] ?? null;
-    const rateKey = primary ? normalizeVehicleType(primary) : null;
     const days = s.days.map((d) => ({
       ...d,
-      vehicle_type: rateKey,
+      vehicle_type: primary,
     }));
     const next = {
       ...s,
@@ -1964,18 +1965,28 @@ export function V1BuilderForm({
             <div className="flex gap-2">
               <Select
                 className="flex-1"
-                value={selectedVehicle}
+                value={vehicles.includes(selectedVehicle) ? selectedVehicle : ""}
                 onChange={(e) => setVehicle(e.target.value)}
               >
-                <option value="">Select Vehicle</option>
-                {vehicles.map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
+                <option value="">
+                  {vehicleCatalog.length ? "Select Vehicle" : "No vehicles in master data"}
+                </option>
+                {vehicleCatalog
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((v) => {
+                    const meta = [v.vehicle_type, v.capacity ? `${v.capacity} seater` : null]
+                      .filter(Boolean)
+                      .join(" · ");
+                    return (
+                      <option key={v.id} value={v.name}>
+                        {meta ? `${v.name} (${meta})` : v.name}
+                      </option>
+                    );
+                  })}
               </Select>
             </div>
-            {selectedVehicle ? (
+            {selectedVehicle && vehicles.includes(selectedVehicle) ? (
               <div className="mt-3">
                 <SelectedVehicleChip
                   name={selectedVehicle}
@@ -2064,7 +2075,6 @@ export function V1BuilderForm({
                           day={viewDay}
                           nightNo={nightNo}
                           hotelCatalog={hotelCatalog}
-                          categoryKey={tier.category_key}
                           onChange={(updater) =>
                             updateDay(dayIndex, (d) =>
                               applyCategoryDayUpdate(
@@ -2153,24 +2163,24 @@ export function V1BuilderForm({
         </div>
         {noteOpen ? (
           <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3">
-            <Label htmlFor="itinerary_public_notes" className="text-blue-900">
+            <Label htmlFor="itinerary_internal_notes" className="text-blue-900">
               Note
             </Label>
             <p className="mt-0.5 text-xs text-stone-500">
-              Shown on Preview &amp; Confirm and the public itinerary link.
+              Staff only — not shown on Preview &amp; Confirm or the client itinerary.
             </p>
             <Textarea
               ref={noteRef}
-              id="itinerary_public_notes"
+              id="itinerary_internal_notes"
               rows={3}
               className="mt-2"
-              placeholder="Add a note for this itinerary…"
-              value={s.public_notes || s.internal_notes || ""}
+              placeholder="Add an internal note for staff…"
+              value={s.internal_notes || ""}
               onChange={(e) =>
                 onChange({
                   ...s,
-                  public_notes: e.target.value,
                   internal_notes: e.target.value,
+                  public_notes: "",
                 })
               }
             />

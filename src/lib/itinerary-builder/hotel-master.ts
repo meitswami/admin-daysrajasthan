@@ -185,6 +185,29 @@ export function hotelsForLocation(
   return filterByLocation(catalog, location);
 }
 
+/** Deluxe → Super Deluxe → Heritage → Luxury, then name. */
+export function sortHotelsByCategory(hotels: HotelMasterItem[]): HotelMasterItem[] {
+  const order = new Map(HOTEL_CATEGORY_OPTIONS.map((o, i) => [o.key, i]));
+  return [...hotels].sort((a, b) => {
+    const ai = order.get(a.category_key) ?? 99;
+    const bi = order.get(b.category_key) ?? 99;
+    if (ai !== bi) return ai - bi;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/** Group hotels for `<optgroup>` sections in the night hotel dropdowns. */
+export function groupHotelsByCategory(
+  hotels: HotelMasterItem[]
+): { key: HotelCategoryKey; label: string; hotels: HotelMasterItem[] }[] {
+  const sorted = sortHotelsByCategory(hotels);
+  return HOTEL_CATEGORY_OPTIONS.map(({ key, label }) => ({
+    key,
+    label,
+    hotels: sorted.filter((h) => h.category_key === key),
+  })).filter((g) => g.hotels.length > 0);
+}
+
 export function findHotelByOptionLabel(
   label: string,
   catalog: HotelMasterItem[] = HOTEL_MASTER

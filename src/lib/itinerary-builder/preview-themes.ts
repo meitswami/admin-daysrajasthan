@@ -166,14 +166,24 @@ export const THEME_MIX_SUGGESTIONS: ThemeMixSuggestion[] = [
   },
 ];
 
+/** Themes shown in Preview & Confirm selection (Theme 1 is hidden). */
+export const SELECTABLE_PREVIEW_THEMES: PreviewTheme[] = PREVIEW_THEMES.filter(
+  (t) => t.id !== 1
+);
+
+/** Default theme when unset or Theme 1 (legacy) is requested. */
+export const DEFAULT_PREVIEW_THEME: PreviewThemeId = 2;
+
 export function clampPreviewTheme(value: unknown): PreviewThemeId {
   const n = Number(value);
   if (n === 2 || n === 3 || n === 4 || n === 5) return n;
-  return 1;
+  // Theme 1 is hidden from selection — fall back to default.
+  return DEFAULT_PREVIEW_THEME;
 }
 
 export function getPreviewTheme(themeId: PreviewThemeId | undefined | null): PreviewTheme {
-  return PREVIEW_THEMES.find((t) => t.id === (themeId ?? 1)) ?? PREVIEW_THEMES[0];
+  const id = clampPreviewTheme(themeId ?? DEFAULT_PREVIEW_THEME);
+  return PREVIEW_THEMES.find((t) => t.id === id) ?? PREVIEW_THEMES[1];
 }
 
 export function themeShellClass(themeId: PreviewThemeId | undefined | null): string {

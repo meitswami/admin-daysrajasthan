@@ -107,23 +107,10 @@ export function vehicleProviderDetailBlocks(providers: VehicleProvider[]): {
   title: string;
   lines: { label: string; value: string }[];
 }[] {
-  if (!providers.length) {
-    return [
-      {
-        title: "Provider",
-        lines: [
-          { label: "Provider", value: "Not specified" },
-          { label: "Contact", value: "—" },
-          { label: "Phones", value: "—" },
-          { label: "Per km", value: "—" },
-          { label: "Per day", value: "—" },
-        ],
-      },
-    ];
-  }
+  if (!providers.length) return [];
 
   return providers.map((p, index) => ({
-    title: providers.length > 1 ? `Provider ${index + 1}` : "Vehicle Details",
+    title: providers.length > 1 ? `Provider ${index + 1}` : "Provider",
     lines: [
       { label: "Provider", value: p.provider_company_name.trim() || "—" },
       { label: "Contact", value: p.contact_person_name?.trim() || "—" },
@@ -132,6 +119,57 @@ export function vehicleProviderDetailBlocks(providers: VehicleProvider[]): {
       { label: "Per day", value: formatInr(p.price_per_day) },
     ],
   }));
+}
+
+/** Vehicle + provider lines for the itinerary-builder info popover. */
+export function vehicleDetailBlocks(
+  vehicle: Pick<
+    WebsiteContentItem,
+    | "name"
+    | "vehicle_type"
+    | "capacity"
+    | "providers"
+    | "provider_company_name"
+    | "contact_person_name"
+    | "contact_phone_1"
+    | "contact_phone_2"
+    | "price_per_km"
+    | "price_per_day"
+  > | null
+): {
+  title: string;
+  lines: { label: string; value: string }[];
+}[] {
+  if (!vehicle) {
+    return [
+      {
+        title: "Vehicle",
+        lines: [{ label: "Status", value: "Not found in master data" }],
+      },
+    ];
+  }
+
+  const capacity = vehicle.capacity?.trim();
+  const blocks: {
+    title: string;
+    lines: { label: string; value: string }[];
+  }[] = [
+    {
+      title: "Vehicle",
+      lines: [
+        { label: "Model", value: vehicle.name.trim() || "—" },
+        { label: "Type", value: vehicle.vehicle_type?.trim() || "—" },
+        { label: "Capacity", value: capacity ? `${capacity} seater` : "—" },
+      ],
+    },
+  ];
+
+  const providerBlocks = vehicleProviderDetailBlocks(normalizeVehicleProviders(vehicle));
+  if (providerBlocks.length) {
+    blocks.push(...providerBlocks);
+  }
+
+  return blocks;
 }
 
 export function parseProvidersColumn(raw: unknown): VehicleProvider[] | undefined {

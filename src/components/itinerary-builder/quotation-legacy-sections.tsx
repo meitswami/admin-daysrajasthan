@@ -85,12 +85,10 @@ export function QuotationLegacyPolicies({
   inclusions,
   exclusions,
   companyName,
-  note,
 }: {
   inclusions: string[];
   exclusions: string[];
   companyName: string;
-  note?: string;
 }) {
   return (
     <section className="break-inside-avoid space-y-8 bg-white px-6 py-10">
@@ -99,16 +97,6 @@ export function QuotationLegacyPolicies({
           {companyName}
         </div>
       </div>
-
-      {note?.trim() ? (
-        <div className="break-inside-avoid rounded-lg border border-stone-200 bg-stone-50 p-4">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-md bg-[#F5C518] px-3 py-1.5 text-sm font-bold text-white">
-            <FileText className="h-4 w-4" />
-            Note
-          </div>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-stone-700">{note.trim()}</p>
-        </div>
-      ) : null}
 
       {(inclusions.length > 0 || exclusions.length > 0) && (
         <div className="grid gap-6 sm:grid-cols-2">
