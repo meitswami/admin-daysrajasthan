@@ -1,15 +1,12 @@
 import type { Itinerary, ItineraryDayPlan, PackageType } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
-import { useCloudMaster } from "@/lib/master-data/cloud";
+import { requireCloudMaster, useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
 function useSupabaseMaster(): boolean {
   return useCloudMaster();
 }
-
-const STORAGE_KEY = "td-master-itineraries-v1";
-const HIDE_EXISTING_FLAG = "td-master-itineraries-hide-existing-v1";
 
 function parseStringList(raw: unknown): string[] {
   if (!Array.isArray(raw)) return [];
@@ -35,79 +32,6 @@ function parseDays(raw: unknown): ItineraryDayPlan[] {
       image_urls: images,
     };
   });
-}
-
-function seed(): Itinerary[] {
-  const now = new Date().toISOString();
-  return [
-    {
-      id: crypto.randomUUID(),
-      package_name: "Jaipur Heritage 3N/4D",
-      alternate_titles: [],
-      tour_code: "DR001",
-      destination: "Jaipur",
-      slug: "dr001-jaipur-heritage-3n4d",
-      pdf_url: null,
-      cover_image_url: null,
-      package_type: "Domestic",
-      package_duration: "4 Days 3 Nights",
-      show_on_website: false,
-      is_trending: false,
-      display_mode: "list",
-      status: "inactive",
-      download_count: 0,
-      created_at: now,
-      updated_at: now,
-      inclusions: ["Hotel stay with breakfast", "Private AC cab for sightseeing"],
-      exclusions: ["Airfare / train fare", "Personal expenses"],
-      gallery_urls: [],
-      days: [
-        {
-          day_number: 1,
-          title: "Arrival in Jaipur",
-          alternate_titles: [],
-          location: "Jaipur",
-          locations: [],
-          description: "Airport pickup and check-in.",
-          image_urls: [],
-        },
-      ],
-      created_by_id: "tm-info",
-      created_by_name: "Travel Days Admin",
-    },
-  ];
-}
-
-function readLocal(): Itinerary[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const s = seed();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-      localStorage.setItem(HIDE_EXISTING_FLAG, "1");
-      return s;
-    }
-    let items = JSON.parse(raw) as Itinerary[];
-    // One-shot: soft-hide packages that existed before inactive workflow.
-    if (!localStorage.getItem(HIDE_EXISTING_FLAG)) {
-      items = items.map((item) => ({
-        ...item,
-        status: "inactive",
-        show_on_website: false,
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-      localStorage.setItem(HIDE_EXISTING_FLAG, "1");
-    }
-    return items;
-  } catch {
-    return seed();
-  }
-}
-
-function writeLocal(items: Itinerary[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
 function mapRow(row: Record<string, unknown>): Itinerary {
@@ -184,20 +108,20 @@ export type MasterItineraryInput = {
 };
 
 export async function listMasterItineraries(): Promise<Itinerary[]> {
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("itineraries")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!error && data) return data.map((r) => mapRow(r as Record<string, unknown>));
-    } catch {
-      // fall through
-    }
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Packages require a live database (no browser storage)."
+    );
   }
-  return readLocal();
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("itineraries")
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((r) => mapRow(r as Record<string, unknown>));
 }
 
 export async function createMasterItinerary(
@@ -219,7 +143,7 @@ export async function createMasterItinerary(
     pdf_url: input.pdf_url || null,
     cover_image_url: cover,
     package_type: input.package_type ?? "Domestic",
-    package_duration: input.package_duration ?? "3 Days 2 Nights",
+    package_duration: input.package_duration ?? "2 Nights 3 Days",
     show_on_website: input.show_on_website ?? true,
     is_trending: input.is_trending ?? false,
     display_mode: input.display_mode ?? "list",
@@ -235,49 +159,32 @@ export async function createMasterItinerary(
     created_by_name: actor.name,
   };
 
-  let persisted = false;
-  let lastError: string | null = null;
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("itineraries").insert({
-        id: item.id,
-        package_name: item.package_name,
-        alternate_titles: item.alternate_titles ?? [],
-        tour_code: item.tour_code,
-        destination: item.destination,
-        slug: item.slug,
-        pdf_url: item.pdf_url,
-        cover_image_url: item.cover_image_url,
-        package_type: item.package_type,
-        package_duration: item.package_duration,
-        show_on_website: item.show_on_website,
-        is_trending: item.is_trending,
-        display_mode: item.display_mode,
-        status: item.status,
-        inclusions: item.inclusions,
-        exclusions: item.exclusions,
-        gallery_urls: item.gallery_urls,
-        days: item.days,
-        created_by: actor.id,
-        created_by_name: actor.name,
-      });
-      if (!error) persisted = true;
-      else lastError = error.message;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : "Failed to save itinerary";
-    }
-  }
-
-  if (!persisted) {
-    if (useSupabaseMaster() && lastError) {
-      throw new Error(lastError);
-    }
-    const list = readLocal();
-    list.unshift(item);
-    writeLocal(list);
-  }
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("itineraries").insert({
+    id: item.id,
+    package_name: item.package_name,
+    alternate_titles: item.alternate_titles ?? [],
+    tour_code: item.tour_code,
+    destination: item.destination,
+    slug: item.slug,
+    pdf_url: item.pdf_url,
+    cover_image_url: item.cover_image_url,
+    package_type: item.package_type,
+    package_duration: item.package_duration,
+    show_on_website: item.show_on_website,
+    is_trending: item.is_trending,
+    display_mode: item.display_mode,
+    status: item.status,
+    inclusions: item.inclusions,
+    exclusions: item.exclusions,
+    gallery_urls: item.gallery_urls,
+    days: item.days,
+    created_by: actor.id,
+    created_by_name: actor.name,
+  });
+  if (error) throw new Error(error.message);
 
   logMasterDataChange({
     entityType: "itinerary",
@@ -332,75 +239,39 @@ export async function updateMasterItinerary(
     if (firstDayImage) nextPatch.cover_image_url = firstDayImage;
   }
 
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("itineraries")
-        .update(nextPatch)
-        .eq("id", id)
-        .select("*")
-        .maybeSingle();
-      if (!error && data) {
-        const after = mapRow(data as Record<string, unknown>);
-        logMasterDataChange({
-          entityType: "itinerary",
-          entityId: id,
-          action: "update",
-          summary: `Updated package “${after.package_name}”`,
-          before: before ? { ...before } : null,
-          after: { ...after },
-          actor,
-        });
-        return after;
-      }
-      if (error) throw new Error(error.message);
-    } catch (err) {
-      if (useSupabaseMaster()) {
-        throw err instanceof Error ? err : new Error("Failed to update itinerary");
-      }
-    }
-  }
-
-  const list = readLocal();
-  const idx = list.findIndex((i) => i.id === id);
-  if (idx < 0) return null;
-  list[idx] = { ...list[idx], ...nextPatch, updated_at: now } as Itinerary;
-  writeLocal(list);
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("itineraries")
+    .update(nextPatch)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const after = mapRow(data as Record<string, unknown>);
   logMasterDataChange({
     entityType: "itinerary",
     entityId: id,
     action: "update",
-    summary: `Updated package “${list[idx].package_name}”`,
+    summary: `Updated package “${after.package_name}”`,
     before: before ? { ...before } : null,
-    after: { ...list[idx] },
+    after: { ...after },
     actor,
   });
-  return list[idx];
+  return after;
 }
 
 export async function deleteMasterItinerary(id: string, actor?: TeamMember): Promise<boolean> {
   const all = await listMasterItineraries();
   const before = all.find((i) => i.id === id) ?? null;
 
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { error } = await supabase.from("itineraries").delete().eq("id", id);
-    if (error) throw new Error(error.message);
-    logMasterDataChange({
-      entityType: "itinerary",
-      entityId: id,
-      action: "delete",
-      summary: `Deleted package “${before?.package_name ?? id}”`,
-      before: before ? { ...before } : null,
-      actor,
-    });
-    return true;
-  }
-
-  writeLocal(readLocal().filter((i) => i.id !== id));
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("itineraries").delete().eq("id", id);
+  if (error) throw new Error(error.message);
   logMasterDataChange({
     entityType: "itinerary",
     entityId: id,

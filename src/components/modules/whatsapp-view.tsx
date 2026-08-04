@@ -10,18 +10,44 @@ import { Sheet } from "@/components/ui/sheet";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CustomerLinkPanel } from "@/components/shared/customer-link-panel";
 import { getCustomerByEmail, getLinkedCustomers } from "@/lib/data/customer-links";
-import { packageInquiries } from "@/lib/data";
-import type { WhatsappLead } from "@/types/database";
+import type { PackageInquiry, WhatsappLead } from "@/types/database";
 import { formatDateTime } from "@/lib/utils";
 import { MessageCircle, ExternalLink, Search } from "lucide-react";
 import { CreateQuoteFromLeadButton } from "@/components/leads/create-quote-from-lead-button";
-import { listUnifiedLeads } from "@/lib/leads/unified-leads";
+import type { UnifiedLead } from "@/lib/leads/unified-leads";
 
 function normalizePhone(p: string) {
   return p.replace(/\D/g, "").slice(-10);
 }
 
-export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
+function whatsappToLead(w: WhatsappLead): UnifiedLead {
+  return {
+    id: `whatsapp:${w.id}`,
+    source: "whatsapp",
+    source_id: w.id,
+    name: w.customer_name ?? "WhatsApp Lead",
+    email: null,
+    phone: w.phone,
+    destination: w.destination,
+    travel_date: null,
+    adults: 2,
+    children: 0,
+    package_hint: w.selected_package,
+    notes: w.landing_url,
+    status: "new",
+    created_at: w.created_at,
+    converted_quote_id: null,
+  };
+}
+
+export function WhatsappView({
+  initialData,
+  linkedInquiries = [],
+}: {
+  initialData: WhatsappLead[];
+  /** Optional package inquiries for phone matching (from DB). */
+  linkedInquiries?: PackageInquiry[];
+}) {
   const { show } = useToast();
   const [items, setItems] = useState(initialData);
   const [search, setSearch] = useState("");
@@ -39,7 +65,7 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
   }, [items, search]);
 
   const linkedCount = items.filter((w) =>
-    packageInquiries.some((i) => normalizePhone(i.mobile) === normalizePhone(w.phone))
+    linkedInquiries.some((i) => normalizePhone(i.mobile) === normalizePhone(w.phone))
   ).length;
 
   const linkedCustomers = getLinkedCustomers();
@@ -54,37 +80,58 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
       key: "customer",
       header: "Customer",
       cell: (row) => {
-        const inq = packageInquiries.find((i) => normalizePhone(i.mobile) === normalizePhone(row.phone));
+        const inq = linkedInquiries.find(
+          (i) => normalizePhone(i.mobile) === normalizePhone(row.phone)
+        );
         return (
           <button
             type="button"
             className="text-left"
             onClick={() => inq && setDetailEmail(inq.email)}
           >
-            <p className="font-medium text-amber-900 hover:underline">{row.customer_name ?? "Unknown"}</p>
+            <p className="font-medium text-amber-900 hover:underline">
+              {row.customer_name ?? "Unknown"}
+            </p>
             <p className="text-xs text-stone-500">{row.phone}</p>
           </button>
         );
       },
     },
     { key: "package", header: "Package", cell: (row) => row.selected_package ?? "—" },
-    { key: "destination", header: "Destination", cell: (row) => row.destination ?? "—", hideOnMobile: true },
-    { key: "source", header: "Source", cell: (row) => <span className="text-xs">{row.source_page}</span>, hideOnMobile: true },
-    { key: "crm", header: "CRM", cell: (row) => (
-      row.synced_to_crm ? <StatusBadge status="synced" /> : (
-        <Button size="sm" variant="outline" onClick={() => syncToCrm(row.id)}>Sync</Button>
-      )
-    ) },
-    { key: "time", header: "Time", cell: (row) => formatDateTime(row.created_at), hideOnMobile: true },
+    {
+      key: "destination",
+      header: "Destination",
+      cell: (row) => row.destination ?? "—",
+      hideOnMobile: true,
+    },
+    {
+      key: "source",
+      header: "Source",
+      cell: (row) => <span className="text-xs">{row.source_page}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: "crm",
+      header: "CRM",
+      cell: (row) =>
+        row.synced_to_crm ? (
+          <StatusBadge status="synced" />
+        ) : (
+          <Button size="sm" variant="outline" onClick={() => syncToCrm(row.id)}>
+            Sync
+          </Button>
+        ),
+    },
+    {
+      key: "time",
+      header: "Time",
+      cell: (row) => formatDateTime(row.created_at),
+      hideOnMobile: true,
+    },
     {
       key: "quote",
       header: "Quote",
-      cell: (row) => {
-        const lead = listUnifiedLeads().find(
-          (l) => l.source === "whatsapp" && l.source_id === row.id
-        );
-        return lead ? <CreateQuoteFromLeadButton lead={lead} /> : "—";
-      },
+      cell: (row) => <CreateQuoteFromLeadButton lead={whatsappToLead(row)} />,
       hideOnMobile: true,
     },
   ];
@@ -105,7 +152,9 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
         </Card>
         <Card>
           <CardContent className="p-4">
-            <p className="text-2xl font-bold text-emerald-700">{items.filter((w) => w.synced_to_crm).length}</p>
+            <p className="text-2xl font-bold text-emerald-700">
+              {items.filter((w) => w.synced_to_crm).length}
+            </p>
             <p className="text-xs text-stone-600">Synced to CRM</p>
           </CardContent>
         </Card>
@@ -120,7 +169,12 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
       <PageToolbar>
         <div className="relative w-full sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
-          <Input placeholder="Search phone, name…" className="h-10 pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input
+            placeholder="Search phone, name…"
+            className="h-10 pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </PageToolbar>
 
@@ -135,7 +189,12 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
             </div>
             <p className="text-sm text-stone-700">{row.selected_package}</p>
             {row.landing_url && (
-              <a href={row.landing_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-amber-700">
+              <a
+                href={row.landing_url}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-xs text-amber-700"
+              >
                 <ExternalLink className="h-3 w-3" /> Landing URL
               </a>
             )}
@@ -151,8 +210,14 @@ export function WhatsappView({ initialData }: { initialData: WhatsappLead[] }) {
         </CardHeader>
         <CardContent className="space-y-2 text-sm">
           {linkedCustomers.slice(0, 4).map((c) => (
-            <div key={c.email} className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2">
-              <span><strong>{c.name}</strong> — {c.whatsapp.length} WA · {c.inquiries.length} inq · {c.downloads.length} dl</span>
+            <div
+              key={c.email}
+              className="flex items-center justify-between rounded-lg bg-stone-50 px-3 py-2"
+            >
+              <span>
+                <strong>{c.name}</strong> — {c.whatsapp.length} WA · {c.inquiries.length} inq ·{" "}
+                {c.downloads.length} dl
+              </span>
               <StatusBadge status={c.crmSynced ? "synced" : "pending"} />
             </div>
           ))}

@@ -16,9 +16,29 @@ import type { PackageInquiry, InquiryStatus } from "@/types/database";
 import { formatDate, formatDateTime } from "@/lib/utils";
 import { Download, Search, Users, Calendar, Sparkles } from "lucide-react";
 import { CreateQuoteFromLeadButton } from "@/components/leads/create-quote-from-lead-button";
-import { listUnifiedLeads } from "@/lib/leads/unified-leads";
+import type { UnifiedLead } from "@/lib/leads/unified-leads";
 
 const STATUSES: InquiryStatus[] = ["new", "contacted", "quoted", "converted", "closed"];
+
+function inquiryToLead(i: PackageInquiry): UnifiedLead {
+  return {
+    id: `website_inquiry:${i.id}`,
+    source: "website_inquiry",
+    source_id: i.id,
+    name: i.customer_name,
+    email: i.email,
+    phone: i.mobile,
+    destination: i.destination,
+    travel_date: i.travel_date,
+    adults: i.adults,
+    children: i.children,
+    package_hint: i.destination,
+    notes: i.additional_requirements,
+    status: (i.status as UnifiedLead["status"]) ?? "new",
+    created_at: i.created_at,
+    converted_quote_id: null,
+  };
+}
 
 export function InquiriesView({ initialData }: { initialData: PackageInquiry[] }) {
   const { show } = useToast();
@@ -190,14 +210,12 @@ export function InquiriesView({ initialData }: { initialData: PackageInquiry[] }
               View linked customer profile
             </Button>
             {(() => {
-              const lead = listUnifiedLeads().find(
-                (l) => l.source === "website_inquiry" && l.source_id === selected.id
-              );
-              return lead ? (
+              const lead = inquiryToLead(selected);
+              return (
                 <div className="pt-2">
                   <CreateQuoteFromLeadButton lead={lead} />
                 </div>
-              ) : null;
+              );
             })()}
           </div>
         )}

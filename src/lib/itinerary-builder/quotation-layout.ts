@@ -4,7 +4,11 @@ import type {
   ItineraryDay,
 } from "@/types/itinerary-builder";
 import { formatDate } from "@/lib/utils";
-import { bookingAdvance } from "./cost-engine";
+import {
+  bookingAdvance,
+  hotelBlockDaysFromItinerary,
+  isDepartureLocation,
+} from "./cost-engine";
 import { dayViewForCategory } from "./category-hotels";
 
 export type NightSegment = {
@@ -31,16 +35,67 @@ export function bookingAmount(total: number, rate?: number): number {
   return bookingAdvance(total, rate);
 }
 
-export function extractDestination(day: ItineraryDay): string {
-  const source = day.day_subtitle?.trim() || day.day_title.trim();
-  const beforeDash = source.split(" - ")[0]?.trim();
-  const beforeComma = beforeDash.split(",")[0]?.trim();
-  const cleaned = (beforeComma || source)
-    .replace(/\b(the|arrival|departure|from|to|in)\b/gi, "")
+/** Normalize location labels: `Desert, Jaisalmer` → `Desert Jaisalmer`. */
+export function formatOvernightLabel(raw: string): string {
+  const cleaned = raw
+    .replace(/,/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  if (!cleaned) return cleaned;
+  return cleaned
+    .split(" ")
+    .map((word) => {
+      if (!word) return word;
+      if (word === word.toUpperCase() && word.length <= 3) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1);
+    })
+    .join(" ");
+}
+
+/**
+ * Overnight destination for covering/hotels.
+ * Prefer day.location (where the night is spent); title is only a fallback.
+ * Transfer titles like `Jodhpur - Jaisalmer - …` use the last place segment.
+ */
+export function extractDestination(day: ItineraryDay): string {
+  const loc = day.location?.trim();
+  if (loc && !isDepartureLocation(loc)) {
+    return formatOvernightLabel(loc);
+  }
+
+  const source = day.day_subtitle?.trim() || day.day_title.trim();
+  const parts = source
+    .split(/\s+-\s+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  // Prefer short place-like segments; drop marketing phrases ("The Pink City", long taglines).
+  const placeParts = parts.filter((p) => {
+    if (/^(the|arrival|departure|from)\b/i.test(p)) return false;
+    if (p.split(/\s+/).length > 2) return false;
+    return true;
+  });
+  const pick =
+    placeParts.length > 0
+      ? placeParts[placeParts.length - 1]
+      : parts[0] || source;
+  const cleaned = formatOvernightLabel(
+    pick
+      .replace(/\b(the|arrival|departure|from|to|in)\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
   if (!cleaned) return `Day ${day.day_number}`;
-  return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+  return cleaned;
+}
+
+/** Append `/ Similar` for vehicle badges when not already present. */
+export function formatVehicleLabel(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  if (/\/\s*similar\b/i.test(trimmed)) {
+    return trimmed.replace(/\/\s*similar\b/i, "/ Similar");
+  }
+  return `${trimmed} / Similar`;
 }
 
 function dayDate(travelDate: string | null, dayNumber: number): Date | null {
@@ -66,38 +121,44 @@ function formatNightDateRange(
   return `${formatDate(start)}${nights > 1 ? ` to ${formatDate(end)}` : ""} · ${nightText}`;
 }
 
+/**
+ * Build overnight segments from hotel-block days (all days except Departure),
+ * keyed by overnight location — not only days that have hotel_name filled.
+ * Matches package duration (e.g. 06 Days / 05 Nights).
+ */
 export function buildNightSegments(
   days: ItineraryDay[],
   travelDate: string | null
 ): NightSegment[] {
   const segments: NightSegment[] = [];
   let current: NightSegment | null = null;
+  /** Sequential night index (1-based), independent of day_number gaps. */
+  let nightIndex = 0;
 
-  for (const day of days) {
-    if (!day.hotel_name) {
-      if (current) {
-        segments.push(current);
-        current = null;
-      }
-      continue;
-    }
-
+  for (const day of hotelBlockDaysFromItinerary(days)) {
     const destination = extractDestination(day);
+    nightIndex += 1;
 
-    if (current && current.destination === destination) {
+    if (current && current.destination.toLowerCase() === destination.toLowerCase()) {
       current.nights += 1;
       current.endDay = day.day_number;
+      const startNight = nightIndex - current.nights + 1;
       current.nightLabel =
         current.nights === 1
-          ? `Night ${String(current.startDay).padStart(2, "0")}`
-          : `Night ${String(current.startDay).padStart(2, "0")}-${String(current.endDay).padStart(2, "0")}`;
-      current.dateLabel = formatNightDateRange(travelDate, current.startDay, current.endDay, current.nights);
+          ? `Night ${String(startNight).padStart(2, "0")}`
+          : `Night ${String(startNight).padStart(2, "0")}-${String(nightIndex).padStart(2, "0")}`;
+      current.dateLabel = formatNightDateRange(
+        travelDate,
+        current.startDay,
+        current.endDay,
+        current.nights
+      );
       continue;
     }
 
     if (current) segments.push(current);
     current = {
-      nightLabel: `Night ${String(day.day_number).padStart(2, "0")}`,
+      nightLabel: `Night ${String(nightIndex).padStart(2, "0")}`,
       destination,
       nights: 1,
       startDay: day.day_number,
@@ -161,19 +222,24 @@ export function resolvePackageVehicles(input: {
   days?: { vehicle_type?: string | null }[];
 }): string[] {
   const fromList = (input.vehicle_types ?? []).map((v) => v.trim()).filter(Boolean);
-  if (fromList.length) return Array.from(new Set(fromList));
-  if (input.vehicle_type?.trim()) return [input.vehicle_type.trim()];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const day of input.days ?? []) {
-    const v = day.vehicle_type?.trim();
-    if (!v) continue;
-    const key = v.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(v);
-  }
-  return out;
+  const raw = fromList.length
+    ? Array.from(new Set(fromList))
+    : input.vehicle_type?.trim()
+      ? [input.vehicle_type.trim()]
+      : (() => {
+          const seen = new Set<string>();
+          const out: string[] = [];
+          for (const day of input.days ?? []) {
+            const v = day.vehicle_type?.trim();
+            if (!v) continue;
+            const key = v.toLowerCase().replace(/\s*\/\s*similar\b/i, "");
+            if (seen.has(key)) continue;
+            seen.add(key);
+            out.push(v);
+          }
+          return out;
+        })();
+  return raw.map(formatVehicleLabel);
 }
 
 export type HotelPackageOption = {
@@ -207,18 +273,35 @@ export function buildHotelPackageNights(
 ): HotelPackageNight[] {
   const segments = buildNightSegments(days, travelDate);
   return segments.map((segment) => {
-    const rawDay =
-      days.find((d) => d.day_number === segment.startDay) ??
-      days.find((d) => d.day_number >= segment.startDay && d.day_number <= segment.endDay);
-    const day =
-      rawDay && opts?.categoryKey
+    const daysInSegment = days.filter(
+      (d) => d.day_number >= segment.startDay && d.day_number <= segment.endDay
+    );
+    const pickSourceDay = () => {
+      for (const raw of daysInSegment) {
+        const view =
+          opts?.categoryKey
+            ? dayViewForCategory(
+                raw,
+                opts.categoryKey,
+                opts.roomCategory ?? null,
+                opts.primaryKey ?? opts.categoryKey
+              )
+            : raw;
+        const pair = [view.breakfast_hotels?.[0], view.breakfast_hotels?.[1]].filter(Boolean);
+        if (pair.length > 0 || view.hotel_name) return view;
+      }
+      const fallback = daysInSegment[0];
+      if (!fallback) return null;
+      return opts?.categoryKey
         ? dayViewForCategory(
-            rawDay,
+            fallback,
             opts.categoryKey,
             opts.roomCategory ?? null,
             opts.primaryKey ?? opts.categoryKey
           )
-        : rawDay;
+        : fallback;
+    };
+    const day = pickSourceDay();
     const pair = day
       ? [day.breakfast_hotels?.[0], day.breakfast_hotels?.[1]].filter(Boolean)
       : [];

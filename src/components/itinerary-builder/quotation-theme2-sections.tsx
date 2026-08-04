@@ -2,19 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReportBrand } from "@/lib/branding/report-brand";
-import {
-  MASTER_CANCELLATION,
-  MASTER_PAYMENT,
-  MASTER_TERMS,
-  type ContentBlockItem,
-  type PreviewContact,
-} from "@/lib/itinerary-builder/policy-master";
+import type { ContentBlockItem, PreviewContact } from "@/lib/itinerary-builder/policy-master";
 import { GOOGLE_REVIEWS_URL } from "@/lib/itinerary-builder/review-links";
 import {
   listInclusionExclusions,
   resolvePolicyContentBlocks,
   type InclusionExclusionItem,
 } from "@/lib/master-data/inclusions-store";
+import {
+  listMasterPolicies,
+  policiesForSection,
+} from "@/lib/master-data/policies-store";
 import type { CompanyStructure } from "@/types/company-structure";
 import {
   DEFAULT_ACHIEVEMENT_DESCRIPTION,
@@ -169,12 +167,28 @@ export function Theme2TourPolicies({
   const tone = accent ?? (variant === "theme3" ? THEME3_ACCENT : THEME2_ACCENT);
   const [tab, setTab] = useState<PolicyTabId>("inclusions");
   const [masterLibrary, setMasterLibrary] = useState<InclusionExclusionItem[]>([]);
+  const [terms, setTerms] = useState<string[]>([]);
+  const [cancellation, setCancellation] = useState<string[]>([]);
+  const [payment, setPayment] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     void listInclusionExclusions().then((rows) => {
       if (!cancelled) setMasterLibrary(rows);
     });
+    void listMasterPolicies()
+      .then((rows) => {
+        if (cancelled) return;
+        setTerms(policiesForSection(rows, "terms").map((t) => t.title));
+        setCancellation(policiesForSection(rows, "cancellation").map((t) => t.title));
+        setPayment(policiesForSection(rows, "payment").map((t) => t.title));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTerms([]);
+        setCancellation([]);
+        setPayment([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -196,11 +210,11 @@ export function Theme2TourPolicies({
     return {
       inclusions,
       exclusions,
-      terms: MASTER_TERMS.map((t) => t.title),
-      cancellation: MASTER_CANCELLATION.map((t) => t.title),
-      payment: MASTER_PAYMENT.map((t) => t.title),
+      terms,
+      cancellation,
+      payment,
     };
-  }, [inclusionItems, exclusionItems, masterLibrary]);
+  }, [inclusionItems, exclusionItems, masterLibrary, terms, cancellation, payment]);
 
   return (
     <section className="break-inside-avoid">

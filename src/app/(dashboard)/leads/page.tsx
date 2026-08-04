@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Header } from "@/components/layout/header";
 import { Input, Select } from "@/components/ui/input";
-import { listUnifiedLeads, type LeadSource, type UnifiedLead } from "@/lib/leads/unified-leads";
+import { listUnifiedLeadsAsync, type LeadSource, type UnifiedLead } from "@/lib/leads/unified-leads";
 import { CreateQuoteFromLeadButton } from "@/components/leads/create-quote-from-lead-button";
 import { formatDateTime } from "@/lib/utils";
 import { Search } from "lucide-react";
@@ -21,7 +21,8 @@ export default function LeadsHubPage() {
   const [source, setSource] = useState<LeadSource | "all">("all");
 
   useEffect(() => {
-    setLeads(listUnifiedLeads());
+    setLeads([]);
+    void listUnifiedLeadsAsync().then(setLeads);
   }, []);
 
   const filtered = useMemo(() => {

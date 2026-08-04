@@ -1,6 +1,7 @@
-/** Unified leads from website, WhatsApp, email inquiries, contact form */
+/** Unified leads from website, WhatsApp, and contact form — Supabase when configured. */
 
-import { packageInquiries, whatsappLeads, contactQueries } from "@/lib/data/mock-data";
+import type { ContactQuery, PackageInquiry, WhatsappLead } from "@/types/database";
+import { isSupabaseConfigured } from "@/lib/system/data-mode";
 
 export type LeadSource = "website_inquiry" | "whatsapp" | "contact" | "email";
 
@@ -51,10 +52,14 @@ function leadKey(source: LeadSource, sourceId: string) {
   return `${source}:${sourceId}`;
 }
 
-export function buildUnifiedLeadsFromMock(): UnifiedLead[] {
+export function buildUnifiedLeadsFromRows(input: {
+  inquiries: PackageInquiry[];
+  whatsapp: WhatsappLead[];
+  contacts: ContactQuery[];
+}): UnifiedLead[] {
   const conversions = typeof window !== "undefined" ? loadConversions() : {};
 
-  const inquiryLeads: UnifiedLead[] = packageInquiries.map((i) => ({
+  const inquiryLeads: UnifiedLead[] = input.inquiries.map((i) => ({
     id: leadKey("website_inquiry", i.id),
     source: "website_inquiry" as const,
     source_id: i.id,
@@ -72,7 +77,7 @@ export function buildUnifiedLeadsFromMock(): UnifiedLead[] {
     converted_quote_id: conversions[leadKey("website_inquiry", i.id)] ?? null,
   }));
 
-  const waLeads: UnifiedLead[] = whatsappLeads.map((w) => ({
+  const waLeads: UnifiedLead[] = input.whatsapp.map((w) => ({
     id: leadKey("whatsapp", w.id),
     source: "whatsapp" as const,
     source_id: w.id,
@@ -90,7 +95,7 @@ export function buildUnifiedLeadsFromMock(): UnifiedLead[] {
     converted_quote_id: conversions[leadKey("whatsapp", w.id)] ?? null,
   }));
 
-  const contactLeads: UnifiedLead[] = contactQueries.map((c) => ({
+  const contactLeads: UnifiedLead[] = input.contacts.map((c) => ({
     id: leadKey("contact", c.id),
     source: "contact" as const,
     source_id: c.id,
@@ -113,6 +118,30 @@ export function buildUnifiedLeadsFromMock(): UnifiedLead[] {
   );
 }
 
+/** @deprecated Prefer listUnifiedLeadsAsync — sync mock path removed. */
 export function listUnifiedLeads(): UnifiedLead[] {
-  return buildUnifiedLeadsFromMock();
+  return [];
+}
+
+export async function listUnifiedLeadsAsync(): Promise<UnifiedLead[]> {
+  if (!isSupabaseConfigured()) {
+    return [];
+  }
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const [inq, wa, contacts] = await Promise.all([
+      supabase.from("package_inquiries").select("*").order("created_at", { ascending: false }),
+      supabase.from("whatsapp_leads").select("*").order("created_at", { ascending: false }),
+      supabase.from("contact_queries").select("*").order("created_at", { ascending: false }),
+    ]);
+    return buildUnifiedLeadsFromRows({
+      inquiries: (inq.data ?? []) as PackageInquiry[],
+      whatsapp: (wa.data ?? []) as WhatsappLead[],
+      contacts: (contacts.data ?? []) as ContactQuery[],
+    });
+  } catch (e) {
+    console.warn("[leads] failed to load from Supabase", e);
+    return [];
+  }
 }

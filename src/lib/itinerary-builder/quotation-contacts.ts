@@ -114,17 +114,15 @@ export function findSelectedContact(
 
 export function formatStructureAddress(structure: CompanyStructure | null | undefined): string {
   const a = structure?.addresses?.[0];
-  if (!a) {
-    return "74, Deewan Nagar, Daulatpura Road, Khora Bisal, Benar Jaipur, Rajasthan India 302012";
-  }
+  if (!a) return "";
   return [a.street, a.area, a.city, a.state, a.pincode].filter(Boolean).join(", ");
 }
 
 export function structureWebsite(structure: CompanyStructure | null | undefined): string {
-  const raw = structure?.social_links?.website?.trim() || "www.rajasthantouring.com";
+  const raw = structure?.social_links?.website?.trim() || "";
   return raw.replace(/^https?:\/\//i, "");
 }
 
 export function structureSupportPhone(structure: CompanyStructure | null | undefined): string {
-  return structure?.support_number?.trim() || "+919351549292";
+  return structure?.support_number?.trim() || "";
 }

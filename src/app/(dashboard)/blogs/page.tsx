@@ -1,12 +1,28 @@
 import { Header } from "@/components/layout/header";
 import { BlogsView } from "@/components/modules/blogs-view";
-import { blogs, blogCategories, blogTags, blogTagMap } from "@/lib/data";
+import {
+  getBlogCategories,
+  getBlogTagMap,
+  getBlogTags,
+  getBlogs,
+} from "@/lib/data/service";
 
-export default function BlogsPage() {
+export default async function BlogsPage() {
+  const [blogs, categories, tags, initialTagMap] = await Promise.all([
+    getBlogs(),
+    getBlogCategories(),
+    getBlogTags(),
+    getBlogTagMap(),
+  ]);
   return (
     <>
       <Header title="Blog CMS" description="Dynamic blog with categories, tags & SEO" />
-      <BlogsView initialBlogs={blogs} categories={blogCategories} tags={blogTags} initialTagMap={blogTagMap} />
+      <BlogsView
+        initialBlogs={blogs}
+        categories={categories}
+        tags={tags}
+        initialTagMap={initialTagMap}
+      />
     </>
   );
 }

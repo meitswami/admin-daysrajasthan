@@ -358,7 +358,7 @@ export function hotelBlockDaysFromItinerary(days: ItineraryDay[]): ItineraryDay[
   return days;
 }
 
-/** Format as `03 Days / 02 Nights` (defaults to days − 1 nights when nights omitted). */
+/** Format as `02 Nights / 03 Days` (nights first; defaults to days − 1 nights when nights omitted). */
 export function durationLabelFromDayCount(dayCount: number, nightCount?: number): string {
   const n = Math.max(0, Math.floor(dayCount));
   if (n <= 0) return "";
@@ -368,7 +368,7 @@ export function durationLabelFromDayCount(dayCount: number, nightCount?: number)
       : Math.max(0, n - 1);
   const dd = String(n).padStart(2, "0");
   const nn = String(nights).padStart(2, "0");
-  return `${dd} Day${n !== 1 ? "s" : ""} / ${nn} Night${nights !== 1 ? "s" : ""}`;
+  return `${nn} Night${nights !== 1 ? "s" : ""} / ${dd} Day${n !== 1 ? "s" : ""}`;
 }
 
 export function durationLabelFromDays(days: ItineraryDay[]): string {
@@ -378,13 +378,14 @@ export function durationLabelFromDays(days: ItineraryDay[]): string {
 
 /**
  * Interpret Duration box typing: `03`, `3`, `30`, or full labels like
- * `03 Days / 02 Nights` / legacy `2 Nights / 3 Days`.
+ * `02 Nights / 03 Days` / legacy `03 Days / 02 Nights`.
  * Partial digit input (`3`) is treated as that many days until more digits arrive.
  */
 export function parseDayCountFromDurationInput(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  // Prefer explicit Days count when present (works for both Nights/Days and Days/Nights).
   const daysMatch = trimmed.match(/(\d+)\s*Days?/i);
   if (daysMatch) {
     const n = Number(daysMatch[1]);

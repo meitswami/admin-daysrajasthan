@@ -1,11 +1,6 @@
 import type { DisplayMode, VehicleProvider, WebsiteContentItem } from "@/types/database";
 import type { TeamMember } from "@/types/rbac";
-import {
-  destinations as seedDestinations,
-  hotels as seedHotels,
-  vehicles as seedVehicles,
-} from "@/lib/data/website-content";
-import { useCloudMaster } from "@/lib/master-data/cloud";
+import { requireCloudMaster, useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import {
   flatFieldsFromProviders,
@@ -21,56 +16,11 @@ function useSupabaseMaster(): boolean {
 
 export type MasterContentEntity = "destinations" | "hotels" | "vehicles";
 
-const STORAGE_PREFIX = "td-master-content-v1:";
-
-const SEEDS: Record<MasterContentEntity, WebsiteContentItem[]> = {
-  destinations: seedDestinations.map((d) => ({
-    ...d,
-    country: d.country ?? "India",
-    created_by_id: "tm-info",
-    created_by_name: "Travel Days Admin",
-  })),
-  hotels: seedHotels.map((h) => ({
-    ...h,
-    country: h.country ?? "India",
-    created_by_id: "tm-info",
-    created_by_name: "Travel Days Admin",
-  })),
-  vehicles: seedVehicles.map((v) => ({
-    ...v,
-    created_by_id: "tm-info",
-    created_by_name: "Travel Days Admin",
-  })),
-};
-
 const TABLE_MAP: Record<MasterContentEntity, string> = {
   destinations: "website_destinations",
   hotels: "website_hotels",
   vehicles: "website_vehicles",
 };
-
-function storageKey(entity: MasterContentEntity) {
-  return `${STORAGE_PREFIX}${entity}`;
-}
-
-function readLocal(entity: MasterContentEntity): WebsiteContentItem[] {
-  if (typeof window === "undefined") return [...SEEDS[entity]];
-  try {
-    const raw = localStorage.getItem(storageKey(entity));
-    if (!raw) {
-      localStorage.setItem(storageKey(entity), JSON.stringify(SEEDS[entity]));
-      return [...SEEDS[entity]];
-    }
-    return JSON.parse(raw) as WebsiteContentItem[];
-  } catch {
-    return [...SEEDS[entity]];
-  }
-}
-
-function writeLocal(entity: MasterContentEntity, items: WebsiteContentItem[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(storageKey(entity), JSON.stringify(items));
-}
 
 function parseGallery(row: Record<string, unknown>): string[] {
   const raw = row.gallery_urls;
@@ -152,22 +102,20 @@ function asMeta(item: WebsiteContentItem): Record<string, unknown> {
 }
 
 export async function listMasterContent(entity: MasterContentEntity): Promise<WebsiteContentItem[]> {
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from(TABLE_MAP[entity])
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (!error && data) {
-        return data.map((row) => mapRow(entity, row as Record<string, unknown>));
-      }
-    } catch {
-      // fall through
-    }
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Master content requires a live database (no browser storage)."
+    );
   }
-  return readLocal(entity);
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from(TABLE_MAP[entity])
+    .select("*")
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRow(entity, row as Record<string, unknown>));
 }
 
 export type MasterContentInput = {
@@ -255,61 +203,44 @@ export async function createMasterContent(
     created_by_name: actor.name,
   };
 
-  let persisted = false;
-  let lastError: string | null = null;
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const payload: Record<string, unknown> = {
-        id: item.id,
-        name: item.name,
-        subtitle: item.subtitle,
-        image_url: item.image_url,
-        gallery_urls: item.gallery_urls ?? [],
-        show_on_website: item.show_on_website,
-        display_mode: item.display_mode,
-        created_by: actor.id,
-        created_by_name: actor.name,
-      };
-      if (entity !== "vehicles") payload.country = item.country ?? "India";
-      if (entity === "destinations") payload.is_trending = item.is_trending ?? false;
-      if (entity === "hotels") {
-        payload.google_maps_url = item.google_maps_url ?? null;
-        payload.category = item.category ?? null;
-        payload.location = item.location ?? null;
-        payload.price_description = item.price_description ?? null;
-        payload.rating = item.rating ?? 0;
-        payload.reviews_count = item.reviews_count ?? 0;
-      }
-      if (entity === "vehicles") {
-        payload.vehicle_type = item.vehicle_type ?? null;
-        payload.capacity = item.capacity ?? null;
-        payload.providers = item.providers ?? [];
-        payload.provider_company_name = item.provider_company_name ?? null;
-        payload.contact_person_name = item.contact_person_name ?? null;
-        payload.contact_phone_1 = item.contact_phone_1 ?? null;
-        payload.contact_phone_2 = item.contact_phone_2 ?? null;
-        payload.price_per_km = item.price_per_km ?? null;
-        payload.price_per_day = item.price_per_day ?? null;
-      }
-
-      const { error } = await supabase.from(TABLE_MAP[entity]).insert(payload);
-      if (!error) persisted = true;
-      else lastError = error.message;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : "Failed to save";
-    }
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const payload: Record<string, unknown> = {
+    id: item.id,
+    name: item.name,
+    subtitle: item.subtitle,
+    image_url: item.image_url,
+    gallery_urls: item.gallery_urls ?? [],
+    show_on_website: item.show_on_website,
+    display_mode: item.display_mode,
+    created_by: actor.id,
+    created_by_name: actor.name,
+  };
+  if (entity !== "vehicles") payload.country = item.country ?? "India";
+  if (entity === "destinations") payload.is_trending = item.is_trending ?? false;
+  if (entity === "hotels") {
+    payload.google_maps_url = item.google_maps_url ?? null;
+    payload.category = item.category ?? null;
+    payload.location = item.location ?? null;
+    payload.price_description = item.price_description ?? null;
+    payload.rating = item.rating ?? 0;
+    payload.reviews_count = item.reviews_count ?? 0;
+  }
+  if (entity === "vehicles") {
+    payload.vehicle_type = item.vehicle_type ?? null;
+    payload.capacity = item.capacity ?? null;
+    payload.providers = item.providers ?? [];
+    payload.provider_company_name = item.provider_company_name ?? null;
+    payload.contact_person_name = item.contact_person_name ?? null;
+    payload.contact_phone_1 = item.contact_phone_1 ?? null;
+    payload.contact_phone_2 = item.contact_phone_2 ?? null;
+    payload.price_per_km = item.price_per_km ?? null;
+    payload.price_per_day = item.price_per_day ?? null;
   }
 
-  if (!persisted) {
-    if (useSupabaseMaster() && lastError) {
-      throw new Error(lastError);
-    }
-    const list = readLocal(entity);
-    list.unshift(item);
-    writeLocal(entity, list);
-  }
+  const { error } = await supabase.from(TABLE_MAP[entity]).insert(payload);
+  if (error) throw new Error(error.message);
 
   logMasterDataChange({
     entityType: entity,
@@ -339,182 +270,108 @@ export async function updateMasterContent(
         ? "hotels"
         : "destinations";
 
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const payload: Record<string, unknown> = { updated_at: now };
-      if (patch.name !== undefined) payload.name = patch.name.trim();
-      if (patch.subtitle !== undefined) payload.subtitle = patch.subtitle;
-      if (patch.gallery_urls !== undefined) {
-        const gallery = await ensureStoredImageUrls(patch.gallery_urls.slice(0, 6), folder);
-        payload.gallery_urls = gallery;
-        payload.image_url =
-          patch.image_url !== undefined
-            ? (await ensureStoredImageUrls(
-                patch.image_url ? [patch.image_url] : [],
-                folder
-              ))[0] ?? gallery[0] ?? null
-            : gallery[0] ?? null;
-      } else if (patch.image_url !== undefined) {
-        payload.image_url = patch.image_url
-          ? (await ensureStoredImageUrls([patch.image_url], folder))[0]
-          : null;
-      }
-      if (patch.show_on_website !== undefined) payload.show_on_website = patch.show_on_website;
-      if (patch.display_mode !== undefined) payload.display_mode = patch.display_mode;
-      if (entity !== "vehicles" && patch.country !== undefined) payload.country = patch.country;
-      if (entity === "destinations" && patch.is_trending !== undefined) {
-        payload.is_trending = patch.is_trending;
-      }
-      if (entity === "hotels") {
-        if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
-        if (patch.category !== undefined) payload.category = patch.category;
-        if (patch.location !== undefined) payload.location = patch.location;
-        if (patch.price_description !== undefined) payload.price_description = patch.price_description;
-        if (patch.rating !== undefined) payload.rating = patch.rating;
-        if (patch.reviews_count !== undefined) payload.reviews_count = patch.reviews_count;
-      }
-      if (entity === "vehicles") {
-        if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
-        if (patch.capacity !== undefined) payload.capacity = patch.capacity;
-        if (
-          patch.providers !== undefined ||
-          patch.provider_company_name !== undefined ||
-          patch.contact_person_name !== undefined ||
-          patch.contact_phone_1 !== undefined ||
-          patch.contact_phone_2 !== undefined ||
-          patch.price_per_km !== undefined ||
-          patch.price_per_day !== undefined
-        ) {
-          const synced = flatFieldsFromProviders(
-            patch.providers ??
-              normalizeVehicleProviders({
-                providers: before?.providers,
-                provider_company_name:
-                  patch.provider_company_name !== undefined
-                    ? patch.provider_company_name
-                    : before?.provider_company_name,
-                contact_person_name:
-                  patch.contact_person_name !== undefined
-                    ? patch.contact_person_name
-                    : before?.contact_person_name,
-                contact_phone_1:
-                  patch.contact_phone_1 !== undefined
-                    ? patch.contact_phone_1
-                    : before?.contact_phone_1,
-                contact_phone_2:
-                  patch.contact_phone_2 !== undefined
-                    ? patch.contact_phone_2
-                    : before?.contact_phone_2,
-                price_per_km:
-                  patch.price_per_km !== undefined ? patch.price_per_km : before?.price_per_km,
-                price_per_day:
-                  patch.price_per_day !== undefined ? patch.price_per_day : before?.price_per_day,
-              })
-          );
-          payload.providers = synced.providers;
-          payload.provider_company_name = synced.provider_company_name;
-          payload.contact_person_name = synced.contact_person_name;
-          payload.contact_phone_1 = synced.contact_phone_1;
-          payload.contact_phone_2 = synced.contact_phone_2;
-          payload.price_per_km = synced.price_per_km;
-          payload.price_per_day = synced.price_per_day;
-        }
-      }
-
-      const { data, error } = await supabase
-        .from(TABLE_MAP[entity])
-        .update(payload)
-        .eq("id", id)
-        .select("*")
-        .maybeSingle();
-      if (!error && data) {
-        const after = mapRow(entity, data as Record<string, unknown>);
-        logMasterDataChange({
-          entityType: entity,
-          entityId: id,
-          action: "update",
-          summary: `Updated ${entity.slice(0, -1)} “${after.name}”`,
-          before: before ? asMeta(before) : null,
-          after: asMeta(after),
-          actor,
-        });
-        return after;
-      }
-      if (error) throw new Error(error.message);
-    } catch (err) {
-      if (useSupabaseMaster()) {
-        throw err instanceof Error ? err : new Error("Failed to update");
-      }
-    }
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const payload: Record<string, unknown> = { updated_at: now };
+  if (patch.name !== undefined) payload.name = patch.name.trim();
+  if (patch.subtitle !== undefined) payload.subtitle = patch.subtitle;
+  if (patch.gallery_urls !== undefined) {
+    const gallery = await ensureStoredImageUrls(patch.gallery_urls.slice(0, 6), folder);
+    payload.gallery_urls = gallery;
+    payload.image_url =
+      patch.image_url !== undefined
+        ? (await ensureStoredImageUrls(
+            patch.image_url ? [patch.image_url] : [],
+            folder
+          ))[0] ?? gallery[0] ?? null
+        : gallery[0] ?? null;
+  } else if (patch.image_url !== undefined) {
+    payload.image_url = patch.image_url
+      ? (await ensureStoredImageUrls([patch.image_url], folder))[0]
+      : null;
   }
-
-  const list = readLocal(entity);
-  const idx = list.findIndex((i) => i.id === id);
-  if (idx < 0) return null;
-  const gallery =
-    patch.gallery_urls !== undefined
-      ? patch.gallery_urls.filter(Boolean).slice(0, 6)
-      : list[idx].gallery_urls;
-  const cover =
-    patch.image_url !== undefined
-      ? patch.image_url
-      : gallery?.[0] ?? list[idx].image_url;
-  list[idx] = {
-    ...list[idx],
-    ...patch,
-    name: patch.name !== undefined ? patch.name.trim() : list[idx].name,
-    gallery_urls: gallery,
-    image_url: cover,
-    updated_at: now,
-    ...(entity === "vehicles" &&
-    (patch.providers !== undefined ||
+  if (patch.show_on_website !== undefined) payload.show_on_website = patch.show_on_website;
+  if (patch.display_mode !== undefined) payload.display_mode = patch.display_mode;
+  if (entity !== "vehicles" && patch.country !== undefined) payload.country = patch.country;
+  if (entity === "destinations" && patch.is_trending !== undefined) {
+    payload.is_trending = patch.is_trending;
+  }
+  if (entity === "hotels") {
+    if (patch.google_maps_url !== undefined) payload.google_maps_url = patch.google_maps_url;
+    if (patch.category !== undefined) payload.category = patch.category;
+    if (patch.location !== undefined) payload.location = patch.location;
+    if (patch.price_description !== undefined) payload.price_description = patch.price_description;
+    if (patch.rating !== undefined) payload.rating = patch.rating;
+    if (patch.reviews_count !== undefined) payload.reviews_count = patch.reviews_count;
+  }
+  if (entity === "vehicles") {
+    if (patch.vehicle_type !== undefined) payload.vehicle_type = patch.vehicle_type;
+    if (patch.capacity !== undefined) payload.capacity = patch.capacity;
+    if (
+      patch.providers !== undefined ||
       patch.provider_company_name !== undefined ||
       patch.contact_person_name !== undefined ||
       patch.contact_phone_1 !== undefined ||
       patch.contact_phone_2 !== undefined ||
       patch.price_per_km !== undefined ||
-      patch.price_per_day !== undefined)
-      ? flatFieldsFromProviders(
-          patch.providers ??
-            normalizeVehicleProviders({
-              providers: patch.providers ?? list[idx].providers,
-              provider_company_name:
-                patch.provider_company_name !== undefined
-                  ? patch.provider_company_name
-                  : list[idx].provider_company_name,
-              contact_person_name:
-                patch.contact_person_name !== undefined
-                  ? patch.contact_person_name
-                  : list[idx].contact_person_name,
-              contact_phone_1:
-                patch.contact_phone_1 !== undefined
-                  ? patch.contact_phone_1
-                  : list[idx].contact_phone_1,
-              contact_phone_2:
-                patch.contact_phone_2 !== undefined
-                  ? patch.contact_phone_2
-                  : list[idx].contact_phone_2,
-              price_per_km:
-                patch.price_per_km !== undefined ? patch.price_per_km : list[idx].price_per_km,
-              price_per_day:
-                patch.price_per_day !== undefined ? patch.price_per_day : list[idx].price_per_day,
-            })
-        )
-      : {}),
-  };
-  writeLocal(entity, list);
+      patch.price_per_day !== undefined
+    ) {
+      const synced = flatFieldsFromProviders(
+        patch.providers ??
+          normalizeVehicleProviders({
+            providers: before?.providers,
+            provider_company_name:
+              patch.provider_company_name !== undefined
+                ? patch.provider_company_name
+                : before?.provider_company_name,
+            contact_person_name:
+              patch.contact_person_name !== undefined
+                ? patch.contact_person_name
+                : before?.contact_person_name,
+            contact_phone_1:
+              patch.contact_phone_1 !== undefined
+                ? patch.contact_phone_1
+                : before?.contact_phone_1,
+            contact_phone_2:
+              patch.contact_phone_2 !== undefined
+                ? patch.contact_phone_2
+                : before?.contact_phone_2,
+            price_per_km:
+              patch.price_per_km !== undefined ? patch.price_per_km : before?.price_per_km,
+            price_per_day:
+              patch.price_per_day !== undefined ? patch.price_per_day : before?.price_per_day,
+          })
+      );
+      payload.providers = synced.providers;
+      payload.provider_company_name = synced.provider_company_name;
+      payload.contact_person_name = synced.contact_person_name;
+      payload.contact_phone_1 = synced.contact_phone_1;
+      payload.contact_phone_2 = synced.contact_phone_2;
+      payload.price_per_km = synced.price_per_km;
+      payload.price_per_day = synced.price_per_day;
+    }
+  }
+
+  const { data, error } = await supabase
+    .from(TABLE_MAP[entity])
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const after = mapRow(entity, data as Record<string, unknown>);
   logMasterDataChange({
     entityType: entity,
     entityId: id,
     action: "update",
-    summary: `Updated ${entity.slice(0, -1)} “${list[idx].name}”`,
+    summary: `Updated ${entity.slice(0, -1)} “${after.name}”`,
     before: before ? asMeta(before) : null,
-    after: asMeta(list[idx]),
+    after: asMeta(after),
     actor,
   });
-  return list[idx];
+  return after;
 }
 
 export async function deleteMasterContent(
@@ -525,24 +382,11 @@ export async function deleteMasterContent(
   const beforeList = await listMasterContent(entity);
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { error } = await supabase.from(TABLE_MAP[entity]).delete().eq("id", id);
-    if (error) throw new Error(error.message);
-    logMasterDataChange({
-      entityType: entity,
-      entityId: id,
-      action: "delete",
-      summary: `Deleted ${entity.slice(0, -1)} “${before?.name ?? id}”`,
-      before: before ? asMeta(before) : null,
-      actor,
-    });
-    return true;
-  }
-
-  const list = readLocal(entity).filter((i) => i.id !== id);
-  writeLocal(entity, list);
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from(TABLE_MAP[entity]).delete().eq("id", id);
+  if (error) throw new Error(error.message);
   logMasterDataChange({
     entityType: entity,
     entityId: id,

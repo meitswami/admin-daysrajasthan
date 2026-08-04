@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Tabs } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
 import { formatInr } from "@/lib/itinerary-builder/cost-engine";
-import { DUMMY_PAYMENT_DETAILS } from "@/lib/itinerary-builder/payment-details";
 import {
   addDaysIso,
   deleteInvoice,
@@ -19,6 +18,8 @@ import {
   nextInvoiceNumber,
   saveInvoice,
 } from "@/lib/operations/store";
+import { getCompanyStructure } from "@/lib/master-data/structure-store";
+import { paymentDetailsFromStructure } from "@/lib/itinerary-builder/payment-details";
 import type {
   InvoiceKind,
   InvoiceParty,
@@ -98,13 +99,34 @@ function blankInvoice(kind: InvoiceKind): OpsInvoice {
     vehicle_name: "",
     trip_legs: [newLeg()],
     rental_amount: 0,
-    bank_name: DUMMY_PAYMENT_DETAILS.bank.bank_name,
-    account_number: DUMMY_PAYMENT_DETAILS.bank.account_number,
-    ifsc: DUMMY_PAYMENT_DETAILS.bank.ifsc,
+    bank_name: "",
+    account_number: "",
+    ifsc: "",
     status: "draft",
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
+}
+
+async function blankInvoiceFromStructure(kind: InvoiceKind): Promise<OpsInvoice> {
+  const invoice = blankInvoice(kind);
+  try {
+    const structure = await getCompanyStructure();
+    const pay = paymentDetailsFromStructure(structure);
+    return {
+      ...invoice,
+      bank_name: pay.bank.bank_name,
+      account_number: pay.bank.account_number,
+      ifsc: pay.bank.ifsc,
+      logo_data_url: structure.logo_url,
+      agency: {
+        ...invoice.agency,
+        phone: structure.support_number || invoice.agency.phone,
+      },
+    };
+  } catch {
+    return invoice;
+  }
 }
 
 function PartyFields({
@@ -214,7 +236,13 @@ export function InvoiceBillsView() {
   useEffect(() => {
     if (tab === "all") return;
     const kind = tab as InvoiceKind;
-    setDraft(blankInvoice(kind));
+    let cancelled = false;
+    void blankInvoiceFromStructure(kind).then((inv) => {
+      if (!cancelled) setDraft(inv);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [tab]);
 
   const subtotal = useMemo(() => {

@@ -139,26 +139,29 @@ export function hotelFromWebsiteItem(item: WebsiteContentItem): HotelMasterItem 
   const name = item.name?.trim();
   const location = item.location?.trim();
   if (!name || !location) return null;
+  const image =
+    item.image_url?.trim() ||
+    (Array.isArray(item.gallery_urls) ? item.gallery_urls.find((u) => Boolean(u?.trim())) : null) ||
+    "";
   return {
     id: item.id,
     name,
     location,
     rating: typeof item.rating === "number" && !Number.isNaN(item.rating) ? item.rating : 0,
     category_key: categoryKeyFromLabel(item.category),
-    image_url: item.image_url || IMG,
+    // Never invent a stock Unsplash photo — wrong images confuse clients.
+    image_url: image,
     price_description: item.price_description ?? null,
   };
 }
 
-/** Prefer Master Data hotels for a location; fall back to dummy inventory for gaps. */
+/** Prefer Master Data hotels. Do not pad with dummy HOTEL_MASTER when cloud data exists. */
 export function mergeHotelCatalog(
   masterHotels: HotelMasterItem[],
   fallback: HotelMasterItem[] = HOTEL_MASTER
 ): HotelMasterItem[] {
-  if (!masterHotels.length) return fallback;
-  const masterLocs = new Set(masterHotels.map((h) => normalizeLoc(h.location)));
-  const keptFallback = fallback.filter((h) => !masterLocs.has(normalizeLoc(h.location)));
-  return [...masterHotels, ...keptFallback];
+  if (masterHotels.length > 0) return masterHotels;
+  return fallback;
 }
 
 function filterByLocation(
@@ -172,9 +175,16 @@ function filterByLocation(
   const exact = catalog.filter((h) => normalizeLoc(h.location) === loc);
   if (exact.length) return exact;
 
+  // Prefer longer location tokens to avoid "Jaipur" matching inside unrelated names.
   return catalog.filter((h) => {
     const hl = normalizeLoc(h.location);
-    return loc.includes(hl) || hl.includes(loc);
+    if (!hl) return false;
+    if (hl === loc) return true;
+    // Only allow containment when one side is a clear prefix/suffix city match (min 4 chars).
+    if (loc.length >= 4 && hl.length >= 4) {
+      return loc.startsWith(hl) || hl.startsWith(loc);
+    }
+    return false;
   });
 }
 
@@ -208,15 +218,46 @@ export function groupHotelsByCategory(
   })).filter((g) => g.hotels.length > 0);
 }
 
+/**
+ * Resolve a hotel option label to master row.
+ * Labels look like: `Opulence Inn - 4.6★ - Deluxe Hotels`
+ * Optional `location` prevents same-name hotels in other cities from winning.
+ */
 export function findHotelByOptionLabel(
   label: string,
-  catalog: HotelMasterItem[] = HOTEL_MASTER
+  catalog: HotelMasterItem[] = HOTEL_MASTER,
+  location?: string | null
 ): HotelMasterItem | null {
-  const exact = catalog.find((h) => formatHotelOption(h) === label);
+  const trimmed = label?.trim();
+  if (!trimmed) return null;
+
+  const scoped = location ? filterByLocation(catalog, location) : catalog;
+  const pool = scoped.length > 0 ? scoped : catalog;
+
+  const exact = pool.find((h) => formatHotelOption(h) === trimmed);
   if (exact) return exact;
-  const name = label.split(" - ")[0]?.trim().toLowerCase();
+
+  // Parse "Name - 4.6★ - Category"
+  const parts = trimmed.split(" - ").map((p) => p.trim()).filter(Boolean);
+  const name = (parts[0] ?? "").toLowerCase();
   if (!name) return null;
-  return catalog.find((h) => h.name.trim().toLowerCase() === name) ?? null;
+
+  const ratingPart = parts.find((p) => /★/.test(p));
+  const rating = ratingPart ? Number(ratingPart.replace("★", "").trim()) : null;
+  const categoryPart = parts.length >= 3 ? parts[parts.length - 1] : null;
+  const categoryKey = categoryPart ? categoryKeyFromLabel(categoryPart) : null;
+
+  const scored = pool
+    .filter((h) => h.name.trim().toLowerCase() === name)
+    .map((h) => {
+      let score = 1;
+      if (rating != null && Number.isFinite(rating) && Math.abs(h.rating - rating) < 0.05) score += 2;
+      if (categoryKey && h.category_key === categoryKey) score += 2;
+      return { h, score };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.h ?? null;
 }
 
 export function hotelLocations(catalog: HotelMasterItem[] = HOTEL_MASTER): string[] {

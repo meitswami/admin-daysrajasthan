@@ -20,7 +20,30 @@ type HeroProps = {
   quoteId: string;
   versionNumber: number;
   contactName?: string | null;
+  /** Public/client payment URL for Book Now */
+  bookNowHref?: string | null;
 };
+
+function BookNowButton({
+  href,
+  className,
+}: {
+  href?: string | null;
+  className: string;
+}) {
+  if (href) {
+    return (
+      <a href={href} className={className}>
+        Book Now
+      </a>
+    );
+  }
+  return (
+    <a href="#book" className={className}>
+      Book Now
+    </a>
+  );
+}
 
 function guestGreeting(clientLabel: string, clientName: string | null | undefined): string {
   const name = (clientLabel || clientName || "there").trim();
@@ -156,6 +179,7 @@ export function Theme2Hero({
   destinationsSummary,
   coveringDestinations,
   packagePrice,
+  bookNowHref,
 }: HeroProps) {
   const wa = brand.phone.replace(/\D/g, "");
   const titleLine = (header.title || "").toUpperCase();
@@ -173,7 +197,7 @@ export function Theme2Hero({
 
   return (
     <header
-      className="relative overflow-hidden bg-white px-6 py-4"
+      className="relative overflow-hidden bg-white px-4 py-2 sm:px-6"
       style={{ fontFamily: "var(--font-nunito), \"Nunito Sans\", sans-serif" }}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -189,7 +213,7 @@ export function Theme2Hero({
         className="pointer-events-none absolute -bottom-24 -right-20 w-44 opacity-30 print:hidden"
       />
 
-      <div className="relative mb-4 flex w-full items-center justify-between px-0 py-4 sm:px-0">
+      <div className="relative mb-1 flex w-full items-center justify-between px-0 py-2 sm:px-0">
         <BrandMark brand={brand} size="lg" />
         <a
           href={`https://wa.me/${wa}`}
@@ -202,43 +226,43 @@ export function Theme2Hero({
         </a>
       </div>
 
-      <div className="hero-wrapper relative mx-auto flex min-h-[50vh] flex-col lg:min-h-[60vh] lg:flex-row print:h-auto">
-        <div className="hero-left order-2 w-full p-6 text-lg md:p-12 lg:order-1 lg:w-1/2">
-          <h1 className="mt-10 text-2xl font-bold text-black sm:text-3xl lg:text-4xl">
+      <div className="hero-wrapper relative mx-auto flex flex-col lg:flex-row print:h-auto">
+        <div className="hero-left order-2 w-full px-2 py-3 text-lg sm:px-4 md:px-8 lg:order-1 lg:w-1/2 lg:py-4">
+          <h1 className="mt-1 text-2xl font-bold text-black sm:text-3xl lg:text-4xl">
             {guestGreeting(clientLabel, client.client_name)},
           </h1>
-          <p className="mt-4 text-gray-500">
+          <p className="mt-2 text-gray-500">
             Here is the package exclusively designed/tailor made <br /> for you
           </p>
           {header.duration_label && (
-            <div className="mt-6">
+            <div className="mt-4">
               <span className="rounded-md bg-yellow-300 px-4 py-2 text-sm font-bold text-[#343333] shadow-md sm:text-lg">
                 {header.duration_label}
               </span>
             </div>
           )}
           {titleLine && (
-            <div className="mt-6">
+            <div className="mt-4">
               <p className="text-2xl font-bold uppercase leading-snug text-pretty text-black sm:text-3xl">
                 {titleLine}
               </p>
             </div>
           )}
           {priceLabel && (
-            <div className="mb-4 mt-2 flex items-center justify-between text-2xl sm:text-3xl md:text-4xl">
+            <div className="mb-2 mt-2 flex items-center justify-between text-2xl sm:text-3xl md:text-4xl">
               <span className="font-bold text-gray-900">{priceLabel}</span>
             </div>
           )}
           {cityChips.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-2 gap-y-2 text-sm font-medium text-gray-700 sm:mt-4 sm:text-lg">
+            <div className="mt-2 flex flex-wrap gap-2 gap-y-1 text-sm font-medium text-gray-700 sm:text-lg">
               {cityChips.map((city) => (
                 <p key={city} className="flex items-center gap-1">
-                  <span>•</span> {city}{" "}
+                  <span aria-hidden>•</span> {city}
                 </p>
               ))}
             </div>
           )}
-          <div className="mt-6 flex flex-col items-center justify-between gap-6 md:items-start">
+          <div className="mt-4 flex flex-col items-center justify-between gap-4 md:items-start">
             <QuotationReviewWidgets
               layout="stack"
               accentClassName="text-gray-500"
@@ -246,20 +270,19 @@ export function Theme2Hero({
               titleClassName="font-semibold text-lg text-gray-700"
             />
             <div className="no-print flex w-full flex-wrap items-center gap-3 md:w-auto print:hidden">
-              <button
-                type="button"
-                className="w-full rounded-lg bg-yellow-600 px-8 py-3 text-3xl font-semibold text-white sm:w-auto sm:min-w-[280px]"
-              >
-                Book Now
-              </button>
+              <BookNowButton
+                href={bookNowHref}
+                className="inline-flex w-full items-center justify-center rounded-lg bg-yellow-600 px-8 py-3 text-3xl font-semibold text-white sm:w-auto sm:min-w-[280px]"
+              />
             </div>
           </div>
         </div>
 
-        <div className="relative order-1 mx-auto flex w-full items-center justify-center p-6 lg:order-2 lg:w-1/2">
-          <div className="relative mx-auto aspect-square w-full max-w-[340px]">
-            <div className="absolute -left-4 top-6 h-28 w-28 rounded-full bg-gradient-to-br from-yellow-300 to-green-500 opacity-80" />
-            <div className="absolute -bottom-2 -right-2 h-36 w-36 rounded-full bg-gradient-to-br from-lime-300 to-yellow-300 opacity-70" />
+        <div className="relative order-1 mx-auto flex w-full items-center justify-center px-4 py-4 lg:order-2 lg:w-1/2 lg:py-6">
+          {/* Large overlapping circles matching SenduserviewData3 reference */}
+          <div className="relative mx-auto aspect-square w-full max-w-[420px] sm:max-w-[480px]">
+            <div className="absolute left-[-6%] top-[8%] z-0 h-[38%] w-[38%] rounded-full bg-gradient-to-br from-yellow-300 to-green-500 opacity-90" />
+            <div className="absolute bottom-[-2%] right-[-4%] z-0 h-[42%] w-[42%] rounded-full bg-gradient-to-br from-lime-300 to-yellow-300 opacity-85" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={theme.heroImage}
@@ -283,6 +306,7 @@ export function Theme3Hero({
   destinationsSummary,
   coveringDestinations,
   packagePrice,
+  bookNowHref,
 }: HeroProps) {
   const circles = theme.gallery.slice(0, 3);
   const wa = brand.phone.replace(/\D/g, "");
@@ -299,10 +323,10 @@ export function Theme3Hero({
 
   return (
     <header
-      className="relative z-[2] overflow-hidden bg-white px-4 py-4 sm:px-6 lg:px-8"
+      className="relative z-[2] overflow-hidden bg-white px-4 py-2 sm:px-6 lg:px-8"
       style={{ fontFamily: "var(--font-poltawski), \"Poltawski Nowy\", serif" }}
     >
-      <div className="mb-4 flex w-full items-center justify-between px-4 py-4 sm:px-6">
+      <div className="mb-1 flex w-full items-center justify-between px-2 py-2 sm:px-4">
         <BrandMark brand={brand} />
         <a
           href={`https://wa.me/${wa}`}
@@ -315,32 +339,32 @@ export function Theme3Hero({
         </a>
       </div>
 
-      <section className="pt-4 sm:pt-6 md:pt-8">
-        <div className="flex flex-col flex-wrap items-start justify-between gap-6 lg:flex-row lg:gap-0">
+      <section className="pt-2 sm:pt-3">
+        <div className="flex flex-col flex-wrap items-start justify-between gap-4 lg:flex-row lg:gap-0">
           <div className="order-2 w-full lg:order-1 lg:w-1/2">
-            <h1 className="mt-4 text-2xl font-bold leading-tight sm:mt-6 sm:text-3xl md:text-4xl">
+            <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl md:text-4xl">
               {guestGreeting(clientLabel, client.client_name)},
             </h1>
-            <p className="mt-3 text-sm leading-relaxed text-gray-700 md:text-lg">
+            <p className="mt-2 text-sm leading-relaxed text-gray-700 md:text-lg">
               Here is the package exclusively designed / tailor made for you
             </p>
             {header.duration_label && (
-              <div className="mt-4 inline-block rounded bg-red-900 px-4 py-1.5 text-sm font-medium text-white sm:mt-6 md:text-lg">
+              <div className="mt-3 inline-block rounded bg-red-900 px-4 py-1.5 text-sm font-medium text-white md:text-lg">
                 {header.duration_label}
               </div>
             )}
             {titleLine && (
-              <h3 className="mt-5 text-lg font-bold leading-snug sm:mt-7 md:text-2xl">
+              <h3 className="mt-4 text-lg font-bold leading-snug sm:mt-5 md:text-2xl">
                 {titleLine.toUpperCase()}
               </h3>
             )}
             {priceLabel && (
-              <div className="mb-4 mt-2 flex items-center justify-between text-2xl sm:text-3xl md:text-4xl">
+              <div className="mb-2 mt-2 flex items-center justify-between text-2xl sm:text-3xl md:text-4xl">
                 <span className="font-bold text-red-900">{priceLabel}</span>
               </div>
             )}
             {cityChips.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2 gap-y-2 text-xs font-medium text-gray-700 sm:mt-4 sm:text-lg">
+              <div className="mt-2 flex flex-wrap gap-2 gap-y-1 text-xs font-medium text-gray-700 sm:text-lg">
                 {cityChips.map((city) => (
                   <p key={city} className="flex items-center gap-1">
                     <MapPin className="h-2 w-2 shrink-0 text-red-900 sm:h-3.5 sm:w-3.5" />
@@ -349,34 +373,40 @@ export function Theme3Hero({
                 ))}
               </div>
             )}
-            <div className="mt-6 flex flex-col gap-4">
+            <div className="mt-4 flex flex-col gap-3">
               <QuotationReviewWidgets
                 layout="stack"
                 accentClassName="text-red-900"
                 className="w-full max-w-md"
                 titleClassName="font-semibold text-lg"
               />
+              <div className="no-print print:hidden">
+                <BookNowButton
+                  href={bookNowHref}
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-red-900 px-6 py-3 text-xl font-semibold text-white hover:bg-red-800 sm:w-auto sm:min-w-[240px]"
+                />
+              </div>
             </div>
           </div>
 
-          <div className="relative order-1 mx-auto h-80 w-80 lg:order-2">
+          <div className="relative order-1 mx-auto h-[22rem] w-[22rem] sm:h-96 sm:w-96 lg:order-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={circles[0] ?? theme.heroImage}
               alt=""
-              className="absolute left-10 top-8 h-52 w-52 rounded-full object-cover shadow-lg ring-4 ring-white"
+              className="absolute left-8 top-10 z-[1] h-64 w-64 rounded-full object-cover shadow-lg ring-4 ring-white sm:h-72 sm:w-72"
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={circles[1] ?? theme.heroImage}
               alt=""
-              className="absolute left-0 top-0 h-28 w-28 rounded-full object-cover shadow-md ring-4 ring-white"
+              className="absolute left-0 top-0 z-[2] h-32 w-32 rounded-full object-cover shadow-md ring-4 ring-white sm:h-36 sm:w-36"
             />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={circles[2] ?? theme.heroImage}
               alt=""
-              className="absolute bottom-4 right-2 h-32 w-36 rounded-[50%] object-cover shadow-md ring-4 ring-white"
+              className="absolute bottom-2 right-0 z-[2] h-36 w-40 rounded-[50%] object-cover shadow-md ring-4 ring-white sm:h-40 sm:w-44"
             />
           </div>
         </div>

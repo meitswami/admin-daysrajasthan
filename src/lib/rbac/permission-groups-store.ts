@@ -3,11 +3,8 @@ import {
   type PermissionKey,
   type StaffPermissionGroup,
 } from "@/types/rbac";
-import { SEED_PERMISSION_GROUPS } from "@/lib/rbac/staff-seed";
 import { isSupabaseConfigured } from "@/lib/system/data-mode";
 import { logActivity } from "@/lib/system/activity-log";
-
-const STORAGE_KEY = "td-permission-groups-v1";
 
 function sanitizePerms(raw: unknown): PermissionKey[] {
   if (!Array.isArray(raw)) return [];
@@ -31,60 +28,40 @@ function mapRow(row: Record<string, unknown>): StaffPermissionGroup | null {
   };
 }
 
-function readLocal(): StaffPermissionGroup[] {
-  if (typeof window === "undefined") return SEED_PERMISSION_GROUPS.map((g) => ({ ...g }));
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seeded = SEED_PERMISSION_GROUPS.map((g) => ({ ...g }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
-      return seeded;
-    }
-    const parsed = JSON.parse(raw) as StaffPermissionGroup[];
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      return SEED_PERMISSION_GROUPS.map((g) => ({ ...g }));
-    }
-    return parsed;
-  } catch {
-    return SEED_PERMISSION_GROUPS.map((g) => ({ ...g }));
-  }
-}
+/** In-memory cache for sync permission resolution (never localStorage). */
+let memoryGroups: StaffPermissionGroup[] = [];
 
-function writeLocal(groups: StaffPermissionGroup[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(groups));
-  window.dispatchEvent(new CustomEvent("td-permission-groups-change"));
+function requireCloud() {
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Permission groups require a live database (no browser storage)."
+    );
+  }
 }
 
 /** Synchronous lookup — used when resolving member permissions */
 export function getPermissionGroupSync(id: string | null | undefined): StaffPermissionGroup | null {
   if (!id) return null;
-  return readLocal().find((g) => g.id === id) ?? null;
+  return memoryGroups.find((g) => g.id === id) ?? null;
 }
 
 export async function listPermissionGroups(): Promise<StaffPermissionGroup[]> {
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("td_permission_groups")
-        .select("id, name, description, permissions, created_at, updated_at")
-        .order("name", { ascending: true });
-      if (!error && data?.length) {
-        const mapped = data
-          .map((r) => mapRow(r as Record<string, unknown>))
-          .filter((g): g is StaffPermissionGroup => Boolean(g));
-        if (mapped.length) {
-          writeLocal(mapped);
-          return mapped;
-        }
-      }
-    } catch {
-      // fall through
-    }
+  requireCloud();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_permission_groups")
+    .select("id, name, description, permissions, created_at, updated_at")
+    .order("name", { ascending: true });
+  if (error) throw new Error(error.message);
+  const mapped = (data ?? [])
+    .map((r) => mapRow(r as Record<string, unknown>))
+    .filter((g): g is StaffPermissionGroup => Boolean(g));
+  memoryGroups = mapped;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("td-permission-groups-change"));
   }
-  return readLocal();
+  return mapped;
 }
 
 export type PermissionGroupInput = {
@@ -96,6 +73,7 @@ export type PermissionGroupInput = {
 export async function createPermissionGroup(
   input: PermissionGroupInput
 ): Promise<StaffPermissionGroup> {
+  requireCloud();
   const group: StaffPermissionGroup = {
     id: crypto.randomUUID(),
     name: input.name.trim(),
@@ -105,29 +83,17 @@ export async function createPermissionGroup(
     updated_at: new Date().toISOString(),
   };
 
-  let persisted = false;
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_permission_groups").insert({
-        id: group.id,
-        name: group.name,
-        description: group.description ?? null,
-        permissions: group.permissions,
-      });
-      if (!error) persisted = true;
-    } catch {
-      // fall through
-    }
-  }
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_permission_groups").insert({
+    id: group.id,
+    name: group.name,
+    description: group.description ?? null,
+    permissions: group.permissions,
+  });
+  if (error) throw new Error(error.message);
 
-  if (!persisted) {
-    const list = readLocal();
-    list.push(group);
-    writeLocal(list);
-  }
-
+  memoryGroups = [...memoryGroups, group];
   logActivity({
     action: "settings_change",
     module: "staff",
@@ -143,76 +109,42 @@ export async function updatePermissionGroup(
   id: string,
   patch: Partial<PermissionGroupInput>
 ): Promise<StaffPermissionGroup | null> {
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
-      if (patch.name !== undefined) payload.name = patch.name.trim();
-      if (patch.description !== undefined) payload.description = patch.description.trim() || null;
-      if (patch.permissions !== undefined) payload.permissions = sanitizePerms(patch.permissions);
+  requireCloud();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (patch.name !== undefined) payload.name = patch.name.trim();
+  if (patch.description !== undefined) payload.description = patch.description.trim() || null;
+  if (patch.permissions !== undefined) payload.permissions = sanitizePerms(patch.permissions);
 
-      const { data, error } = await supabase
-        .from("td_permission_groups")
-        .update(payload)
-        .eq("id", id)
-        .select("id, name, description, permissions, created_at, updated_at")
-        .maybeSingle();
+  const { data, error } = await supabase
+    .from("td_permission_groups")
+    .update(payload)
+    .eq("id", id)
+    .select("id, name, description, permissions, created_at, updated_at")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const updated = mapRow(data as Record<string, unknown>);
+  if (!updated) return null;
 
-      if (!error && data) {
-        const updated = mapRow(data as Record<string, unknown>);
-        if (updated) {
-          const list = readLocal();
-          const idx = list.findIndex((g) => g.id === id);
-          if (idx >= 0) list[idx] = updated;
-          else list.push(updated);
-          writeLocal(list);
-          logActivity({
-            action: "settings_change",
-            module: "staff",
-            summary: `Updated permission group ${updated.name}`,
-            entity_type: "permission_group",
-            entity_id: id,
-          });
-          return updated;
-        }
-      }
-    } catch {
-      // fall through
-    }
-  }
-
-  const list = readLocal();
-  const idx = list.findIndex((g) => g.id === id);
-  if (idx < 0) return null;
-  list[idx] = {
-    ...list[idx],
-    ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-    ...(patch.description !== undefined
-      ? { description: patch.description.trim() || undefined }
-      : {}),
-    ...(patch.permissions !== undefined
-      ? { permissions: sanitizePerms(patch.permissions) }
-      : {}),
-    updated_at: new Date().toISOString(),
-  };
-  writeLocal(list);
-  return list[idx];
+  memoryGroups = memoryGroups.map((g) => (g.id === id ? updated : g));
+  logActivity({
+    action: "settings_change",
+    module: "staff",
+    summary: `Updated permission group ${updated.name}`,
+    entity_type: "permission_group",
+    entity_id: id,
+  });
+  return updated;
 }
 
 export async function deletePermissionGroup(id: string): Promise<boolean> {
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_permission_groups").delete().eq("id", id);
-      if (error) return false;
-    } catch {
-      return false;
-    }
-  }
-
-  const list = readLocal().filter((g) => g.id !== id);
-  writeLocal(list);
+  requireCloud();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_permission_groups").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  memoryGroups = memoryGroups.filter((g) => g.id !== id);
   return true;
 }

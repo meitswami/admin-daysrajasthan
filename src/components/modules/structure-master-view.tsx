@@ -114,6 +114,13 @@ export function StructureMasterView() {
   }
 
   useEffect(() => {
+    // Clear any leftover Structure browser cache on this page too.
+    try {
+      localStorage.removeItem("td-company-structure-v2");
+      localStorage.removeItem("td-company-structure-v1");
+    } catch {
+      /* ignore */
+    }
     void refresh();
   }, []);
 
@@ -279,8 +286,8 @@ export function StructureMasterView() {
       show(successMessage);
     } catch (err) {
       show(err instanceof Error ? err.message : "Failed to save structure");
-      // Reload cloud truth so this PC does not keep unsaved local-only edits
-      await refresh();
+      // Keep the draft on screen so team work is not wiped after a failed cloud write.
+      // User can retry Save All; cloud truth is only reloaded on page refresh.
     } finally {
       setSaving(false);
     }

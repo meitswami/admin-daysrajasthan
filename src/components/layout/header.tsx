@@ -5,11 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Menu, Bell, LogOut, User, ChevronDown } from "lucide-react";
 import { useMobileNav } from "./mobile-nav-context";
-import { getRecentActivity } from "@/lib/data";
-import { activityToRoute } from "@/lib/data/search";
+import { getCurrentTeamMember } from "@/lib/rbac/current-user";
+import { listActivityLogs } from "@/lib/system/activity-log";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatDateTime } from "@/lib/utils";
-import { getCurrentTeamMember } from "@/lib/rbac/current-user";
 import type { ChatConversationStub } from "@/modules/chat";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +18,15 @@ type LeadAlertDetail = {
   adminEscalations: ChatConversationStub[];
 };
 
+function activityHref(module: string): string {
+  const m = module.toLowerCase();
+  if (m.includes("inquiry")) return "/inquiries";
+  if (m.includes("contact")) return "/contacts";
+  if (m.includes("whatsapp")) return "/whatsapp-leads";
+  if (m.includes("itinerary") || m.includes("quote")) return "/itinerary-builder";
+  return "/dashboard";
+}
+
 export function Header({ title, description }: { title?: string; description?: string } = {}) {
   const { toggle } = useMobileNav();
   const router = useRouter();
@@ -26,13 +34,17 @@ export function Header({ title, description }: { title?: string; description?: s
   const [userOpen, setUserOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
-  const activity = getRecentActivity().slice(0, 5);
+  const [activity, setActivity] = useState(() => listActivityLogs({ limit: 5 }));
   const [leadAlerts, setLeadAlerts] = useState<LeadAlertDetail>({
     offered: [],
     floating: [],
     adminEscalations: [],
   });
   const me = getCurrentTeamMember();
+
+  useEffect(() => {
+    setActivity(listActivityLogs({ limit: 5 }));
+  }, [notifOpen]);
 
   useEffect(() => {
     const onLeads = (e: Event) => {
@@ -152,16 +164,16 @@ export function Header({ title, description }: { title?: string; description?: s
                     {activity.map((item) => (
                       <Link
                         key={item.id}
-                        href={activityToRoute(item)}
+                        href={activityHref(item.module)}
                         className="block rounded-lg px-3 py-2.5 hover:bg-stone-50"
                         onClick={() => setNotifOpen(false)}
                       >
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-amber-700">{item.type}</span>
-                          <StatusBadge status={item.status} />
+                          <span className="text-xs font-medium text-amber-700">{item.module}</span>
+                          <StatusBadge status={item.action} />
                         </div>
-                        <p className="mt-1 line-clamp-2 text-sm text-stone-800">{item.title}</p>
-                        <p className="text-xs text-stone-400">{formatDateTime(item.time)}</p>
+                        <p className="mt-1 line-clamp-2 text-sm text-stone-800">{item.summary}</p>
+                        <p className="text-xs text-stone-400">{formatDateTime(item.created_at)}</p>
                       </Link>
                     ))}
                     {chatNotifs.length === 0 && activity.length === 0 && (

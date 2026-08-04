@@ -1,12 +1,13 @@
 import { Header } from "@/components/layout/header";
 import { InquiriesView } from "@/components/modules/inquiries-view";
-import { packageInquiries } from "@/lib/data";
+import { getPackageInquiries } from "@/lib/data/service";
 
-export default function InquiriesPage() {
+export default async function InquiriesPage() {
+  const initialData = await getPackageInquiries();
   return (
     <>
       <Header title="Inquiry Forms" description="Package inquiries linked to downloads & WhatsApp" />
-      <InquiriesView initialData={packageInquiries} />
+      <InquiriesView initialData={initialData} />
     </>
   );
 }

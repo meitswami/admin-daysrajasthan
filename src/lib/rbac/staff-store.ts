@@ -126,27 +126,23 @@ export function memberHasPermission(member: TeamMember, permission: PermissionKe
 }
 
 export async function listStaffMembers(): Promise<TeamMember[]> {
-  if (isSupabaseConfigured()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("td_team_members")
-        .select(
-          "id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id"
-        )
-        .order("created_at", { ascending: true });
-      if (!error && data?.length) {
-        const mapped = data
-          .map((r) => mapRow(r as Record<string, unknown>))
-          .filter((m): m is TeamMember => Boolean(m));
-        if (mapped.length) return mapped;
-      }
-    } catch {
-      // fall through
-    }
+  if (!isSupabaseConfigured()) {
+    throw new Error(
+      "Supabase is not configured. Staff require a live database (no browser storage)."
+    );
   }
-  return readLocal();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_team_members")
+    .select(
+      "id, name, email, role, mfa_enabled, mfa_locked, is_active, created_at, permission_overrides, permission_group_id"
+    )
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? [])
+    .map((r) => mapRow(r as Record<string, unknown>))
+    .filter((m): m is TeamMember => Boolean(m));
 }
 
 export type StaffUpdateInput = {

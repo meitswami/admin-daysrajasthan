@@ -1,5 +1,4 @@
 import type { TeamMember } from "@/types/rbac";
-import { HOTEL_CATEGORY_OPTIONS } from "@/types/itinerary-builder";
 import { requireCloudMaster, useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 
@@ -12,8 +11,6 @@ export type MasterCategory = {
   created_by_id?: string | null;
   created_by_name?: string | null;
 };
-
-const STORAGE_KEY = "td-master-categories-v1";
 
 function mapRow(row: Record<string, unknown>): MasterCategory {
   return {
@@ -39,36 +36,6 @@ function toRow(item: MasterCategory) {
   };
 }
 
-function seed(): MasterCategory[] {
-  const now = new Date().toISOString();
-  return HOTEL_CATEGORY_OPTIONS.map((opt) => ({
-    id: crypto.randomUUID(),
-    label: opt.label,
-    room_category: opt.room_category,
-    key: opt.key,
-    created_at: now,
-    created_by_id: "tm-info",
-    created_by_name: "Travel Days Admin",
-  }));
-}
-
-function readLocalRaw(): MasterCategory[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as MasterCategory[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalCache(items: MasterCategory[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 async function fetchRemote(): Promise<MasterCategory[]> {
   requireCloudMaster();
   const { createClient } = await import("@/lib/supabase/client");
@@ -81,53 +48,14 @@ async function fetchRemote(): Promise<MasterCategory[]> {
   return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
 }
 
-async function uploadMissingLocal(remote: MasterCategory[]): Promise<MasterCategory[]> {
-  const local = readLocalRaw();
-  if (!local.length) return remote;
-  const remoteIds = new Set(remote.map((r) => r.id));
-  const remoteKeys = new Set(remote.map((r) => r.key));
-  const missing = local.filter((l) => !remoteIds.has(l.id) && !remoteKeys.has(l.key));
-  if (!missing.length) return remote;
-  const { createClient } = await import("@/lib/supabase/client");
-  const supabase = createClient();
-  const { error } = await supabase
-    .from("td_master_categories")
-    .upsert(missing.map(toRow), { onConflict: "id" });
-  if (error) throw new Error(error.message);
-  return fetchRemote();
-}
-
+/** Categories — Supabase only. No seed insert, no localStorage. */
 export async function listMasterCategories(): Promise<MasterCategory[]> {
   if (!useCloudMaster()) {
-    const local = readLocalRaw();
-    return local.length ? local : seed();
+    throw new Error(
+      "Supabase is not configured. Categories require a live database (no browser storage)."
+    );
   }
-
-  let remote = await fetchRemote();
-  if (remote.length === 0) {
-    const local = readLocalRaw();
-    if (local.length > 0) {
-      remote = await uploadMissingLocal([]);
-    } else {
-      const seeded = seed();
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_master_categories").insert(seeded.map(toRow));
-      if (error) throw new Error(error.message);
-      remote = seeded;
-    }
-  } else {
-    remote = await uploadMissingLocal(remote);
-  }
-
-  writeLocalCache(remote);
-  return remote;
-}
-
-/** Sync helper for places that still need an immediate list (hotel dropdowns). */
-export function listMasterCategoriesCached(): MasterCategory[] {
-  const local = readLocalRaw();
-  return local.length ? local : seed();
+  return fetchRemote();
 }
 
 export async function createMasterCategory(

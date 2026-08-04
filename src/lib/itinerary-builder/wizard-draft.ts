@@ -2,6 +2,7 @@ import type { ItinerarySnapshot } from "@/types/itinerary-builder";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 
 const STORAGE_KEY = "tdr.wizard-unsaved-draft.v1";
+const DRAFT_PREVIEW_ID_KEY = "tdr.wizard-draft-preview-id.v1";
 
 export type WizardDraftPayload = {
   snapshot: ItinerarySnapshot;
@@ -47,7 +48,22 @@ export function clearWizardDraft(): void {
   if (typeof window === "undefined") return;
   try {
     sessionStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(DRAFT_PREVIEW_ID_KEY);
   } catch {
     // ignore
+  }
+}
+
+/** Stable temp id for Preview-without-Save (not a list / QRT allotment). */
+export function getOrCreateDraftPreviewId(): string {
+  if (typeof window === "undefined") return crypto.randomUUID();
+  try {
+    const existing = sessionStorage.getItem(DRAFT_PREVIEW_ID_KEY);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    sessionStorage.setItem(DRAFT_PREVIEW_ID_KEY, id);
+    return id;
+  } catch {
+    return crypto.randomUUID();
   }
 }

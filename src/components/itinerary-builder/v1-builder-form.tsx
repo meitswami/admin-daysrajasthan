@@ -590,11 +590,10 @@ function NightHotelCard({
   onChange: (updater: (d: ItineraryDay) => ItineraryDay) => void;
   hotelCatalog: HotelMasterItem[];
 }) {
-  /** All location hotels — every category (Deluxe → Luxury), not limited to the package tier. */
+  /** Hotels for this night’s location only — never spill other cities into the picker. */
   const locationHotels = useMemo(() => {
     const byLocation = hotelsForLocation(day.location, hotelCatalog);
-    const pool = byLocation.length ? byLocation : hotelCatalog;
-    return sortHotelsByCategory(pool);
+    return sortHotelsByCategory(byLocation);
   }, [day.location, hotelCatalog]);
 
   const breakfastHotel1 = day.breakfast_hotels[0];
@@ -1584,7 +1583,7 @@ export function V1BuilderForm({
                 <Input
                   className="mt-1.5"
                   inputMode="numeric"
-                  placeholder="e.g. 03 → 03 Days / 02 Nights"
+                  placeholder="e.g. 03 → 02 Nights / 03 Days"
                   value={
                     durationFocused
                       ? durationDraft

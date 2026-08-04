@@ -28,8 +28,6 @@ export type InclusionExclusionItem = {
   created_by_name?: string | null;
 };
 
-const STORAGE_KEY = "td-master-inclusions-exclusions-v1";
-
 function mapRow(row: Record<string, unknown>): InclusionExclusionItem {
   return {
     id: String(row.id),
@@ -49,49 +47,21 @@ function sortByCreatedAsc(items: InclusionExclusionItem[]): InclusionExclusionIt
   );
 }
 
-function readLocal(): InclusionExclusionItem[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([]));
-      return [];
-    }
-    const parsed = JSON.parse(raw) as InclusionExclusionItem[];
-    return sortByCreatedAsc(
-      parsed.map((item) => ({
-        ...item,
-        description: item.description ?? "",
-        image_url: item.image_url ?? null,
-      }))
-    );
-  } catch {
-    return [];
-  }
-}
-
-function writeLocal(items: InclusionExclusionItem[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
+/** Inclusions/exclusions — Supabase only. No localStorage / dummy seed. */
 export async function listInclusionExclusions(): Promise<InclusionExclusionItem[]> {
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("td_master_inclusions_exclusions")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (!error && data) {
-        return sortByCreatedAsc(data.map((row) => mapRow(row as Record<string, unknown>)));
-      }
-    } catch {
-      // fall through
-    }
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Inclusions require a live database (no browser storage)."
+    );
   }
-  return readLocal();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_master_inclusions_exclusions")
+    .select("*")
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return sortByCreatedAsc((data ?? []).map((row) => mapRow(row as Record<string, unknown>)));
 }
 
 /** Master library → content blocks used on preview / public quotation. */
@@ -208,34 +178,23 @@ export async function createInclusionExclusion(
     created_by_name: actor.name,
   };
 
-  let persisted = false;
-  let lastError: string | null = null;
-  if (useSupabaseMaster()) {
-    try {
-      const { createClient } = await import("@/lib/supabase/client");
-      const supabase = createClient();
-      const { error } = await supabase.from("td_master_inclusions_exclusions").insert({
-        id: item.id,
-        kind: item.kind,
-        text: item.text,
-        description: item.description,
-        image_url: item.image_url,
-        created_by: actor.id,
-        created_by_name: actor.name,
-      });
-      if (!error) persisted = true;
-      else lastError = error.message;
-    } catch (err) {
-      lastError = err instanceof Error ? err.message : "Failed to save";
-    }
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Inclusions require a live database (no browser storage)."
+    );
   }
-
-  if (!persisted) {
-    if (useSupabaseMaster() && lastError) throw new Error(lastError);
-    const list = readLocal();
-    list.push(item);
-    writeLocal(sortByCreatedAsc(list));
-  }
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_master_inclusions_exclusions").insert({
+    id: item.id,
+    kind: item.kind,
+    text: item.text,
+    description: item.description,
+    image_url: item.image_url,
+    created_by: actor.id,
+    created_by_name: actor.name,
+  });
+  if (error) throw new Error(error.message);
 
   logMasterDataChange({
     entityType: "inclusion_exclusion",
@@ -275,74 +234,47 @@ export async function updateInclusionExclusion(
   const nextDescription =
     patch.description !== undefined ? patch.description.trim() : before.description;
 
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("td_master_inclusions_exclusions")
-      .update({ text: nextText, description: nextDescription, image_url: nextImage })
-      .eq("id", id)
-      .select("*")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (data) {
-      const after = mapRow(data as Record<string, unknown>);
-      logMasterDataChange({
-        entityType: "inclusion_exclusion",
-        entityId: id,
-        action: "update",
-        summary: `Updated ${after.kind} “${after.text}”`,
-        before: before ? { ...before } : null,
-        after: { ...after },
-        actor,
-      });
-      return after;
-    }
-    return null;
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Inclusions require a live database (no browser storage)."
+    );
   }
-
-  const list = readLocal();
-  const idx = list.findIndex((i) => i.id === id);
-  if (idx < 0) return null;
-  list[idx] = {
-    ...list[idx],
-    text: nextText,
-    description: nextDescription,
-    image_url: nextImage,
-  };
-  writeLocal(list);
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_master_inclusions_exclusions")
+    .update({ text: nextText, description: nextDescription, image_url: nextImage })
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) return null;
+  const after = mapRow(data as Record<string, unknown>);
   logMasterDataChange({
     entityType: "inclusion_exclusion",
     entityId: id,
     action: "update",
-    summary: `Updated ${list[idx].kind} “${list[idx].text}”`,
+    summary: `Updated ${after.kind} “${after.text}”`,
     before: before ? { ...before } : null,
-    after: { ...list[idx] },
+    after: { ...after },
     actor,
   });
-  return list[idx];
+  return after;
 }
 
 export async function deleteInclusionExclusion(id: string, actor?: TeamMember): Promise<boolean> {
   const beforeList = await listInclusionExclusions();
   const before = beforeList.find((i) => i.id === id) ?? null;
 
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { error } = await supabase.from("td_master_inclusions_exclusions").delete().eq("id", id);
-    if (error) throw new Error(error.message);
-    logMasterDataChange({
-      entityType: "inclusion_exclusion",
-      entityId: id,
-      action: "delete",
-      summary: `Deleted ${before?.kind ?? "item"} “${before?.text ?? id}”`,
-      before: before ? { ...before } : null,
-      actor,
-    });
-    return true;
+  if (!useSupabaseMaster()) {
+    throw new Error(
+      "Supabase is not configured. Inclusions require a live database (no browser storage)."
+    );
   }
-  writeLocal(readLocal().filter((i) => i.id !== id));
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { error } = await supabase.from("td_master_inclusions_exclusions").delete().eq("id", id);
+  if (error) throw new Error(error.message);
   logMasterDataChange({
     entityType: "inclusion_exclusion",
     entityId: id,

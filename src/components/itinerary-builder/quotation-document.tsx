@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import type { ReportBrand } from "@/lib/branding/report-brand";
@@ -9,14 +9,14 @@ import {
   resolvePolicyContentBlocks,
   type InclusionExclusionItem,
 } from "@/lib/master-data/inclusions-store";
+import { listMasterContent } from "@/lib/master-data/content-store";
 import {
   bookingAmount,
   buildHotelPackageNights,
   buildNightSegments,
-  DEFAULT_CANCELLATION_POLICY,
-  DEFAULT_PAYMENT_POLICY,
   formatCoveringDestinations,
   formatDestinationsSummary,
+  formatVehicleLabel,
   resolvePackageVehicles,
   tierRowsFromSnapshot,
   type CoveringDestination,
@@ -34,12 +34,20 @@ import {
   type ContentBlockItem,
   type PreviewContact,
 } from "@/lib/itinerary-builder/policy-master";
+import {
+  listMasterPolicies,
+  policiesForSection,
+} from "@/lib/master-data/policies-store";
 import { findSelectedContact } from "@/lib/itinerary-builder/quotation-contacts";
 import {
   defaultPaymentDetailsFromSeed,
   type PaymentDetails,
 } from "@/lib/itinerary-builder/payment-details";
-import { findHotelByOptionLabel } from "@/lib/itinerary-builder/hotel-master";
+import {
+  findHotelByOptionLabel,
+  hotelFromWebsiteItem,
+  type HotelMasterItem,
+} from "@/lib/itinerary-builder/hotel-master";
 import type { CompanyStructure } from "@/types/company-structure";
 import type {
   CategoryTotalSummary,
@@ -66,6 +74,11 @@ import {
 } from "@/components/itinerary-builder/quotation-legacy-sections";
 import { Car, Coffee, Navigation } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+function countLabel(n: number | null | undefined): string | null {
+  if (n == null || Number.isNaN(n)) return null;
+  return String(n);
+}
 function brandWithSelectedContact(
   brand: ReportBrand,
   contact: PreviewContact | null
@@ -91,14 +104,24 @@ function ClientDetailsTable({
   title?: string;
   variant?: "default" | "theme2" | "theme3";
 }) {
+  const kids512 = countLabel(client.children_5_12);
+  const kidsBelow5 = countLabel(client.children_below_5);
+  const childrenParts = [
+    kids512 != null ? `${kids512} (5â€“12 yrs)` : null,
+    kidsBelow5 != null ? `${kidsBelow5} (below 5)` : null,
+  ].filter(Boolean);
+  const childrenDisplay = childrenParts.length > 0 ? childrenParts.join(", ") : null;
+
   const rows = [
     ["Name", clientLabel],
     ["Email", client.email],
     ["Phone", client.phone],
     ["Adults", client.adults != null ? String(client.adults) : null],
+    ["Child / Children", childrenDisplay],
+    ["Extra Mattress", countLabel(client.extra_beds)],
     ["Rooms", client.rooms != null ? String(client.rooms) : null],
     ["Travel Date", client.travel_date ? formatDate(client.travel_date) : null],
-  ].filter(([, value]) => value);
+  ].filter(([, value]) => value != null && value !== "");
 
   if (variant === "theme3") {
     return (
@@ -155,11 +178,13 @@ function Theme3PackageSummaryCard({
   packagePrice,
   grandTotal,
   advancePercent,
+  bookNowHref,
 }: {
   label: string;
   packagePrice: number;
   grandTotal: number;
   advancePercent: 20 | 30;
+  bookNowHref?: string | null;
 }) {
   const advance = bookingAmount(grandTotal, advancePercent / 100);
   const shortKey = label.replace(/ Package$/i, "").toLowerCase();
@@ -180,12 +205,12 @@ function Theme3PackageSummaryCard({
           <span className="font-semibold text-gray-700">Booking Amount ({shortKey})</span>
           <span className="font-bold text-red-700">{formatInr(advance)}/-</span>
         </div>
-        <button
-          type="button"
-          className="mt-8 inline-block w-full rounded-xl bg-red-900 px-4 py-4 text-xl font-semibold text-white hover:bg-red-800"
+        <a
+          href={bookNowHref || "#book"}
+          className="mt-8 inline-block w-full rounded-xl bg-red-900 px-4 py-4 text-center text-xl font-semibold text-white hover:bg-red-800"
         >
           Book Now
-        </button>
+        </a>
       </div>
     </section>
   );
@@ -196,14 +221,16 @@ function Theme2PackagePriceCard({
   packagePrice,
   grandTotal,
   advancePercent,
+  bookNowHref,
 }: {
   label: string;
   packagePrice: number;
   grandTotal: number;
   advancePercent: 20 | 30;
+  bookNowHref?: string | null;
 }) {
   const advance = bookingAmount(grandTotal, advancePercent / 100);
-  const plain = (n: number) => `₹${Math.round(n)}/-`;
+  const plain = (n: number) => `â‚¹${Math.round(n)}/-`;
   return (
     <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
       <h3 className="mb-4 text-2xl font-extrabold capitalize text-gray-700">{label}</h3>
@@ -220,12 +247,12 @@ function Theme2PackagePriceCard({
         <span>Booking Amount</span>
         <span>{plain(advance)}</span>
       </div>
-      <button
-        type="button"
-        className="mt-6 w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
+      <a
+        href={bookNowHref || "#book"}
+        className="mt-6 block w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
       >
         Book Now
-      </button>
+      </a>
     </section>
   );
 }
@@ -267,7 +294,7 @@ function CoveringDestinationsRow({
               </span>
             ) : (
               <span key={item.label} className="mr-2 flex items-center gap-1 text-lg">
-                <span className="text-yellow-500">•</span> {item.label}
+                <span className="text-yellow-500">â€¢</span> {item.label}
               </span>
             )
           )}
@@ -297,18 +324,19 @@ function Theme2HotelCard({
   option,
   checkIn,
   checkOut,
+  hotelCatalog,
+  destination,
 }: {
   option: HotelPackageNight["options"][number];
   checkIn: string | null;
   checkOut: string | null;
+  hotelCatalog: HotelMasterItem[];
+  destination?: string | null;
 }) {
   const master =
-    findHotelByOptionLabel(option.optionLabel) ??
-    findHotelByOptionLabel(option.hotelName);
-  const image =
-    option.imageUrl ||
-    master?.image_url ||
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=80";
+    findHotelByOptionLabel(option.optionLabel, hotelCatalog, destination) ??
+    findHotelByOptionLabel(option.hotelName, hotelCatalog, destination);
+  const image = option.imageUrl || master?.image_url || "";
   const rating = master?.rating || option.rating;
   const reviews = option.reviewCount;
   const fullStars = Math.min(5, Math.round(rating));
@@ -317,15 +345,21 @@ function Theme2HotelCard({
     <div className="relative w-full max-w-[450px] rounded-2xl border-2 border-stone-200 bg-white p-6 shadow-lg">
       <div className="flex flex-col gap-6 sm:flex-row">
         <div className="h-40 w-full shrink-0 overflow-hidden rounded-xl shadow-md sm:w-40">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={image} alt={option.hotelName} className="h-full w-full object-cover" />
+          {image ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={image} alt={option.hotelName} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center bg-stone-100 text-xs text-stone-400">
+              No hotel photo
+            </div>
+          )}
         </div>
         <div className="min-w-0 flex-1 space-y-3">
           <h3 className="text-xl font-bold text-stone-900">{option.hotelName}</h3>
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1 text-yellow-500">
               {Array.from({ length: 5 }).map((_, i) => (
-                <span key={i}>{i < fullStars ? "★" : "☆"}</span>
+                <span key={i}>{i < fullStars ? "â˜…" : "â˜†"}</span>
               ))}
               <span className="ml-1 text-xs text-stone-600">{rating.toFixed(1)}</span>
             </div>
@@ -370,9 +404,11 @@ function Theme2HotelCard({
 function Theme2HotelsPackage({
   packageLabel,
   nights,
+  hotelCatalog,
 }: {
   packageLabel: string;
   nights: HotelPackageNight[];
+  hotelCatalog: HotelMasterItem[];
 }) {
   if (!nights.length) return null;
   return (
@@ -382,15 +418,15 @@ function Theme2HotelsPackage({
           <span>{packageLabel}</span>
         </h3>
       </div>
-      <div className="mb-8 space-y-8 rounded-2xl border border-gray-300 bg-white p-6 shadow-lg">
+      <div className="mb-6 space-y-6 rounded-2xl border border-gray-300 bg-white p-6 shadow-lg">
         {nights.map((night) => (
-          <div key={`${night.nightLabel}-${night.destination}`} className="mb-12">
-            <div className="mb-6">
+          <div key={`${night.nightLabel}-${night.destination}`} className="mb-8">
+            <div className="mb-4">
               <span className="rounded-full bg-green-900 px-3 py-1 text-lg font-bold text-white shadow-md">
                 {night.nightLabel}{" "}
               </span>
               <br />
-              <span className="mt-4 inline-flex flex-wrap gap-4 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-green-700">
+              <span className="mt-3 inline-flex flex-wrap gap-4 rounded-full border border-green-200 bg-green-50 px-3 py-1 text-green-700">
                 {"  "}
                 {night.dateLabel}
               </span>
@@ -405,7 +441,13 @@ function Theme2HotelsPackage({
                       <div className="py-2 text-center text-xl font-bold text-green-900 lg:hidden">OR</div>
                     </>
                   )}
-                  <Theme2HotelCard option={option} checkIn={night.checkIn} checkOut={night.checkOut} />
+                  <Theme2HotelCard
+                    option={option}
+                    checkIn={night.checkIn}
+                    checkOut={night.checkOut}
+                    hotelCatalog={hotelCatalog}
+                    destination={night.destination}
+                  />
                 </div>
               ))}
             </div>
@@ -419,20 +461,22 @@ function Theme2HotelsPackage({
 function Theme3HotelsPackage({
   packageLabel,
   nights,
+  hotelCatalog,
 }: {
   packageLabel: string;
   nights: HotelPackageNight[];
+  hotelCatalog: HotelMasterItem[];
 }) {
   if (!nights.length) return null;
   return (
     <section className="break-inside-avoid overflow-hidden">
       <h3 className="mb-6 text-2xl font-bold capitalize text-gray-900">{packageLabel}</h3>
-      <div className="space-y-10">
+      <div className="space-y-6">
         {nights.map((night) => (
           <div key={`${night.nightLabel}-${night.destination}`}>
             <div className="mb-3">
               <div className="inline-flex items-center rounded-full bg-red-900 px-3 py-1 font-bold text-white">
-                <span>{night.nightLabel.replace(/-/g, " – ")} </span>
+                <span>{night.nightLabel.replace(/-/g, " â€“ ")} </span>
               </div>
               <br />
               <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-0 text-red-700">
@@ -445,12 +489,9 @@ function Theme3HotelsPackage({
                 <div className="flex w-full flex-col items-center justify-center gap-4 md:flex-row md:gap-4 lg:gap-6">
                   {night.options.map((option, index) => {
                     const master =
-                      findHotelByOptionLabel(option.optionLabel) ??
-                      findHotelByOptionLabel(option.hotelName);
-                    const image =
-                      option.imageUrl ||
-                      master?.image_url ||
-                      "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400&q=80";
+                      findHotelByOptionLabel(option.optionLabel, hotelCatalog, night.destination) ??
+                      findHotelByOptionLabel(option.hotelName, hotelCatalog, night.destination);
+                    const image = option.imageUrl || master?.image_url || "";
                     const rating = master?.rating || option.rating;
                     return (
                       <div key={`${option.hotelName}-${index}`} className="contents">
@@ -459,12 +500,18 @@ function Theme3HotelsPackage({
                         )}
                         <div className="w-full md:w-1/2">
                           <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-gradient-to-br from-gray-50 to-white p-4 transition hover:border-red-300 sm:flex-row">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={image}
-                              alt={option.hotelName}
-                              className="h-32 w-full rounded-lg object-cover shadow-md sm:h-28 sm:w-28"
-                            />
+                            {image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={image}
+                                alt={option.hotelName}
+                                className="h-32 w-full rounded-lg object-cover shadow-md sm:h-28 sm:w-28"
+                              />
+                            ) : (
+                              <div className="flex h-32 w-full items-center justify-center rounded-lg bg-stone-100 text-xs text-stone-400 sm:h-28 sm:w-28">
+                                No photo
+                              </div>
+                            )}
                             <div className="min-w-0 flex-1">
                               <p className="font-bold text-gray-900">{option.hotelName}</p>
                               <div className="mt-1 flex items-center gap-2 text-sm text-gray-600">
@@ -515,6 +562,7 @@ function Theme3HotelsPackage({
     </section>
   );
 }
+
 
 function NightSegmentPills({ segments, accentSoft }: { segments: NightSegment[]; accentSoft: string }) {
   return (
@@ -582,9 +630,27 @@ function PackageOptionCard({
   );
 }
 
-function dayImagesForCard(day: ItineraryDay, theme: PreviewTheme): string[] {
+function dayImagesForCard(
+  day: ItineraryDay,
+  theme: PreviewTheme,
+  locationPhotos: Map<string, string[]>
+): string[] {
   const fromDay = (day.images ?? []).filter(Boolean);
   if (fromDay.length > 0) return fromDay;
+
+  const loc = day.location?.trim().toLowerCase();
+  if (loc && loc !== "departure") {
+    const fromMaster = locationPhotos.get(loc);
+    if (fromMaster && fromMaster.length > 0) return fromMaster.slice(0, 3);
+    // Soft match by prefix (e.g. "Jaipur City" → "Jaipur")
+    for (const [key, urls] of locationPhotos) {
+      if (loc.startsWith(key) || key.startsWith(loc)) {
+        if (urls.length > 0) return urls.slice(0, 3);
+      }
+    }
+  }
+
+  // Last resort: theme stock — only when no day/location photos exist
   const start = (Math.max(1, day.day_number) - 1) % theme.gallery.length;
   return [0, 1, 2]
     .map((offset) => theme.gallery[(start + offset) % theme.gallery.length])
@@ -598,6 +664,7 @@ function TimelineDayCard({
   isLast,
   layout,
   packageVehicles = [],
+  locationPhotos,
 }: {
   day: ItineraryDay;
   travelDate: string | null;
@@ -605,18 +672,19 @@ function TimelineDayCard({
   isLast: boolean;
   layout: "theme2" | "theme3";
   packageVehicles?: string[];
+  locationPhotos: Map<string, string[]>;
 }) {
   const dateLabel = travelDate
     ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
     : null;
-  const images = dayImagesForCard(day, theme);
-  const dayVehicle =
-    day.vehicle_type?.trim() ||
-    (layout === "theme3" ? packageVehicles[0] : undefined);
+  const images = dayImagesForCard(day, theme, locationPhotos);
+  const dayVehicle = formatVehicleLabel(
+    day.vehicle_type?.trim() || packageVehicles[0] || ""
+  );
 
   if (layout === "theme3") {
     return (
-      <div className="relative flex flex-col gap-4 sm:flex-row sm:gap-6">
+      <div className="relative flex flex-col gap-3 sm:flex-row sm:gap-5">
         <div className="w-full shrink-0 text-left sm:w-28 sm:text-right">
           <p className="font-semibold text-red-900">Day {day.day_number}</p>
           {dateLabel && <p className="text-sm text-gray-600">{dateLabel}</p>}
@@ -643,7 +711,7 @@ function TimelineDayCard({
             heightClassName="h-48 sm:h-60"
           />
           {day.day_description && (
-            <p className="mt-4 whitespace-pre-wrap text-base leading-relaxed text-gray-700 md:text-lg">
+            <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-gray-700 md:text-lg">
               {day.day_description}
             </p>
           )}
@@ -653,7 +721,7 @@ function TimelineDayCard({
   }
 
   return (
-    <div className="relative flex flex-col gap-4 text-lg text-slate-600 sm:flex-row sm:gap-6">
+    <div className="relative flex flex-col gap-3 text-lg text-slate-600 sm:flex-row sm:gap-5">
       <div className="w-full shrink-0 text-left sm:w-24 sm:text-right">
         <p className="font-bold text-green-600">Day {day.day_number}</p>
         {dateLabel && <p className="text-sm text-gray-500">{dateLabel}</p>}
@@ -662,8 +730,14 @@ function TimelineDayCard({
         {!isLast && <div className="absolute bottom-0 top-4 w-0.5 bg-green-500" />}
         <div className="z-10 mt-1 hidden h-4 w-4 rounded-full border-2 border-green-500 bg-white sm:flex" />
       </div>
-      <div className="mt-4 w-full text-lg sm:mt-0 sm:w-1/4">
+      <div className="mt-2 w-full text-lg sm:mt-0 sm:w-1/4">
         <p className="font-bold text-gray-800">{day.day_title}</p>
+        {dayVehicle && (
+          <span className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#00A63E] px-2 py-1 text-xs font-semibold capitalize text-white sm:text-sm">
+            <Car className="h-4 w-4" />
+            {dayVehicle}
+          </span>
+        )}
         <QuotationDayCarousel
           images={images}
           alt={day.day_title}
@@ -672,7 +746,7 @@ function TimelineDayCard({
           heightClassName="h-48 sm:h-60"
         />
       </div>
-      <div className="mt-4 min-w-0 flex-1 sm:mt-6">
+      <div className="mt-2 min-w-0 flex-1 sm:mt-4">
         {day.day_description && (
           <p className="whitespace-pre-wrap text-lg leading-relaxed text-slate-600">
             {day.day_description}
@@ -687,16 +761,18 @@ function DayCard({
   day,
   travelDate,
   theme,
+  locationPhotos,
 }: {
   day: ItineraryDay;
   travelDate: string | null;
   theme: PreviewTheme;
+  locationPhotos: Map<string, string[]>;
 }) {
   const dateLabel = travelDate
     ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
     : null;
   const image = dayGalleryImage(theme, day.day_number);
-  const images = dayImagesForCard(day, theme);
+  const images = dayImagesForCard(day, theme, locationPhotos);
   const isHeritageLayout = theme.id === 1;
 
   if (isHeritageLayout) {
@@ -771,7 +847,7 @@ function DayCard({
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {day.vehicle_type && (
                 <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
-                  🚗 {day.vehicle_type}
+                  ðŸš— {day.vehicle_type}
                 </span>
               )}
               {day.meal_plan && (
@@ -784,7 +860,7 @@ function DayCard({
               <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
                 {(day.activities ?? []).map((activity) => (
                   <li key={activity.activity_uuid}>
-                    • {activity.title}
+                    â€¢ {activity.title}
                     {activity.start_time ? ` (${activity.start_time})` : ""}
                   </li>
                 ))}
@@ -808,12 +884,45 @@ function PolicyGrid({
   terms: string;
   accent: string;
 }) {
+  const [cancellation, setCancellation] = useState("");
+  const [payment, setPayment] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterPolicies()
+      .then((rows) => {
+        if (cancelled) return;
+        setCancellation(
+          policiesForSection(rows, "cancellation")
+            .map((t) => t.title)
+            .join(" ")
+        );
+        setPayment(
+          policiesForSection(rows, "payment")
+            .map((t) => t.title)
+            .join(" ")
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCancellation("");
+        setPayment("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const policies = [
     { title: "Inclusions", items: inclusions, tone: "text-emerald-800" },
     { title: "Exclusions", items: exclusions, tone: "text-red-800" },
     { title: "Terms & Conditions", text: terms, tone: "text-stone-800" },
-    { title: "Cancellation & Refund Policy", text: DEFAULT_CANCELLATION_POLICY, tone: "text-stone-800" },
-    { title: "Payment Policy", text: DEFAULT_PAYMENT_POLICY, tone: "text-stone-800" },
+    {
+      title: "Cancellation & Refund Policy",
+      text: cancellation,
+      tone: "text-stone-800",
+    },
+    { title: "Payment Policy", text: payment, tone: "text-stone-800" },
   ];
 
   return (
@@ -832,7 +941,9 @@ function PolicyGrid({
                 ))}
               </ul>
             ) : (
-              <p className="mt-2 text-sm leading-relaxed text-stone-600">{"text" in policy ? policy.text : ""}</p>
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
+                {"text" in policy ? policy.text : ""}
+              </p>
             )}
           </div>
         ))}
@@ -852,6 +963,8 @@ export function QuotationDocument({
   contacts = PREVIEW_CONTACTS,
   payment,
   structure = null,
+  itineraryId,
+  bookNowHref,
 }: {
   quoteId: string;
   versionNumber: number;
@@ -863,14 +976,43 @@ export function QuotationDocument({
   contacts?: PreviewContact[];
   payment?: PaymentDetails;
   structure?: CompanyStructure | null;
+  itineraryId?: string;
+  bookNowHref?: string | null;
 }) {
   const { header, client, days, terms, cost_sheet, category_pricing } = snapshot;
   const [masterLibrary, setMasterLibrary] = useState<InclusionExclusionItem[]>([]);
+  const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>([]);
+  const [locationPhotos, setLocationPhotos] = useState<Map<string, string[]>>(new Map());
+  const paymentHref =
+    bookNowHref ||
+    (itineraryId ? `/${itineraryId}/payment` : "#book");
 
   useEffect(() => {
     let cancelled = false;
     void listInclusionExclusions().then((rows) => {
       if (!cancelled) setMasterLibrary(rows);
+    });
+    void listMasterContent("hotels").then((rows) => {
+      if (cancelled) return;
+      setHotelCatalog(
+        rows
+          .map(hotelFromWebsiteItem)
+          .filter((h): h is HotelMasterItem => Boolean(h))
+      );
+    });
+    void listMasterContent("destinations").then((rows) => {
+      if (cancelled) return;
+      const map = new Map<string, string[]>();
+      for (const row of rows) {
+        const key = row.name?.trim().toLowerCase();
+        if (!key) continue;
+        const urls = [
+          row.image_url,
+          ...(Array.isArray(row.gallery_urls) ? row.gallery_urls : []),
+        ].filter((u): u is string => Boolean(u?.trim()));
+        if (urls.length) map.set(key, urls);
+      }
+      setLocationPhotos(map);
     });
     return () => {
       cancelled = true;
@@ -886,7 +1028,8 @@ export function QuotationDocument({
           masterLibrary,
           "inclusion"
         ),
-        snapshot.optional_inclusion_keys
+        snapshot.optional_inclusion_keys,
+        masterLibrary
       ),
     [
       snapshot.inclusion_items,
@@ -1010,17 +1153,18 @@ export function QuotationDocument({
         packagePrice={isTheme2 || isTheme3 ? primaryPackagePrice : null}
         quoteId={quoteId}
         versionNumber={versionNumber}
+        bookNowHref={paymentHref}
       />
 
       {isLegacyTheme && <QuotationLegacyExploreBanner />}
 
       <div
-        className={`relative z-[2] space-y-8 ${
+        className={`relative z-[2] space-y-5 ${
           isLegacyTheme
-            ? "px-4 py-6 sm:px-6"
+            ? "px-4 py-4 sm:px-6"
             : isTheme3
-              ? "px-4 py-8 sm:px-6 lg:px-8"
-              : "px-6 py-8"
+              ? "px-4 py-5 sm:px-6 lg:px-8"
+              : "px-4 py-5 sm:px-6"
         }`}
       >
         {!isLegacyTheme && theme.id !== 2 && theme.id !== 3 && (
@@ -1076,6 +1220,7 @@ export function QuotationDocument({
               packagePrice={primaryPackagePrice}
               grandTotal={primaryGrandTotal}
               advancePercent={advancePercent}
+              bookNowHref={paymentHref}
             />
           </div>
         )}
@@ -1094,6 +1239,7 @@ export function QuotationDocument({
               packagePrice={primaryPackagePrice}
               grandTotal={primaryGrandTotal}
               advancePercent={advancePercent}
+              bookNowHref={paymentHref}
             />
           </div>
         )}
@@ -1107,19 +1253,33 @@ export function QuotationDocument({
           {usesTimelineDays && (isTheme2 || isTheme3) && (
             <CoveringDestinationsRow
               covering={coveringDestinations}
-              vehicles={isTheme2 ? packageVehicles : []}
+              vehicles={packageVehicles}
               variant={isTheme3 ? "theme3" : "theme2"}
               accent={theme.accent}
             />
           )}
           {usesTimelineDays && !isTheme2 && !isTheme3 && (
-            <div className="mb-6">
+            <div className="mb-4">
               <h2 className="text-2xl font-bold" style={{ color: theme.accent }}>
                 Travel Itinerary
               </h2>
               <p className="mt-1 text-sm text-stone-500">
                 Covering Destinations • {destinationsSummary}
               </p>
+              {packageVehicles.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {packageVehicles.map((vehicle) => (
+                    <p
+                      key={vehicle}
+                      className="inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-white"
+                      style={{ backgroundColor: theme.accent }}
+                    >
+                      <Car className="h-4 w-4 shrink-0" />
+                      {vehicle}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
           )}
           <div
@@ -1127,7 +1287,7 @@ export function QuotationDocument({
               theme.id === 1
                 ? "mt-2"
                 : usesTimelineDays
-                  ? "mt-2 space-y-8 sm:space-y-10"
+                  ? "mt-2 space-y-5 sm:space-y-6"
                   : "mt-4 space-y-4"
             }
           >
@@ -1141,9 +1301,16 @@ export function QuotationDocument({
                   isLast={index === days.length - 1}
                   layout={theme.id === 3 ? "theme3" : "theme2"}
                   packageVehicles={packageVehicles}
+                  locationPhotos={locationPhotos}
                 />
               ) : (
-                <DayCard key={day.day_uuid} day={day} travelDate={client.travel_date} theme={theme} />
+                <DayCard
+                  key={day.day_uuid}
+                  day={day}
+                  travelDate={client.travel_date}
+                  theme={theme}
+                  locationPhotos={locationPhotos}
+                />
               )
             )}
           </div>
@@ -1157,6 +1324,7 @@ export function QuotationDocument({
                 key={pkg.label}
                 packageLabel={pkg.label}
                 nights={pkg.nights}
+                hotelCatalog={hotelCatalog}
               />
             ))}
 
@@ -1168,6 +1336,7 @@ export function QuotationDocument({
                 key={pkg.label}
                 packageLabel={pkg.label}
                 nights={pkg.nights}
+                hotelCatalog={hotelCatalog}
               />
             ))}
 
@@ -1247,7 +1416,7 @@ export function QuotationDocument({
                   .map((line) => (
                     <tr key={line.id} className="border-b border-stone-100">
                       <td className="py-2 pr-4 text-stone-600">
-                        {line.day_number ? `Day ${line.day_number} · ` : ""}
+                        {line.day_number ? `Day ${line.day_number} Â· ` : ""}
                         {line.description}
                       </td>
                       <td className="py-2 text-right tabular-nums">{formatInr(line.total)}</td>
@@ -1288,7 +1457,7 @@ export function QuotationDocument({
               accent={theme.accent}
             />
             <p className="pt-4 text-center text-[10px] text-stone-400">
-              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
+              This quotation is pinned to revision v{versionNumber} Â· {revisionId.slice(0, 8)}â€¦ Â· Theme{" "}
               {theme.id} {theme.styleName}
             </p>
           </>
@@ -1310,7 +1479,7 @@ export function QuotationDocument({
 
               <DocumentBrandFooter brand={displayBrand} />
               <p className="text-center text-[10px] text-stone-400">
-                This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
+                This quotation is pinned to revision v{versionNumber} Â· {revisionId.slice(0, 8)}â€¦ Â· Theme{" "}
                 {theme.id} {theme.styleName}
               </p>
             </>
@@ -1343,6 +1512,7 @@ export function QuotationDocument({
             agent={selectedContact}
             website={website}
             brandLogo={structure?.logo_url || coverBrand.logoUrl}
+            bookNowHref={paymentHref}
           />
         </>
       )}

@@ -12,6 +12,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { useSiteSettings } from "@/components/providers/site-settings-provider";
 import { useToast } from "@/components/ui/toast";
 import { crmSyncLogs } from "@/lib/data/mock-data";
+import type { CrmSyncLog } from "@/types/database";
 import { formatDateTime } from "@/lib/utils";
 import type { AdminSettingsTab, SmtpSecure } from "@/types/site-settings";
 import { cn } from "@/lib/utils";
@@ -28,7 +29,12 @@ export function SettingsView() {
   const [draftSmtp, setDraftSmtp] = useState(settings.smtp);
   const [webhookUrl, setWebhookUrl] = useState("https://crm.traveldays.in/api/webhooks/leads");
   const [testing, setTesting] = useState(false);
-  const [logs, setLogs] = useState(crmSyncLogs);
+  const [logs, setLogs] = useState<CrmSyncLog[]>(() =>
+    // Keep mock only when deliberately running without Supabase.
+    typeof process !== "undefined" && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? []
+      : crmSyncLogs
+  );
 
   useEffect(() => {
     setDraftAdmin(settings.adminGeneral);

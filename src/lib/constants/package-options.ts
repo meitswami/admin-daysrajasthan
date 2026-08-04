@@ -14,10 +14,10 @@ function formatPackageDuration(days: number): string {
   const nights = Math.max(0, days - 1);
   const dayLabel = days === 1 ? "Day" : "Days";
   const nightLabel = nights === 1 ? "Night" : "Nights";
-  return `${days} ${dayLabel} ${nights} ${nightLabel}`;
+  return `${nights} ${nightLabel} ${days} ${dayLabel}`;
 }
 
-/** 1 Day 0 Nights … 24 Days 23 Nights */
+/** 0 Nights 1 Day … 23 Nights 24 Days */
 export const PACKAGE_DURATIONS: readonly string[] = Array.from({ length: 24 }, (_, i) =>
   formatPackageDuration(i + 1)
 );

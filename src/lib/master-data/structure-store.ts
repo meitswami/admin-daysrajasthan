@@ -8,120 +8,37 @@ import type {
   SocialLinks,
   StaffContact,
 } from "@/types/company-structure";
-import {
-  DEFAULT_ACHIEVEMENT_DESCRIPTION,
-  DEFAULT_ACHIEVEMENT_IMAGES,
-  DEFAULT_ACHIEVEMENT_NAME,
-  DEFAULT_COMPANY_LOGO_URL,
-} from "@/types/company-structure";
-import { useCloudMaster } from "@/lib/master-data/cloud";
+import { requireCloudMaster, useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
 
-function useSupabaseMaster(): boolean {
-  return useCloudMaster();
-}
-
-const STORAGE_KEY = "td-company-structure-v2";
 const ROW_ID = "default";
 
 function uid(): string {
   return crypto.randomUUID();
 }
 
-function defaultAchievements(): CompanyAchievement[] {
-  return [
-    {
-      id: uid(),
-      name: DEFAULT_ACHIEVEMENT_NAME,
-      description: DEFAULT_ACHIEVEMENT_DESCRIPTION,
-      image_urls: [...DEFAULT_ACHIEVEMENT_IMAGES],
-    },
-  ];
-}
-
-export function defaultCompanyStructure(): CompanyStructure {
+/** Empty shell for first-time / missing cloud row — never invents contacts or bank details. */
+export function emptyCompanyStructure(): CompanyStructure {
   return {
-    logo_url: DEFAULT_COMPANY_LOGO_URL,
-    staff_contacts: [
-      {
-        id: "ct-vandana",
-        name: "Vandana Shekhawat",
-        emails: "rajasthantouringjaipur@gmail.com",
-        mobiles: "+919351549292",
-      },
-      {
-        id: "ct-shatrughan",
-        name: "Shatrughan Singh",
-        emails: "rajasthantouringjaipur@gmail.com",
-        mobiles: "+918058100276",
-      },
-      {
-        id: "ct-hemendra",
-        name: "Hemendra Singh",
-        emails: "rajasthantouringjaipur@gmail.com",
-        mobiles: "+919257368877",
-      },
-      {
-        id: "ct-priya",
-        name: "Priya Vohra",
-        emails: "sales.rajasthantouring@gmail.com",
-        mobiles: "+918766266066",
-      },
-      {
-        id: "ct-soniya",
-        name: "Soniya Shekhawat",
-        emails: "soniya.rajasthantouring@gmail.com",
-        mobiles: "+917357571614",
-      },
-      {
-        id: "ct-pooja",
-        name: "Pooja Shekhawat",
-        emails: "pooja.rajasthantouring@gmail.com",
-        mobiles: "+919784011614",
-      },
-    ],
-    addresses: [
-      {
-        id: uid(),
-        street: "74, Deewan Nagar, Daulatpura Road, Khora Bisal",
-        area: "Benar",
-        city: "Jaipur",
-        state: "Rajasthan India",
-        pincode: "302012",
-        landmark: "N/A",
-      },
-    ],
-    social_links: {
-      facebook: "https://www.facebook.com/RajasthanTouring",
-      instagram: "https://www.instagram.com/rajasthan_touring",
-      youtube: "https://www.youtube.com/@rajasthantouring",
-      website: "www.rajasthantouring.com",
-    },
-    support_number: "9509911614",
-    bank_accounts: [
-      {
-        id: uid(),
-        bank_name: "Bank of India",
-        ifsc_code: "BKID0007482",
-        account_name: "Welcome Rajasthan",
-        account_number: "748220110000989",
-        account_type: "Current",
-      },
-    ],
-    payment_methods: [
-      {
-        id: uid(),
-        type: "UPI",
-        upi_id: "sales.welcomerajasthantours@okicici",
-        receiver_name: "Welcome Rajasthan",
-        mobile_number: "+91 9588911614",
-        qr_image_url: "/structure-upi-qr.png",
-      },
-    ],
-    achievements: defaultAchievements(),
+    logo_url: null,
+    staff_contacts: [],
+    addresses: [],
+    social_links: { facebook: "", instagram: "", youtube: "", website: "" },
+    support_number: "",
+    bank_accounts: [],
+    payment_methods: [],
+    achievements: [],
     updated_at: new Date().toISOString(),
   };
+}
+
+/**
+ * @deprecated Do not use for UI data. Kept only for rare offline tooling.
+ * Prefer getCompanyStructure() (database) or emptyCompanyStructure().
+ */
+export function defaultCompanyStructure(): CompanyStructure {
+  return emptyCompanyStructure();
 }
 
 function asArray<T>(value: unknown): T[] {
@@ -137,7 +54,7 @@ function mapRow(row: Record<string, unknown>): CompanyStructure {
   };
   const achievementsRaw = asArray<CompanyAchievement>(row.achievements);
   return {
-    logo_url: (row.logo_url as string | null) ?? DEFAULT_COMPANY_LOGO_URL,
+    logo_url: (row.logo_url as string | null) ?? null,
     staff_contacts: asArray<StaffContact>(row.staff_contacts).map((c) => ({
       id: c.id || uid(),
       name: c.name ?? "",
@@ -176,80 +93,44 @@ function mapRow(row: Record<string, unknown>): CompanyStructure {
       mobile_number: p.mobile_number ?? "",
       qr_image_url: p.qr_image_url ?? null,
     })),
-    achievements:
-      achievementsRaw.length > 0
-        ? achievementsRaw.map((a) => ({
-            id: a.id || uid(),
-            name: a.name ?? "",
-            description: a.description ?? "",
-            image_urls: Array.isArray(a.image_urls)
-              ? a.image_urls.filter(Boolean)
-              : [...DEFAULT_ACHIEVEMENT_IMAGES],
-          }))
-        : defaultAchievements(),
+    achievements: achievementsRaw.map((a) => ({
+      id: a.id || uid(),
+      name: a.name ?? "",
+      description: a.description ?? "",
+      image_urls: Array.isArray(a.image_urls) ? a.image_urls.filter(Boolean) : [],
+    })),
     updated_at: String(row.updated_at ?? new Date().toISOString()),
   };
 }
 
-function readLocal(): CompanyStructure {
-  if (typeof window === "undefined") return defaultCompanyStructure();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      const seed = defaultCompanyStructure();
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
-      return seed;
-    }
-    return mapRow(JSON.parse(raw) as Record<string, unknown>);
-  } catch {
-    return defaultCompanyStructure();
-  }
-}
-
-function writeLocal(data: CompanyStructure) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
+/**
+ * Company structure — Supabase only.
+ * Never reads or writes localStorage / cookies. Never seeds dummy contacts.
+ */
 export async function getCompanyStructure(): Promise<CompanyStructure> {
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("td_company_structure")
-      .select("*")
-      .eq("id", ROW_ID)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (data) {
-      // Always return the cloud row — never replace empty/partial rows with hardcoded defaults
-      // (that looked like permanent "dummy mode").
-      return mapRow(data as Record<string, unknown>);
-    }
-    // First-time: seed the singleton row into the cloud so every PC sees the same data.
-    const seed = defaultCompanyStructure();
-    const { error: insertError } = await supabase.from("td_company_structure").upsert({
-      id: ROW_ID,
-      logo_url: seed.logo_url,
-      staff_contacts: seed.staff_contacts,
-      addresses: seed.addresses,
-      social_links: seed.social_links,
-      support_number: seed.support_number,
-      bank_accounts: seed.bank_accounts,
-      payment_methods: seed.payment_methods,
-      achievements: seed.achievements,
-      updated_at: seed.updated_at,
-    });
-    if (insertError) throw new Error(insertError.message);
-    return seed;
+  if (!useCloudMaster()) {
+    throw new Error(
+      "Supabase is not configured. Structure requires a live database (no browser storage)."
+    );
   }
-  return readLocal();
+  requireCloudMaster();
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_company_structure")
+    .select("*")
+    .eq("id", ROW_ID)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return mapRow(data as Record<string, unknown>);
+  return emptyCompanyStructure();
 }
 
 export async function saveCompanyStructure(
   draft: CompanyStructure,
   actor?: TeamMember
 ): Promise<CompanyStructure> {
+  requireCloudMaster();
   const before = await getCompanyStructure();
 
   const [logoResolved] = draft.logo_url
@@ -286,61 +167,44 @@ export async function saveCompanyStructure(
     updated_at: new Date().toISOString(),
   };
 
-  if (useSupabaseMaster()) {
-    const { createClient } = await import("@/lib/supabase/client");
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("td_company_structure")
-      .upsert({
-        id: ROW_ID,
-        logo_url: next.logo_url,
-        staff_contacts: next.staff_contacts,
-        addresses: next.addresses,
-        social_links: next.social_links,
-        support_number: next.support_number,
-        bank_accounts: next.bank_accounts,
-        payment_methods: next.payment_methods,
-        achievements: next.achievements,
-        updated_at: next.updated_at,
-        updated_by: actor?.id ?? null,
-        updated_by_name: actor?.name ?? null,
-      })
-      .select("*")
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    // RLS can "succeed" with 0 rows — treat that as failure so we never fake a save.
-    if (!data) {
-      throw new Error(
-        "Structure save was blocked (no row returned). Check database permissions and try again."
-      );
-    }
-    const saved = mapRow(data as Record<string, unknown>);
-    writeLocal(saved);
-    logMasterDataChange({
-      entityType: "company_structure",
-      entityId: ROW_ID,
-      action: "update",
-      summary: "Updated company structure",
-      before: { ...before },
-      after: { ...saved },
-      actor,
-    });
-    return saved;
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("td_company_structure")
+    .upsert({
+      id: ROW_ID,
+      logo_url: next.logo_url,
+      staff_contacts: next.staff_contacts,
+      addresses: next.addresses,
+      social_links: next.social_links,
+      support_number: next.support_number,
+      bank_accounts: next.bank_accounts,
+      payment_methods: next.payment_methods,
+      achievements: next.achievements,
+      updated_at: next.updated_at,
+      updated_by: actor?.id ?? null,
+      updated_by_name: actor?.name ?? null,
+    })
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  // RLS can "succeed" with 0 rows — treat that as failure so we never fake a save.
+  if (!data) {
+    throw new Error(
+      "Structure save was blocked (no row returned). Check database permissions and try again."
+    );
   }
-
-  writeLocal(next);
-
+  const saved = mapRow(data as Record<string, unknown>);
   logMasterDataChange({
     entityType: "company_structure",
     entityId: ROW_ID,
     action: "update",
     summary: "Updated company structure",
     before: { ...before },
-    after: { ...next },
+    after: { ...saved },
     actor,
   });
-
-  return next;
+  return saved;
 }
 
 export function emptyStaffContact(): StaffContact {

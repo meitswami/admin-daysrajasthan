@@ -1,10 +1,13 @@
 import { Header } from "@/components/layout/header";
 import { ItinerariesView } from "@/components/modules/itineraries-view";
-import { itineraryDownloads } from "@/lib/data";
+import { getItineraryDownloads } from "@/lib/data/service";
 import { listCmsPackages } from "@/modules/packages";
 
 export default async function ItinerariesPage() {
-  const packages = await listCmsPackages();
+  const [packages, downloads] = await Promise.all([
+    listCmsPackages(),
+    getItineraryDownloads(),
+  ]);
 
   return (
     <>
@@ -12,7 +15,7 @@ export default async function ItinerariesPage() {
         title="Website Packages"
         description="Public tour packages — sourced via Knowledge Engine · PDF uploads, SEO display & download lead tracking"
       />
-      <ItinerariesView initialItineraries={packages} initialDownloads={itineraryDownloads} />
+      <ItinerariesView initialItineraries={packages} initialDownloads={downloads} />
     </>
   );
 }

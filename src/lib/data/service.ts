@@ -1,35 +1,51 @@
 /**
- * Async data service — set DATA_SOURCE to "supabase" when connecting.
- * Pages can import from here instead of lib/data for live DB reads.
+ * Async data service — always prefers Supabase when configured.
+ * Pages must import from here (not mock-data) for live DB reads.
  */
-import { DATA_SOURCE } from "./index";
+import { getDataSource } from "./index";
 import * as mock from "./mock-data";
 import * as queries from "@/lib/supabase/queries";
 
+function source(): "mock" | "supabase" {
+  return getDataSource();
+}
+
 export async function getItineraries() {
-  return DATA_SOURCE === "supabase" ? queries.fetchItineraries() : mock.itineraries;
+  return source() === "supabase" ? queries.fetchItineraries() : mock.itineraries;
 }
 
 export async function getItineraryDownloads() {
-  return DATA_SOURCE === "supabase" ? queries.fetchItineraryDownloads() : mock.itineraryDownloads;
+  return source() === "supabase" ? queries.fetchItineraryDownloads() : mock.itineraryDownloads;
 }
 
 export async function getContactQueries() {
-  return DATA_SOURCE === "supabase" ? queries.fetchContactQueries() : mock.contactQueries;
+  return source() === "supabase" ? queries.fetchContactQueries() : mock.contactQueries;
 }
 
 export async function getPackageInquiries() {
-  return DATA_SOURCE === "supabase" ? queries.fetchPackageInquiries() : mock.packageInquiries;
+  return source() === "supabase" ? queries.fetchPackageInquiries() : mock.packageInquiries;
 }
 
 export async function getBlogs() {
-  return DATA_SOURCE === "supabase" ? queries.fetchBlogs() : mock.blogs;
+  return source() === "supabase" ? queries.fetchBlogs() : mock.blogs;
+}
+
+export async function getBlogCategories() {
+  return source() === "supabase" ? queries.fetchBlogCategories() : mock.blogCategories;
+}
+
+export async function getBlogTags() {
+  return source() === "supabase" ? queries.fetchBlogTags() : mock.blogTags;
+}
+
+export async function getBlogTagMap() {
+  return source() === "supabase" ? queries.fetchBlogTagMap() : mock.blogTagMap;
 }
 
 export async function getWhatsappLeads() {
-  return DATA_SOURCE === "supabase" ? queries.fetchWhatsappLeads() : mock.whatsappLeads;
+  return source() === "supabase" ? queries.fetchWhatsappLeads() : mock.whatsappLeads;
 }
 
 export async function getDashboardStats() {
-  return DATA_SOURCE === "supabase" ? queries.fetchDashboardStats() : mock.getDashboardStats();
+  return source() === "supabase" ? queries.fetchDashboardStats() : mock.getDashboardStats();
 }

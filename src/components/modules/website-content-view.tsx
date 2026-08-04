@@ -29,7 +29,7 @@ import {
   updateMasterContent,
   type MasterContentEntity,
 } from "@/lib/master-data/content-store";
-import { listMasterCategoriesCached } from "@/lib/master-data/categories-store";
+import { listMasterCategories } from "@/lib/master-data/categories-store";
 import {
   emptyVehicleProvider,
   normalizeVehicleProviders,
@@ -48,12 +48,6 @@ const TAB_TITLES: Record<MasterContentEntity, { title: string; singular: string 
   hotels: { title: "Hotels", singular: "Hotel" },
   vehicles: { title: "Vehicles", singular: "Vehicle" },
 };
-
-function hotelCategoryOptions(): { value: string; label: string }[] {
-  const fromMaster = listMasterCategoriesCached().map((c) => ({ value: c.label, label: c.label }));
-  if (fromMaster.length) return fromMaster;
-  return HOTEL_CATEGORY_OPTIONS.map((c) => ({ value: c.label, label: c.label }));
-}
 
 function getImageCategory(tab: MasterContentEntity): PlaceholderCategory {
   if (tab === "destinations") return "destination";
@@ -118,7 +112,21 @@ export function WebsiteContentView({ entity }: { entity?: MasterDataEntity }) {
   const [locations, setLocations] = useState<string[]>([]);
 
   const canCreate = canCreateMasterData(currentMember);
-  const categoryOptions = useMemo(() => hotelCategoryOptions(), []);
+  const [categoryOptions, setCategoryOptions] = useState<{ value: string; label: string }[]>(
+    () => HOTEL_CATEGORY_OPTIONS.map((c) => ({ value: c.label, label: c.label }))
+  );
+
+  useEffect(() => {
+    void listMasterCategories()
+      .then((rows) => {
+        if (rows.length) {
+          setCategoryOptions(rows.map((c) => ({ value: c.label, label: c.label })));
+        }
+      })
+      .catch(() => {
+        /* keep HOTEL_CATEGORY_OPTIONS fallback for empty/error */
+      });
+  }, [dataMode]);
 
   const refresh = useCallback(async () => {
     setLoading(true);

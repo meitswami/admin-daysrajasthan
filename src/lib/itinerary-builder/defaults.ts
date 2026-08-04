@@ -113,7 +113,7 @@ export function clearPlaceholderDayTitles(days: ItineraryDay[]): ItineraryDay[] 
   );
 }
 
-/** Default custom itinerary: 02 Days / 01 Night (last day is Departure). */
+/** Default custom itinerary: 01 Night / 02 Days (last day is Departure). */
 export function emptyCustomItineraryDays(): ItineraryDay[] {
   return [
     emptyDay(1),
@@ -127,7 +127,7 @@ export function emptySnapshot(overrides?: Partial<ItinerarySnapshot>): Itinerary
       title: "",
       subtitle: null,
       tour_code: null,
-      duration_label: "02 Days / 01 Night",
+      duration_label: "01 Night / 02 Days",
       alternate_titles: [],
     },
     client: emptyClientDetails(),
@@ -194,44 +194,57 @@ export const HOTEL_OPTIONS = [
   "Amanbagh — Ajabgarh",
 ] as const;
 
-/** Fixed V1 optional inclusion checklist */
+/** Fixed V1 optional inclusion checklist — descriptions come from Master Data when present. */
 export const OPTIONAL_INCLUSIONS = [
   {
     key: "ranthambhore_canter",
     label: "Ranthambhore Canter Safari",
-    description: "Jungle safari in a comfortable canter through Ranthambhore National Park.",
+    description: "",
   },
   {
     key: "ranthambhore_gypsy",
     label: "Ranthambhore Gypsy Safari",
-    description: "More adventurous safari by gypsy jeep in Ranthambhore.",
+    description: "",
   },
   {
     key: "jaisalmer_desert",
     label: "Jaisalmer Desert Add-ons",
-    description: "Desert stay including camel rides, bonfire, dinner, and cultural programs.",
+    description: "",
   },
 ] as const;
 
 export function optionalInclusionBlocks(
-  keys: string[] | null | undefined
+  keys: string[] | null | undefined,
+  master?: { text: string; description?: string | null; image_url?: string | null; kind?: string }[]
 ): { id: string; title: string; description: string; images: string[] }[] {
   const selected = new Set(keys ?? []);
-  return OPTIONAL_INCLUSIONS.filter((o) => selected.has(o.key)).map((o) => ({
-    id: `optional-${o.key}`,
-    title: o.label,
-    description: o.description,
-    images: [],
-  }));
+  const byTitle = new Map(
+    (master ?? [])
+      .filter((row) => !row.kind || row.kind === "inclusion")
+      .map((row) => [row.text.trim().toLowerCase(), row] as const)
+  );
+  return OPTIONAL_INCLUSIONS.filter((o) => selected.has(o.key)).map((o) => {
+    const hit = byTitle.get(o.label.trim().toLowerCase());
+    return {
+      id: `optional-${o.key}`,
+      title: o.label,
+      description: (hit?.description ?? o.description ?? "").trim(),
+      images: hit?.image_url ? [hit.image_url] : [],
+    };
+  });
 }
 
 /** Keep base inclusion cards, then append checked optional inclusions. */
 export function mergeOptionalIntoInclusionItems<
   T extends { id: string; title: string; description: string; images: string[] },
->(items: T[], keys: string[] | null | undefined): T[] {
+>(
+  items: T[],
+  keys: string[] | null | undefined,
+  master?: { text: string; description?: string | null; image_url?: string | null; kind?: string }[]
+): T[] {
   const optionalLabels = new Set(
     OPTIONAL_INCLUSIONS.map((o) => o.label.trim().toLowerCase())
   );
   const base = items.filter((i) => !optionalLabels.has(i.title.trim().toLowerCase()));
-  return [...base, ...(optionalInclusionBlocks(keys) as T[])];
+  return [...base, ...(optionalInclusionBlocks(keys, master) as T[])];
 }

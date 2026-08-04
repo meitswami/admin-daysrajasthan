@@ -249,8 +249,7 @@ export function QuotationPrintView({
                 className="no-print text-white hover:opacity-90"
                 style={{ backgroundColor: bookAccent }}
                 onClick={() => {
-                  const el = document.getElementById("book");
-                  el?.scrollIntoView({ behavior: "smooth" });
+                  window.location.href = `/${itineraryId}/payment`;
                 }}
               >
                 Book Now
@@ -290,6 +289,8 @@ export function QuotationPrintView({
           contacts={contacts}
           payment={payment}
           structure={structure}
+          itineraryId={itineraryId}
+          bookNowHref={`/${itineraryId}/payment`}
         />
       </div>
     </div>

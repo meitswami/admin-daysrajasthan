@@ -1,12 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { ReportBrand } from "@/lib/branding/report-brand";
 import type { PreviewContact } from "@/lib/itinerary-builder/policy-master";
 import {
-  MASTER_CANCELLATION,
-  MASTER_PAYMENT,
-  MASTER_TERMS,
-} from "@/lib/itinerary-builder/policy-master";
+  listMasterPolicies,
+  policiesForSection,
+} from "@/lib/master-data/policies-store";
 import type { PaymentDetails } from "@/lib/itinerary-builder/payment-details";
 import type { CompanyAchievement, CompanyStructure } from "@/types/company-structure";
 import {
@@ -90,6 +90,30 @@ export function QuotationLegacyPolicies({
   exclusions: string[];
   companyName: string;
 }) {
+  const [terms, setTerms] = useState<string[]>([]);
+  const [cancellation, setCancellation] = useState<string[]>([]);
+  const [payment, setPayment] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listMasterPolicies()
+      .then((rows) => {
+        if (cancelled) return;
+        setTerms(policiesForSection(rows, "terms").map((t) => t.title));
+        setCancellation(policiesForSection(rows, "cancellation").map((t) => t.title));
+        setPayment(policiesForSection(rows, "payment").map((t) => t.title));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTerms([]);
+        setCancellation([]);
+        setPayment([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section className="break-inside-avoid space-y-8 bg-white px-6 py-10">
       <div className="mx-auto mb-2 flex justify-center">
@@ -117,21 +141,27 @@ export function QuotationLegacyPolicies({
         </div>
       )}
 
-      <PolicyBlock
-        title="Terms & Conditions :"
-        icon={<FileText className="h-4 w-4" />}
-        items={MASTER_TERMS.map((t) => t.title)}
-      />
-      <PolicyBlock
-        title="Cancellation & Refund Policy :"
-        icon={<RotateCcw className="h-4 w-4" />}
-        items={MASTER_CANCELLATION.map((t) => t.title)}
-      />
-      <PolicyBlock
-        title="Payment Policy :"
-        icon={<Wallet className="h-4 w-4" />}
-        items={MASTER_PAYMENT.map((t) => t.title)}
-      />
+      {terms.length > 0 && (
+        <PolicyBlock
+          title="Terms & Conditions :"
+          icon={<FileText className="h-4 w-4" />}
+          items={terms}
+        />
+      )}
+      {cancellation.length > 0 && (
+        <PolicyBlock
+          title="Cancellation & Refund Policy :"
+          icon={<RotateCcw className="h-4 w-4" />}
+          items={cancellation}
+        />
+      )}
+      {payment.length > 0 && (
+        <PolicyBlock
+          title="Payment Policy :"
+          icon={<Wallet className="h-4 w-4" />}
+          items={payment}
+        />
+      )}
     </section>
   );
 }
@@ -219,11 +249,13 @@ export function QuotationLegacyPaymentSection({
   agent,
   website,
   brandLogo,
+  bookNowHref,
 }: {
   payment: PaymentDetails;
   agent: PreviewContact | null;
   website: string;
   brandLogo: string | null;
+  bookNowHref?: string | null;
 }) {
   const upiId = payment.upi_ids[0] ?? "";
   const logo = brandLogo || "/structure-company-logo.png";
@@ -334,7 +366,7 @@ export function QuotationLegacyPaymentSection({
           </div>
 
           <a
-            href="#book"
+            href={bookNowHref || "#book"}
             className="inline-flex rounded-md bg-[#F5C518] px-8 py-2.5 text-sm font-bold text-white shadow-sm"
           >
             Book Now

@@ -70,6 +70,11 @@ export function publicQuotationUrl(
   return `${base}?v=${encodeURIComponent(token)}`;
 }
 
+/** Client payment page for a published quotation: `/{id}/payment`. */
+export function publicPaymentUrl(itineraryId: string, origin?: string | null): string {
+  return `${getAdminPublicOrigin(origin)}/${itineraryId}/payment`;
+}
+
 /**
  * Server-side origin from an incoming Request (nginx → PM2 on :3102).
  * Prefer forwarded Host; never return localhost when a public env/default exists.

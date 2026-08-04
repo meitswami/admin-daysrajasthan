@@ -29,6 +29,7 @@ import {
 import { hasPermission } from "@/lib/rbac/permissions";
 import { memberHasPermission } from "@/lib/rbac/staff-store";
 import { listPermissionGroups } from "@/lib/rbac/permission-groups-store";
+import { purgeObsoleteMasterLocalStorage } from "@/lib/master-data/purge-local";
 
 type SystemContextValue = {
   dataMode: DataMode;
@@ -55,6 +56,8 @@ export function SystemProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    purgeObsoleteMasterLocalStorage();
+
     let cancelled = false;
 
     void (async () => {
@@ -70,7 +73,9 @@ export function SystemProvider({ children }: { children: ReactNode }) {
       setDataModeReady(true);
     })();
 
-    void listPermissionGroups();
+    void listPermissionGroups().catch(() => {
+      /* cloud unavailable — permissions resolve after next successful fetch */
+    });
     void fetchTeamMembers().then((members) => {
       if (cancelled) return;
       setTeamMembers(members);

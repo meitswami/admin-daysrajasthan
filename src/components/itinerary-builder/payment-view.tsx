@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
@@ -15,7 +14,6 @@ import {
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
   clampAdvancePercent,
-  DUMMY_PAYMENT_DETAILS,
   paymentDetailsFromStructure,
   type AdvancePercent,
   type PaymentDetails,
@@ -52,25 +50,66 @@ function statusForAmount(amount: number, total: number): PaymentStatus {
   return "partial";
 }
 
-export function PaymentView({ itineraryId }: { itineraryId: string }) {
-  const router = useRouter();
+export function PaymentView({
+  itineraryId,
+  publicMode = false,
+}: {
+  itineraryId: string;
+  publicMode?: boolean;
+}) {
   const { show } = useToast();
   const [record, setRecord] = useState<ClientItineraryRecord | null>(null);
   const [snapshot, setSnapshot] = useState<ItinerarySnapshot | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editAmount, setEditAmount] = useState(0);
-  const [payDetails, setPayDetails] = useState<PaymentDetails>(DUMMY_PAYMENT_DETAILS);
+  const [payDetails, setPayDetails] = useState<PaymentDetails>(() =>
+    paymentDetailsFromStructure(null)
+  );
 
   useEffect(() => {
-    const r = getClientItinerary(itineraryId);
-    const revs = getRevisions(itineraryId);
-    const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
-    if (r && current) {
-      setRecord(r);
-      setSnapshot(normalizeSnapshot(current.snapshot));
+    let cancelled = false;
+
+    async function load() {
+      void getCompanyStructure().then((s) => {
+        if (!cancelled) setPayDetails(paymentDetailsFromStructure(s));
+      });
+
+      try {
+        const res = await fetch(`/api/public/quotation/${itineraryId}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (!cancelled && json?.snapshot) {
+            setRecord({
+              id: itineraryId,
+              quote_id: json.quote_id,
+              current_version: json.version_number,
+              client_name: json.client_name,
+              category_totals: json.category_totals ?? [],
+              amount_paid: 0,
+              payment_status: "unpaid",
+            } as ClientItineraryRecord);
+            setSnapshot(normalizeSnapshot(json.snapshot));
+            return;
+          }
+        }
+      } catch {
+        // fall through to local storage
+      }
+
+      const r = getClientItinerary(itineraryId);
+      const revs = getRevisions(itineraryId);
+      const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
+      if (r && current && !cancelled) {
+        setRecord(r);
+        setSnapshot(normalizeSnapshot(current.snapshot));
+      }
     }
-    void getCompanyStructure().then((s) => setPayDetails(paymentDetailsFromStructure(s)));
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [itineraryId]);
 
   const themeShell = useMemo(
@@ -211,10 +250,14 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
             </p>
           </div>
           <Link
-            href={`/itinerary-builder/${itineraryId}/preview-confirm`}
+            href={
+              publicMode
+                ? `/${itineraryId}/quotation`
+                : `/itinerary-builder/${itineraryId}/preview-confirm`
+            }
             className="text-sm font-medium text-stone-600 hover:text-stone-900"
           >
-            Back to Preview
+            {publicMode ? "Back to Quotation" : "Back to Preview"}
           </Link>
         </div>
       </div>
@@ -237,9 +280,12 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
             Advance Amount
           </h2>
           <p className="mt-1 text-sm text-stone-500">
-            Admin &amp; agents can set 20% or 30% of the package total.
+            {publicMode
+              ? `Please pay ${advancePercent}% of the package total to confirm your booking.`
+              : "Admin & agents can set 20% or 30% of the package total."}
           </p>
 
+          {!publicMode && (
           <div className="mt-4 flex flex-wrap gap-2">
             {([20, 30] as const).map((pct) => (
               <button
@@ -257,6 +303,7 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
               </button>
             ))}
           </div>
+          )}
 
           <div className="mt-5 space-y-3">
             {tierAdvances.length === 0 ? (
@@ -379,50 +426,55 @@ export function PaymentView({ itineraryId }: { itineraryId: string }) {
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#7B1E2E]/15 pb-10 pt-4">
-          <button
-            type="button"
+          <Link
+            href={
+              publicMode
+                ? `/${itineraryId}/quotation`
+                : `/itinerary-builder/${itineraryId}/preview-confirm`
+            }
             className="text-sm font-medium text-stone-600 hover:text-stone-900"
-            onClick={() => router.push(`/itinerary-builder/${itineraryId}/preview-confirm`)}
           >
-            Back to Preview
-          </button>
-          <div className="flex flex-col items-stretch gap-2 sm:items-end">
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="border-[#7B1E2E]/30 text-[#7B1E2E]"
-                onClick={() => {
-                  if (handleSave()) show("Saved");
-                }}
-              >
-                Save
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="border-stone-300 bg-white text-stone-800 hover:bg-stone-50"
-                onClick={handleSkipToPdf}
-              >
-                <Download className="h-4 w-4" />
-                Skip & Download PDF
-              </Button>
-              <Button
-                type="button"
-                className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
-                onClick={handleRecordPayment}
-                disabled={primaryAdvance <= 0}
-              >
-                Record Payment
-              </Button>
+            {publicMode ? "Back to Quotation" : "Back to Preview"}
+          </Link>
+          {!publicMode && (
+            <div className="flex flex-col items-stretch gap-2 sm:items-end">
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-[#7B1E2E]/30 text-[#7B1E2E]"
+                  onClick={() => {
+                    if (handleSave()) show("Saved");
+                  }}
+                >
+                  Save
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="border-stone-300 bg-white text-stone-800 hover:bg-stone-50"
+                  onClick={handleSkipToPdf}
+                >
+                  <Download className="h-4 w-4" />
+                  Skip & Download PDF
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-[#7B1E2E] hover:bg-[#5C0F1A]"
+                  onClick={handleRecordPayment}
+                  disabled={primaryAdvance <= 0}
+                >
+                  Record Payment
+                </Button>
+              </div>
+              <p className="text-right text-xs text-stone-500">
+                Payment is optional — skip to share the quotation PDF now; collect payment later if needed.
+              </p>
             </div>
-            <p className="text-right text-xs text-stone-500">
-              Payment is optional — skip to share the quotation PDF now; collect payment later if needed.
-            </p>
-          </div>
+          )}
         </div>
 
-        {(record.payment_status !== "unpaid" || record.amount_paid > 0) && (
+        {!publicMode && (record.payment_status !== "unpaid" || record.amount_paid > 0) && (
           <div className="flex flex-wrap items-center justify-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <p>
               Payment status: <strong>{record.payment_status}</strong> · Amount paid:{" "}
