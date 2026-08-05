@@ -14,6 +14,7 @@ import {
   getOrCreateCostSheet,
   hasCostSheet,
   hotelRowTotal,
+  hydrateOperationsFromSupabase,
   listConfirmedBookings,
   saveCostSheet,
 } from "@/lib/operations/store";
@@ -41,7 +42,7 @@ export function OperationSheetView() {
   }
 
   useEffect(() => {
-    refresh();
+    void hydrateOperationsFromSupabase().then(() => refresh());
   }, []);
 
   const agents = useMemo(
@@ -67,11 +68,15 @@ export function OperationSheetView() {
 
   const activeBooking = bookings.find((b) => b.id === activeId) ?? null;
 
-  function openSheet(id: string) {
-    const next = getOrCreateCostSheet(id);
-    setSheet(next);
-    setActiveId(id);
-    setCreatedMap((m) => ({ ...m, [id]: true }));
+  async function openSheet(id: string) {
+    try {
+      const next = await getOrCreateCostSheet(id);
+      setSheet(next);
+      setActiveId(id);
+      setCreatedMap((m) => ({ ...m, [id]: true }));
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to open cost sheet");
+    }
   }
 
   function updateRow(id: string, patch: Partial<HotelCostRow>) {
@@ -84,31 +89,39 @@ export function OperationSheetView() {
     });
   }
 
-  function regenerate() {
+  async function regenerate() {
     if (!activeId || !sheet) return;
-    const next = saveCostSheet({
-      ...sheet,
-      hotel_rows: sheet.hotel_rows.map((r) => ({
-        ...r,
-        room_price: 0,
-        extra_bed_count: 0,
-        extra_bed_price: 0,
-        notes: "",
-        status: "original",
-      })),
-      total_vehicle_km: 0,
-      price_per_km: 0,
-      additional_charges: 0,
-    });
-    setSheet(next);
-    show("Cost sheet regenerated");
+    try {
+      const next = await saveCostSheet({
+        ...sheet,
+        hotel_rows: sheet.hotel_rows.map((r) => ({
+          ...r,
+          room_price: 0,
+          extra_bed_count: 0,
+          extra_bed_price: 0,
+          notes: "",
+          status: "original",
+        })),
+        total_vehicle_km: 0,
+        price_per_km: 0,
+        additional_charges: 0,
+      });
+      setSheet(next);
+      show("Cost sheet regenerated");
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to regenerate");
+    }
   }
 
-  function persist() {
+  async function persist() {
     if (!sheet) return;
-    setSheet(saveCostSheet(sheet));
-    show("Cost sheet saved");
-    refresh();
+    try {
+      setSheet(await saveCostSheet(sheet));
+      show("Cost sheet saved");
+      refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save cost sheet");
+    }
   }
 
   const totals = sheet ? costSheetTotals(sheet) : null;

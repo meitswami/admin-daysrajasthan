@@ -192,21 +192,27 @@ export async function deleteAiSuggestion(id: string): Promise<boolean> {
   return true;
 }
 
-/** Learn from custom day title/description so suggestions stay fresh */
+/**
+ * Do NOT auto-insert into master AI suggestions from the itinerary builder.
+ * Partial keystrokes ("jaip", "Day 2") were polluting Supabase for every user.
+ * Curated suggestions must be added only via Master Data → AI Suggestions.
+ * Existing matches may still get a description refresh when the title is exact.
+ */
 export async function learnAiSuggestionFromDay(title: string, description: string) {
   const t = title.trim();
   const d = description.trim();
-  if (!t || t.length < 3) return;
+  if (!t || t.length < 8) return;
+  // Reject placeholder / incomplete titles that used to reappear after delete
+  if (/^day\s*\d+$/i.test(t)) return;
+  if (t.length < 12 && !/\s/.test(t)) return;
+  if (!d || d === t || d.length < 20) return;
   try {
     const list = await listAiSuggestions();
     const existing = list.find((s) => s.title.toLowerCase() === t.toLowerCase());
-    if (existing) {
-      if (d && d !== existing.description) {
-        await updateAiSuggestion(existing.id, { title: existing.title, description: d });
-      }
-      return;
+    if (existing && d !== existing.description) {
+      await updateAiSuggestion(existing.id, { title: existing.title, description: d });
     }
-    await createAiSuggestion({ title: t, description: d || t, source: "learned" });
+    // Never create new rows from the builder — prevents deleted junk from coming back
   } catch (err) {
     console.warn("[ai-suggestions] learn failed", err);
   }

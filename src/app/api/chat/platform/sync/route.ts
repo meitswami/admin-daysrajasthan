@@ -32,6 +32,8 @@ export async function POST(request: Request) {
 
 /** Superadmin inbox pull — conversations, messages, sessions, settings. */
 export async function GET() {
+  const { hydrateServerChatFromSupabase } = await import("@/modules/chat/server-store");
+  await hydrateServerChatFromSupabase();
   processLeadRotations();
   const state = getServerChatPlatformState();
   return Response.json({

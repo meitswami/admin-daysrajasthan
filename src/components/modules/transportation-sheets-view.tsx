@@ -15,6 +15,7 @@ import { listMasterContent } from "@/lib/master-data/content-store";
 import {
   formatDisplayDate,
   getTransport,
+  hydrateOperationsFromSupabase,
   listConfirmedBookings,
   upsertTransport,
 } from "@/lib/operations/store";
@@ -97,7 +98,7 @@ export function TransportationSheetsView() {
   }
 
   useEffect(() => {
-    refresh();
+    void hydrateOperationsFromSupabase().then(() => refresh());
     void listMasterContent("vehicles").then(setVehicles);
   }, []);
 
@@ -138,20 +139,28 @@ export function TransportationSheetsView() {
     setAdvanceAmount(getTransport(record.id)?.driver_advance ?? 0);
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!editRecord) return;
-    upsertTransport(editRecord.id, form);
-    show("Driver & vehicle updated");
-    setEditRecord(null);
-    refresh();
+    try {
+      await upsertTransport(editRecord.id, form);
+      show("Driver & vehicle updated");
+      setEditRecord(null);
+      refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save transport");
+    }
   }
 
-  function saveAdvance() {
+  async function saveAdvance() {
     if (!advanceRecord) return;
-    upsertTransport(advanceRecord.id, { driver_advance: Number(advanceAmount) || 0 });
-    show("Driver advance updated");
-    setAdvanceRecord(null);
-    refresh();
+    try {
+      await upsertTransport(advanceRecord.id, { driver_advance: Number(advanceAmount) || 0 });
+      show("Driver advance updated");
+      setAdvanceRecord(null);
+      refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save advance");
+    }
   }
 
   function exportCsv() {

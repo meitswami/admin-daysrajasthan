@@ -14,9 +14,13 @@ const OBSOLETE_MASTER_KEYS = [
   "td_ai_suggestions_v1",
   "td_ai_suggestions_cloud_migrated_v1",
   "td-permission-groups-v1",
+  // Operations / Chat / Email — now Supabase-only
+  "td-operations-v1",
+  "travel-days-team-email-v1",
+  "travel-days-chat-platform-v1",
 ] as const;
 
-const PURGED_FLAG = "td-master-local-purged-v2";
+const PURGED_FLAG = "td-master-local-purged-v3";
 
 /**
  * When Supabase is configured, drop legacy master-data localStorage so the UI
@@ -29,6 +33,9 @@ export function purgeObsoleteMasterLocalStorage(): void {
     // Structure must never linger in the browser after cloud mode is on.
     localStorage.removeItem("td-company-structure-v2");
     localStorage.removeItem("td-company-structure-v1");
+    localStorage.removeItem("td-operations-v1");
+    localStorage.removeItem("travel-days-team-email-v1");
+    localStorage.removeItem("travel-days-chat-platform-v1");
 
     if (localStorage.getItem(PURGED_FLAG) === "1") return;
     for (const key of OBSOLETE_MASTER_KEYS) {

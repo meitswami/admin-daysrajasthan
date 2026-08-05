@@ -167,8 +167,9 @@ export function getInquiryReportRows(source?: PackageInquiry[]): InquiryReportRo
   }));
 }
 
-export function getEmailReportRows(): EmailReportRow[] {
-  return listMessages()
+export async function getEmailReportRows(): Promise<EmailReportRow[]> {
+  const messages = await listMessages();
+  return messages
     .filter((m) => m.folder !== "spam")
     .map((m) => ({
       id: m.id,

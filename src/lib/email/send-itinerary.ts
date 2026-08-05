@@ -44,7 +44,7 @@ export async function sendItineraryEmail(
   const ctx = buildTemplateContext(record);
   const { subject, body } = renderTemplate(templateId, ctx);
 
-  const msg = queueOutboundSend({
+  const msg = await queueOutboundSend({
     folder: options.scheduledAt ? "scheduled" : "outbox",
     from_email: TEAM_MAIL_DEFAULTS.from_email,
     from_name: TEAM_MAIL_DEFAULTS.from_name,
@@ -84,7 +84,7 @@ export async function sendItineraryEmail(
       const data = (await res.json()) as { error?: string };
       return { ok: false, error: data.error ?? "Send failed" };
     }
-    completeSend(msg.id);
+    await completeSend(msg.id);
     void import("@/lib/system/activity-log").then(({ logActivity }) =>
       logActivity({
         action: "email_send",
@@ -96,7 +96,7 @@ export async function sendItineraryEmail(
     );
     return { ok: true, messageId: msg.id };
   } catch {
-    completeSend(msg.id);
+    await completeSend(msg.id);
     void import("@/lib/system/activity-log").then(({ logActivity }) =>
       logActivity({
         action: "email_send",

@@ -14,6 +14,7 @@ import {
   deleteInvoice,
   emptyParty,
   formatDisplayDate,
+  hydrateOperationsFromSupabase,
   listInvoices,
   nextInvoiceNumber,
   saveInvoice,
@@ -230,7 +231,7 @@ export function InvoiceBillsView() {
   }
 
   useEffect(() => {
-    refreshBills();
+    void hydrateOperationsFromSupabase().then(() => refreshBills());
   }, []);
 
   useEffect(() => {
@@ -252,15 +253,19 @@ export function InvoiceBillsView() {
 
   const summary = moneySummary(subtotal, draft.gst_rate, draft.total_paid);
 
-  function persist(status: OpsInvoice["status"] = "pending") {
-    const next = saveInvoice({
-      ...draft,
-      status: summary.pending <= 0 && draft.total_paid > 0 ? "paid" : status,
-      number: draft.number || nextInvoiceNumber(draft.kind),
-    });
-    setDraft(next);
-    refreshBills();
-    show(`${draft.kind === "quotation" ? "Quotation" : "Invoice"} saved (${next.number})`);
+  async function persist(status: OpsInvoice["status"] = "pending") {
+    try {
+      const next = await saveInvoice({
+        ...draft,
+        status: summary.pending <= 0 && draft.total_paid > 0 ? "paid" : status,
+        number: draft.number || nextInvoiceNumber(draft.kind),
+      });
+      setDraft(next);
+      refreshBills();
+      show(`${draft.kind === "quotation" ? "Quotation" : "Invoice"} saved (${next.number})`);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save invoice");
+    }
   }
 
   function previewText() {
@@ -966,9 +971,14 @@ export function InvoiceBillsView() {
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => {
-                                  deleteInvoice(b.id);
-                                  refreshBills();
-                                  show("Bill deleted");
+                                  void deleteInvoice(b.id)
+                                    .then(() => {
+                                      refreshBills();
+                                      show("Bill deleted");
+                                    })
+                                    .catch((err) =>
+                                      show(err instanceof Error ? err.message : "Delete failed")
+                                    );
                                 }}
                               >
                                 <Trash2 className="h-4 w-4 text-red-500" />

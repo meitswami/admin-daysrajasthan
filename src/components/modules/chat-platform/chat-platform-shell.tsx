@@ -218,10 +218,14 @@ export function ChatPlatformShell({ section }: { section: ChatPlatformSectionId 
   const me = useMemo(() => getCurrentTeamMember(), []);
 
   const refresh = useCallback(() => {
-    const next = getChatPlatformState();
-    setState(next);
-    const def = getDefaultWebsite();
-    setWebsiteId((prev) => prev || def?.id || next.websites[0]?.id || "");
+    void import("@/modules/chat/repository").then(({ hydrateChatPlatformFromSupabase }) =>
+      hydrateChatPlatformFromSupabase().then(() => {
+        const next = getChatPlatformState();
+        setState(next);
+        const def = getDefaultWebsite();
+        setWebsiteId((prev) => prev || def?.id || next.websites[0]?.id || "");
+      })
+    );
     void fetch("/api/chat/platform/sync")
       .then(async (res) => {
         const json = (await res.json()) as {

@@ -19,6 +19,7 @@ import {
 import {
   addPayment,
   formatDisplayDate,
+  hydrateOperationsFromSupabase,
   listPayments,
   updatePayment,
 } from "@/lib/operations/store";
@@ -118,7 +119,7 @@ export function PaymentManagerView() {
   }
 
   useEffect(() => {
-    refresh();
+    void hydrateOperationsFromSupabase().then(() => refresh());
   }, []);
 
   function loadLedger(itineraryId: string) {
@@ -203,40 +204,44 @@ export function PaymentManagerView() {
     });
   }
 
-  function submitPayment() {
+  async function submitPayment() {
     if (!manageRecord) return;
     const amount = Number(form.amount);
     if (!amount || amount <= 0) {
       show("Enter a valid amount");
       return;
     }
-    if (editingId) {
-      updatePayment(manageRecord.id, editingId, {
-        amount,
-        method: form.method,
-        gateway: form.gateway,
-        status: form.status,
-        receipt_url: form.receipt_url,
-        screenshot_data_url: form.screenshot_data_url,
-      });
-      show("Payment updated");
-    } else {
-      addPayment(manageRecord.id, {
-        amount,
-        method: form.method,
-        gateway: form.gateway,
-        status: form.status,
-        receipt_url: form.receipt_url,
-        screenshot_data_url: form.screenshot_data_url,
-      });
-      show("Payment added");
+    try {
+      if (editingId) {
+        await updatePayment(manageRecord.id, editingId, {
+          amount,
+          method: form.method,
+          gateway: form.gateway,
+          status: form.status,
+          receipt_url: form.receipt_url,
+          screenshot_data_url: form.screenshot_data_url,
+        });
+        show("Payment updated");
+      } else {
+        await addPayment(manageRecord.id, {
+          amount,
+          method: form.method,
+          gateway: form.gateway,
+          status: form.status,
+          receipt_url: form.receipt_url,
+          screenshot_data_url: form.screenshot_data_url,
+        });
+        show("Payment added");
+      }
+      setForm(emptyForm());
+      setEditingId(null);
+      loadLedger(manageRecord.id);
+      refresh();
+      const updated = listClientItineraries().find((r) => r.id === manageRecord.id);
+      if (updated) setManageRecord(updated);
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save payment");
     }
-    setForm(emptyForm());
-    setEditingId(null);
-    loadLedger(manageRecord.id);
-    refresh();
-    const updated = listClientItineraries().find((r) => r.id === manageRecord.id);
-    if (updated) setManageRecord(updated);
   }
 
   return (

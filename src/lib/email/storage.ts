@@ -1,3 +1,7 @@
+/**
+ * Team email — Supabase `team_email_messages` only.
+ * No localStorage, no demo seed rows.
+ */
 import type {
   BookingEmailLogEntry,
   EmailDeliveryStatus,
@@ -5,8 +9,8 @@ import type {
   TeamEmailMessage,
 } from "@/types/team-email";
 import { newUuid } from "@/lib/itinerary-builder/defaults";
+import { isSupabaseConfigured } from "@/lib/system/data-mode";
 
-const STORAGE_KEY = "travel-days-team-email-v1";
 const DEMO_FROM = "vandana@traveldays.in";
 const DEMO_FROM_NAME = "Vandana Shekhawat";
 const DEMO_USER = "Vandana Shekhawat";
@@ -15,166 +19,164 @@ function now() {
   return new Date().toISOString();
 }
 
-function seedMessages(): TeamEmailMessage[] {
-  const t = "2026-07-11T09:42:00Z";
-  return [
-    {
-      id: "em-seed-001",
-      folder: "sent",
-      from_email: DEMO_FROM,
-      from_name: DEMO_FROM_NAME,
-      to_email: "ranveer@example.com",
-      to_name: "Ranveer Singh",
-      cc: null,
-      subject: "Itinerary options for your trip — QRT807",
-      body_text: "Dear Mr. Ranveer Singh,\n\nOption 1 — Deluxe Hotels: ₹123,000\n...",
-      body_html: "<p>Dear Mr. Ranveer Singh,</p>",
-      template_id: "itinerary_suggestion",
-      itinerary_id: null,
-      quote_id: "QRT807",
-      delivery_status: "sent",
-      send_count: 1,
-      seen: true,
-      seen_at: "2026-07-11T10:15:00Z",
-      scheduled_at: null,
-      sent_at: t,
-      created_at: t,
-      updated_at: t,
-      created_by: DEMO_USER,
-      error_message: null,
-    },
-    {
-      id: "em-seed-002",
-      folder: "inbox",
-      from_email: "ranveer@example.com",
-      from_name: "Ranveer Singh",
-      to_email: DEMO_FROM,
-      to_name: DEMO_FROM_NAME,
-      cc: null,
-      subject: "Re: Itinerary options — QRT807",
-      body_text: "We prefer Option 1 Deluxe. Please confirm.",
-      body_html: "<p>We prefer Option 1 Deluxe. Please confirm.</p>",
-      template_id: null,
-      itinerary_id: null,
-      quote_id: "QRT807",
-      delivery_status: "received",
-      send_count: 0,
-      seen: false,
-      seen_at: null,
-      scheduled_at: null,
-      sent_at: null,
-      created_at: "2026-07-11T11:00:00Z",
-      updated_at: "2026-07-11T11:00:00Z",
-      created_by: "system",
-      error_message: null,
-    },
-    {
-      id: "em-seed-003",
-      folder: "draft",
-      from_email: DEMO_FROM,
-      from_name: DEMO_FROM_NAME,
-      to_email: "vikas@example.com",
-      to_name: "Vikas Sharma",
-      cc: null,
-      subject: "Itinerary options for your trip — QRT805",
-      body_text: "Draft itinerary suggestion for Golden Triangle...",
-      body_html: "<p>Draft...</p>",
-      template_id: "itinerary_suggestion",
-      itinerary_id: null,
-      quote_id: "QRT805",
-      delivery_status: "draft",
-      send_count: 0,
-      seen: false,
-      seen_at: null,
-      scheduled_at: null,
-      sent_at: null,
-      created_at: "2026-07-11T14:00:00Z",
-      updated_at: "2026-07-11T14:00:00Z",
-      created_by: DEMO_USER,
-      error_message: null,
-    },
-  ];
-}
-
-function loadMessages(): TeamEmailMessage[] {
-  if (typeof window === "undefined") return seedMessages();
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return seedMessages();
-    return JSON.parse(raw) as TeamEmailMessage[];
-  } catch {
-    return seedMessages();
+function requireCloud(): void {
+  if (!isSupabaseConfigured()) {
+    throw new Error("Supabase is not configured. Email cannot be saved without a database.");
   }
 }
 
-function saveMessages(messages: TeamEmailMessage[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+async function supabase() {
+  const { createClient } = await import("@/lib/supabase/client");
+  return createClient();
 }
 
-export function listMessages(folder?: EmailFolder): TeamEmailMessage[] {
-  let list = loadMessages();
-  if (folder) list = list.filter((m) => m.folder === folder);
-  return list.sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-  );
-}
-
-export function getMessage(id: string): TeamEmailMessage | null {
-  return loadMessages().find((m) => m.id === id) ?? null;
-}
-
-export function saveMessage(message: Omit<TeamEmailMessage, "id" | "created_at" | "updated_at"> & { id?: string }): TeamEmailMessage {
-  const messages = loadMessages();
-  const ts = now();
-  if (message.id) {
-    const idx = messages.findIndex((m) => m.id === message.id);
-    if (idx >= 0) {
-      messages[idx] = { ...messages[idx], ...message, updated_at: ts };
-      saveMessages(messages);
-      return messages[idx];
-    }
-  }
-  const created: TeamEmailMessage = {
-    ...message,
-    id: message.id ?? newUuid(),
-    created_at: ts,
-    updated_at: ts,
+function mapRow(row: Record<string, unknown>): TeamEmailMessage {
+  return {
+    id: String(row.id),
+    folder: row.folder as EmailFolder,
+    from_email: String(row.from_email ?? ""),
+    from_name: String(row.from_name ?? ""),
+    to_email: String(row.to_email ?? ""),
+    to_name: (row.to_name as string | null) ?? null,
+    cc: (row.cc as string | null) ?? null,
+    subject: String(row.subject ?? ""),
+    body_text: String(row.body_text ?? ""),
+    body_html: String(row.body_html ?? ""),
+    template_id: (row.template_id as TeamEmailMessage["template_id"]) ?? null,
+    itinerary_id: (row.itinerary_id as string | null) ?? null,
+    quote_id: (row.quote_id as string | null) ?? null,
+    delivery_status: (row.delivery_status as EmailDeliveryStatus) ?? "draft",
+    send_count: Number(row.send_count) || 0,
+    seen: Boolean(row.seen),
+    seen_at: (row.seen_at as string | null) ?? null,
+    scheduled_at: (row.scheduled_at as string | null) ?? null,
+    sent_at: (row.sent_at as string | null) ?? null,
+    created_at: String(row.created_at ?? now()),
+    updated_at: String(row.updated_at ?? now()),
+    created_by: String(row.created_by ?? ""),
+    error_message: (row.error_message as string | null) ?? null,
   };
-  messages.unshift(created);
-  saveMessages(messages);
-  return created;
 }
 
-export function moveMessage(id: string, folder: EmailFolder): TeamEmailMessage | null {
-  const messages = loadMessages();
-  const idx = messages.findIndex((m) => m.id === id);
-  if (idx < 0) return null;
-  messages[idx] = { ...messages[idx], folder, updated_at: now() };
-  saveMessages(messages);
-  return messages[idx];
+function toRow(message: TeamEmailMessage) {
+  return {
+    id: message.id,
+    folder: message.folder,
+    from_email: message.from_email,
+    from_name: message.from_name,
+    to_email: message.to_email,
+    to_name: message.to_name,
+    cc: message.cc,
+    subject: message.subject,
+    body_text: message.body_text,
+    body_html: message.body_html,
+    template_id: message.template_id,
+    itinerary_id: message.itinerary_id,
+    quote_id: message.quote_id,
+    delivery_status: message.delivery_status,
+    send_count: message.send_count,
+    seen: message.seen,
+    seen_at: message.seen_at,
+    scheduled_at: message.scheduled_at,
+    sent_at: message.sent_at,
+    created_by: message.created_by,
+    error_message: message.error_message,
+    created_at: message.created_at,
+    updated_at: message.updated_at,
+  };
 }
 
-export function markMessageSeen(id: string): TeamEmailMessage | null {
-  const messages = loadMessages();
-  const idx = messages.findIndex((m) => m.id === id);
-  if (idx < 0) return null;
-  messages[idx] = {
-    ...messages[idx],
+export async function listMessages(folder?: EmailFolder): Promise<TeamEmailMessage[]> {
+  if (!isSupabaseConfigured()) return [];
+  const sb = await supabase();
+  let query = sb.from("team_email_messages").select("*").order("updated_at", { ascending: false });
+  if (folder) query = query.eq("folder", folder);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapRow(row as Record<string, unknown>));
+}
+
+export async function getMessage(id: string): Promise<TeamEmailMessage | null> {
+  if (!isSupabaseConfigured()) return null;
+  const sb = await supabase();
+  const { data, error } = await sb.from("team_email_messages").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? mapRow(data as Record<string, unknown>) : null;
+}
+
+export async function saveMessage(
+  message: Omit<TeamEmailMessage, "id" | "created_at" | "updated_at"> & { id?: string }
+): Promise<TeamEmailMessage> {
+  requireCloud();
+  const ts = now();
+  const existingId = message.id;
+  let created: TeamEmailMessage;
+
+  if (existingId) {
+    const prev = await getMessage(existingId);
+    if (prev) {
+      created = { ...prev, ...message, id: existingId, updated_at: ts };
+    } else {
+      created = {
+        ...message,
+        id: existingId,
+        created_at: ts,
+        updated_at: ts,
+      } as TeamEmailMessage;
+    }
+  } else {
+    created = {
+      ...message,
+      id: newUuid(),
+      created_at: ts,
+      updated_at: ts,
+    } as TeamEmailMessage;
+  }
+
+  const sb = await supabase();
+  const { data, error } = await sb
+    .from("team_email_messages")
+    .upsert(toRow(created))
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Email save was blocked (no row returned).");
+  return mapRow(data as Record<string, unknown>);
+}
+
+export async function moveMessage(id: string, folder: EmailFolder): Promise<TeamEmailMessage | null> {
+  const prev = await getMessage(id);
+  if (!prev) return null;
+  return saveMessage({ ...prev, folder });
+}
+
+export async function markMessageSeen(id: string): Promise<TeamEmailMessage | null> {
+  const prev = await getMessage(id);
+  if (!prev) return null;
+  return saveMessage({
+    ...prev,
     seen: true,
     seen_at: now(),
-    updated_at: now(),
-  };
-  saveMessages(messages);
-  return messages[idx];
+  });
 }
 
-export function queueOutboundSend(
-  input: Omit<TeamEmailMessage, "id" | "created_at" | "updated_at" | "delivery_status" | "send_count" | "seen" | "seen_at" | "sent_at" | "error_message"> & {
+export async function queueOutboundSend(
+  input: Omit<
+    TeamEmailMessage,
+    | "id"
+    | "created_at"
+    | "updated_at"
+    | "delivery_status"
+    | "send_count"
+    | "seen"
+    | "seen_at"
+    | "sent_at"
+    | "error_message"
+  > & {
     id?: string;
     scheduled_at?: string | null;
   }
-): TeamEmailMessage {
+): Promise<TeamEmailMessage> {
   const folder: EmailFolder = input.scheduled_at ? "scheduled" : "outbox";
   const status: EmailDeliveryStatus = input.scheduled_at ? "scheduled" : "queued";
   return saveMessage({
@@ -189,33 +191,32 @@ export function queueOutboundSend(
   });
 }
 
-/** Demo: simulate SMTP send — moves outbox → sent */
-export function completeSend(messageId: string): TeamEmailMessage | null {
-  const messages = loadMessages();
-  const idx = messages.findIndex((m) => m.id === messageId);
-  if (idx < 0) return null;
-  const msg = messages[idx];
+export async function completeSend(messageId: string): Promise<TeamEmailMessage | null> {
+  const prev = await getMessage(messageId);
+  if (!prev) return null;
   const ts = now();
-  messages[idx] = {
-    ...msg,
+  return saveMessage({
+    ...prev,
     folder: "sent",
     delivery_status: "sent",
-    send_count: msg.send_count + 1,
+    send_count: prev.send_count + 1,
     sent_at: ts,
-    updated_at: ts,
     error_message: null,
-  };
-  saveMessages(messages);
-  return messages[idx];
+  });
 }
 
-export function resendMessage(messageId: string): TeamEmailMessage | null {
+export async function resendMessage(messageId: string): Promise<TeamEmailMessage | null> {
   return completeSend(messageId);
 }
 
-export function getBookingEmailLogs(): BookingEmailLogEntry[] {
-  return loadMessages()
-    .filter((m) => m.quote_id && (m.folder === "sent" || m.folder === "outbox" || m.delivery_status === "pending"))
+export async function getBookingEmailLogs(): Promise<BookingEmailLogEntry[]> {
+  const all = await listMessages();
+  return all
+    .filter(
+      (m) =>
+        m.quote_id &&
+        (m.folder === "sent" || m.folder === "outbox" || m.delivery_status === "pending")
+    )
     .map((m) => ({
       id: m.id,
       message_id: m.id,
@@ -224,16 +225,18 @@ export function getBookingEmailLogs(): BookingEmailLogEntry[] {
       client_name: m.to_name ?? m.to_email,
       client_email: m.to_email,
       sent_at: m.sent_at ?? m.created_at,
-      delivery_status: (m.delivery_status === "sent" ? "sent" : "pending") as BookingEmailLogEntry["delivery_status"],
+      delivery_status: (m.delivery_status === "sent"
+        ? "sent"
+        : "pending") as BookingEmailLogEntry["delivery_status"],
       seen: m.seen,
       send_count: Math.max(1, m.send_count),
     }))
     .sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime());
 }
 
-export function getEmailStats() {
-  const all = loadMessages();
-  const bookingLogs = getBookingEmailLogs();
+export async function getEmailStats() {
+  const all = await listMessages();
+  const bookingLogs = await getBookingEmailLogs();
   return {
     totalEmails: all.length,
     totalSends: all.reduce((s, m) => s + m.send_count, 0),
@@ -244,8 +247,9 @@ export function getEmailStats() {
   };
 }
 
+/** @deprecated No seed — returns empty. Kept for API compatibility. */
 export function getServerEmailSeed() {
-  return { messages: seedMessages() };
+  return { messages: [] as TeamEmailMessage[] };
 }
 
 export const TEAM_MAIL_DEFAULTS = {

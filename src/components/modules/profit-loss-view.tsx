@@ -13,6 +13,7 @@ import {
   expenseTotal,
   formatDisplayDate,
   getExpenses,
+  hydrateOperationsFromSupabase,
   listConfirmedBookings,
   saveExpenses,
 } from "@/lib/operations/store";
@@ -50,7 +51,7 @@ export function ProfitLossView() {
   }
 
   useEffect(() => {
-    refresh();
+    void hydrateOperationsFromSupabase().then(() => refresh());
   }, []);
 
   const totals = useMemo(() => {
@@ -83,15 +84,19 @@ export function ProfitLossView() {
     setEditId(id);
   }
 
-  function saveExpenseModal() {
+  async function saveExpenseModal() {
     if (!editId) return;
-    saveExpenses(
-      editId,
-      lines.filter((l) => l.label.trim() || l.amount > 0)
-    );
-    show("Expenses saved");
-    setEditId(null);
-    refresh();
+    try {
+      await saveExpenses(
+        editId,
+        lines.filter((l) => l.label.trim() || l.amount > 0)
+      );
+      show("Expenses saved");
+      setEditId(null);
+      refresh();
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Failed to save expenses");
+    }
   }
 
   function exportSelected() {

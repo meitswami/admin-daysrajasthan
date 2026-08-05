@@ -96,6 +96,11 @@ export {
 } from "./service";
 
 export {
+  flushChatPlatformToSupabase,
+  hydrateChatPlatformFromSupabase,
+} from "./repository";
+
+export {
   generateEmbedSnippets,
   getEmbedSnippet,
   resolvePublicBaseUrl,

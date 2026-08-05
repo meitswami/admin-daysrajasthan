@@ -128,7 +128,6 @@ export function mergeAdminConfigIntoServer(incoming: ChatPlatformState): ChatPla
   const existing = g.__tdChatPlatformServer;
   const next = normalizeState({
     ...incoming,
-    // Preserve runtime inbox unless incoming already carries richer runtime data
     conversations:
       (existing?.conversations?.length ?? 0) >= (incoming.conversations?.length ?? 0)
         ? existing?.conversations ?? incoming.conversations ?? []
@@ -147,6 +146,7 @@ export function mergeAdminConfigIntoServer(incoming: ChatPlatformState): ChatPla
         : incoming.analyticsLog ?? [],
   });
   g.__tdChatPlatformServer = next;
+  void persistServerState(next);
   return next;
 }
 
@@ -156,9 +156,10 @@ export function getServerChatPlatformState(): ChatPlatformState | null {
 
 export function setServerChatPlatformState(state: ChatPlatformState): void {
   g.__tdChatPlatformServer = normalizeState(state);
+  void persistServerState(g.__tdChatPlatformServer);
 }
 
-/** Ensure server has at least the default website for local demo keys. */
+/** Ensure server has at least the default website; hydrate from Supabase when empty. */
 export function ensureServerChatPlatformState(): ChatPlatformState {
   const existing = g.__tdChatPlatformServer;
   if (existing?.websites?.length) {
@@ -168,6 +169,8 @@ export function ensureServerChatPlatformState(): ChatPlatformState {
   }
   const boot = bootstrapState();
   g.__tdChatPlatformServer = boot;
+  // Background hydrate overwrites bootstrap when cloud data exists
+  void hydrateServerChatFromSupabase();
   return boot;
 }
 
@@ -177,5 +180,51 @@ export function mutateServerChatPlatformState(
   const current = ensureServerChatPlatformState();
   const next = normalizeState(mutator(current));
   g.__tdChatPlatformServer = next;
+  void persistServerState(next);
   return next;
+}
+
+async function persistServerState(state: ChatPlatformState): Promise<void> {
+  try {
+    const { isSupabaseConfigured } = await import("@/lib/system/data-mode");
+    if (!isSupabaseConfigured()) return;
+    const { createClient } = await import("@/lib/supabase/server");
+    const sb = await createClient();
+    await sb.from("td_chat_platform").upsert({
+      id: "default",
+      payload: state,
+      updated_at: new Date().toISOString(),
+    });
+  } catch (e) {
+    console.warn("[chat-server] persist failed", e);
+  }
+}
+
+export async function hydrateServerChatFromSupabase(): Promise<ChatPlatformState> {
+  try {
+    const { isSupabaseConfigured } = await import("@/lib/system/data-mode");
+    if (!isSupabaseConfigured()) {
+      const boot = bootstrapState();
+      g.__tdChatPlatformServer = g.__tdChatPlatformServer ?? boot;
+      return g.__tdChatPlatformServer;
+    }
+    const { createClient } = await import("@/lib/supabase/server");
+    const sb = await createClient();
+    const { data } = await sb
+      .from("td_chat_platform")
+      .select("payload")
+      .eq("id", "default")
+      .maybeSingle();
+    const payload = (data?.payload ?? null) as ChatPlatformState | null;
+    if (payload && Array.isArray(payload.websites) && payload.websites.length > 0) {
+      const normalized = normalizeState(payload);
+      g.__tdChatPlatformServer = normalized;
+      return normalized;
+    }
+  } catch (e) {
+    console.warn("[chat-server] hydrate failed", e);
+  }
+  const boot = bootstrapState();
+  if (!g.__tdChatPlatformServer) g.__tdChatPlatformServer = boot;
+  return g.__tdChatPlatformServer;
 }

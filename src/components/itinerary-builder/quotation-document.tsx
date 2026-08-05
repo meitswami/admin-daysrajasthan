@@ -107,7 +107,7 @@ function ClientDetailsTable({
   const kids512 = countLabel(client.children_5_12);
   const kidsBelow5 = countLabel(client.children_below_5);
   const childrenParts = [
-    kids512 != null ? `${kids512} (5â€“12 yrs)` : null,
+    kids512 != null ? `${kids512} (5–12 yrs)` : null,
     kidsBelow5 != null ? `${kidsBelow5} (below 5)` : null,
   ].filter(Boolean);
   const childrenDisplay = childrenParts.length > 0 ? childrenParts.join(", ") : null;
@@ -230,7 +230,7 @@ function Theme2PackagePriceCard({
   bookNowHref?: string | null;
 }) {
   const advance = bookingAmount(grandTotal, advancePercent / 100);
-  const plain = (n: number) => `â‚¹${Math.round(n)}/-`;
+  const plain = (n: number) => `₹${Math.round(n)}/-`;
   return (
     <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
       <h3 className="mb-4 text-2xl font-extrabold capitalize text-gray-700">{label}</h3>
@@ -294,7 +294,7 @@ function CoveringDestinationsRow({
               </span>
             ) : (
               <span key={item.label} className="mr-2 flex items-center gap-1 text-lg">
-                <span className="text-yellow-500">â€¢</span> {item.label}
+                <span className="text-yellow-500">•</span> {item.label}
               </span>
             )
           )}
@@ -359,7 +359,7 @@ function Theme2HotelCard({
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-1 text-yellow-500">
               {Array.from({ length: 5 }).map((_, i) => (
-                <span key={i}>{i < fullStars ? "â˜…" : "â˜†"}</span>
+                <span key={i}>{i < fullStars ? "★" : "☆"}</span>
               ))}
               <span className="ml-1 text-xs text-stone-600">{rating.toFixed(1)}</span>
             </div>
@@ -476,7 +476,7 @@ function Theme3HotelsPackage({
           <div key={`${night.nightLabel}-${night.destination}`}>
             <div className="mb-3">
               <div className="inline-flex items-center rounded-full bg-red-900 px-3 py-1 font-bold text-white">
-                <span>{night.nightLabel.replace(/-/g, " â€“ ")} </span>
+                <span>{night.nightLabel.replace(/-/g, " – ")} </span>
               </div>
               <br />
               <div className="mt-4 inline-flex flex-wrap items-center gap-2 rounded-full border border-red-200 bg-red-50 px-4 py-0 text-red-700">
@@ -847,7 +847,7 @@ function DayCard({
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               {day.vehicle_type && (
                 <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
-                  ðŸš— {day.vehicle_type}
+                  🚗 {day.vehicle_type}
                 </span>
               )}
               {day.meal_plan && (
@@ -860,7 +860,7 @@ function DayCard({
               <ul className="mt-3 space-y-1 border-t border-stone-100 pt-3 text-sm text-stone-700">
                 {(day.activities ?? []).map((activity) => (
                   <li key={activity.activity_uuid}>
-                    â€¢ {activity.title}
+                    • {activity.title}
                     {activity.start_time ? ` (${activity.start_time})` : ""}
                   </li>
                 ))}
@@ -1416,7 +1416,7 @@ export function QuotationDocument({
                   .map((line) => (
                     <tr key={line.id} className="border-b border-stone-100">
                       <td className="py-2 pr-4 text-stone-600">
-                        {line.day_number ? `Day ${line.day_number} Â· ` : ""}
+                        {line.day_number ? `Day ${line.day_number} · ` : ""}
                         {line.description}
                       </td>
                       <td className="py-2 text-right tabular-nums">{formatInr(line.total)}</td>
@@ -1457,7 +1457,7 @@ export function QuotationDocument({
               accent={theme.accent}
             />
             <p className="pt-4 text-center text-[10px] text-stone-400">
-              This quotation is pinned to revision v{versionNumber} Â· {revisionId.slice(0, 8)}â€¦ Â· Theme{" "}
+              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
               {theme.id} {theme.styleName}
             </p>
           </>
@@ -1479,7 +1479,7 @@ export function QuotationDocument({
 
               <DocumentBrandFooter brand={displayBrand} />
               <p className="text-center text-[10px] text-stone-400">
-                This quotation is pinned to revision v{versionNumber} Â· {revisionId.slice(0, 8)}â€¦ Â· Theme{" "}
+                This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
                 {theme.id} {theme.styleName}
               </p>
             </>

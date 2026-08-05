@@ -76,17 +76,18 @@ export function ReportsView() {
   const [optional, setOptional] = useState<OptionalItineraryRow[]>([]);
   const [emails, setEmails] = useState<EmailReportRow[]>([]);
 
-  function refresh() {
+  async function refresh() {
     setBookings(getBookingReportRows());
     setPayments(getPaymentReportRows());
     setInquiries(getInquiryReportRows());
     setOptional(getOptionalItineraryRows());
-    setEmails(getEmailReportRows());
+    setEmails(await getEmailReportRows());
   }
 
   useEffect(() => {
-    refresh();
-    setReady(true);
+    void import("@/lib/operations/store").then(({ hydrateOperationsFromSupabase }) =>
+      hydrateOperationsFromSupabase().then(() => refresh().then(() => setReady(true)))
+    );
   }, []);
 
   useEffect(() => {

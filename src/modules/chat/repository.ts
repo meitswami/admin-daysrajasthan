@@ -1,10 +1,9 @@
 /**
- * Chat platform persistence — localStorage demo store (multi-website ready).
- * Never queries tourism Supabase tables.
+ * Chat platform persistence — Supabase `td_chat_platform` (no localStorage).
+ * Session memory cache for sync service callers; durable writes go to DB.
  */
 
 import {
-  CHAT_STORAGE_KEY,
   DEFAULT_APPEARANCE,
   DEFAULT_BEHAVIOUR,
   DEFAULT_KNOWLEDGE_SCOPE,
@@ -14,9 +13,15 @@ import {
   createDefaultWebsite,
 } from "./constants";
 import type { AiProviderSlot, ChatAiMode, ChatPlatformState, ChatWebsite } from "./types";
+import { isSupabaseConfigured } from "@/lib/system/data-mode";
+
+const ROW_ID = "default";
+
+let memory: ChatPlatformState | null = null;
+let hydratePromise: Promise<ChatPlatformState> | null = null;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 function migrateAiMode(mode: string | undefined): ChatAiMode {
-  // Product default: always online AI. Keep explicit "disabled" only.
   if (mode === "disabled") return "disabled";
   if (mode === "ai" || mode === "ai_ready_future") return "ai";
   if (mode === "offline" || mode === "manual") return "ai";
@@ -59,7 +64,6 @@ function migrateProviders(providers: AiProviderSlot[] | undefined): AiProviderSl
       ...def,
       ...prev,
       modelId,
-      // Keep cloud + local providers online by default after platform upgrade
       enabled:
         def.providerId === "none"
           ? false
@@ -136,44 +140,103 @@ function emptyState(): ChatPlatformState {
   };
 }
 
-export function loadChatPlatformState(): ChatPlatformState {
-  if (typeof window === "undefined") return emptyState();
+function normalizePartial(parsed: Partial<ChatPlatformState>): ChatPlatformState {
+  const base = emptyState();
+  const hasPayload = Boolean(parsed.websites?.length || parsed.keys?.length || parsed.settings);
+  if (!hasPayload) return base;
+  return {
+    ...base,
+    ...parsed,
+    websites: migrateWebsites(
+      parsed.websites?.length ? (parsed.websites as ChatWebsite[]) : base.websites
+    ),
+    sessions: parsed.sessions ?? [],
+    messages: parsed.messages ?? [],
+    analyticsLog: parsed.analyticsLog ?? [],
+    conversations: parsed.conversations ?? [],
+    feedback: parsed.feedback ?? [],
+    settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+    providers: migrateProviders(parsed.providers as AiProviderSlot[] | undefined),
+  };
+}
+
+async function fetchFromSupabase(): Promise<ChatPlatformState> {
+  if (!isSupabaseConfigured()) return emptyState();
   try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY);
-    if (!raw) {
-      const initial = emptyState();
-      saveChatPlatformState(initial);
-      return initial;
+    const { createClient } = await import("@/lib/supabase/client");
+    const sb = createClient();
+    const { data, error } = await sb
+      .from("td_chat_platform")
+      .select("payload")
+      .eq("id", ROW_ID)
+      .maybeSingle();
+    if (error) {
+      console.warn("[chat] load failed", error.message);
+      return emptyState();
     }
-    const parsed = JSON.parse(raw) as Partial<ChatPlatformState>;
-    const base = emptyState();
-    return {
-      ...base,
-      ...parsed,
-      websites: migrateWebsites(
-        parsed.websites?.length ? (parsed.websites as ChatWebsite[]) : base.websites
-      ),
-      sessions: parsed.sessions ?? [],
-      messages: parsed.messages ?? [],
-      analyticsLog: parsed.analyticsLog ?? [],
-      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-      providers: migrateProviders(parsed.providers as AiProviderSlot[] | undefined),
-    };
-  } catch {
+    const payload = (data?.payload ?? {}) as Partial<ChatPlatformState>;
+    return normalizePartial(payload);
+  } catch (e) {
+    console.warn("[chat] load exception", e);
     return emptyState();
   }
 }
 
+async function persistToSupabase(state: ChatPlatformState): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const sb = createClient();
+    const { error } = await sb.from("td_chat_platform").upsert({
+      id: ROW_ID,
+      payload: state,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) console.warn("[chat] save failed", error.message);
+  } catch (e) {
+    console.warn("[chat] save exception", e);
+  }
+}
+
+function schedulePersist(state: ChatPlatformState) {
+  if (persistTimer) clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    void persistToSupabase(state);
+  }, 250);
+}
+
+/** Hydrate session memory from Supabase (call on admin chat mount). */
+export async function hydrateChatPlatformFromSupabase(): Promise<ChatPlatformState> {
+  if (hydratePromise) return hydratePromise;
+  hydratePromise = fetchFromSupabase().then((state) => {
+    memory = state;
+    return state;
+  });
+  return hydratePromise;
+}
+
+export function loadChatPlatformState(): ChatPlatformState {
+  if (memory) return memory;
+  // Kick off background hydrate; return empty shell until then.
+  void hydrateChatPlatformFromSupabase();
+  const initial = emptyState();
+  memory = initial;
+  return initial;
+}
+
 export function saveChatPlatformState(state: ChatPlatformState): void {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(state));
-  window.dispatchEvent(new CustomEvent("td-chat-platform-change"));
+  memory = state;
+  schedulePersist(state);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("td-chat-platform-change"));
+  }
+  // Keep server inbox in sync for widget APIs
   void fetch("/api/chat/platform/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(state),
   }).catch(() => {
-    /* demo sync optional */
+    /* optional */
   });
 }
 
@@ -183,4 +246,13 @@ export function mutateChatPlatformState(
   const next = mutator(loadChatPlatformState());
   saveChatPlatformState(next);
   return next;
+}
+
+/** Force flush pending chat writes (e.g. before unload). */
+export async function flushChatPlatformToSupabase(): Promise<void> {
+  if (persistTimer) {
+    clearTimeout(persistTimer);
+    persistTimer = null;
+  }
+  if (memory) await persistToSupabase(memory);
 }

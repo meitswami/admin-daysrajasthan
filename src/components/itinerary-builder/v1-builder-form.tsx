@@ -240,10 +240,8 @@ function DayTitleSuggest({
             }
           }}
           onBlur={() => {
-            // learn custom titles into master data
-            if (value.trim().length >= 3) {
-              void learnAiSuggestionFromDay(value, "");
-            }
+            // Do not auto-create master suggestions from title keystrokes
+            setOpen(false);
           }}
           placeholder="Day title"
           className="flex-1"
