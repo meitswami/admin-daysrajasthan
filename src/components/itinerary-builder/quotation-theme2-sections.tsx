@@ -360,7 +360,6 @@ export function Theme2About({
       ? ach.image_urls.filter(Boolean)
       : [...DEFAULT_ACHIEVEMENT_IMAGES];
   const paragraphs = description.split(/\n\n+/).filter(Boolean);
-  const website = brand.websiteUrl || "https://www.rajasthantouring.com";
 
   return (
     <section className="mt-10 space-y-8">
@@ -430,7 +429,7 @@ export function Theme2About({
           className="pointer-events-none absolute -bottom-10 -right-10 w-36 opacity-30 brightness-0 invert"
         />
         <a
-          href={website.startsWith("http") ? website : `https://${website}`}
+          href="https://tour.rajasthantouring.in/pdf_compressed.pdf"
           target="_blank"
           rel="noopener noreferrer"
           className={cn(

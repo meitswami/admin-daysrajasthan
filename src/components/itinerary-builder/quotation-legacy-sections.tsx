@@ -231,7 +231,7 @@ export function QuotationLegacyAbout({
         />
         <div className="relative flex justify-center">
           <a
-            href={brand.websiteUrl || "https://www.rajasthantouring.com"}
+            href="https://tour.rajasthantouring.in/pdf_compressed.pdf"
             target="_blank"
             rel="noreferrer"
             className="rounded-full bg-white px-6 py-2.5 text-sm font-semibold text-stone-800 shadow-sm"
