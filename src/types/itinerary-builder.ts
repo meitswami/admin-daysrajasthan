@@ -105,6 +105,13 @@ export interface DayActivity {
   guide_required: boolean;
 }
 
+/** Meal hotel picks for one location within a night (up to 2 per meal). */
+export interface LocationMealHotels {
+  breakfast_hotels: [string | null, string | null];
+  lunch_hotels: [string | null, string | null];
+  dinner_hotels: [string | null, string | null];
+}
+
 /** Per-category night hotel picks (one inventory per selected package tier). */
 export interface DayCategoryHotelPicks {
   breakfast_hotels: [string | null, string | null];
@@ -114,6 +121,11 @@ export interface DayCategoryHotelPicks {
   guest_self_booked_hotel: boolean;
   hotel_name: string | null;
   room_category: string | null;
+  /**
+   * Extra locations on the same night (keyed by location name).
+   * Primary location uses the top-level meal fields above.
+   */
+  by_location?: Record<string, LocationMealHotels>;
 }
 
 export interface ItineraryDay {

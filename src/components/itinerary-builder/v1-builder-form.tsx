@@ -26,7 +26,12 @@ import {
   emptyDay,
   OPTIONAL_INCLUSIONS,
   mergeOptionalIntoInclusionItems,
+  resolveOptionalInclusionFromMaster,
 } from "@/lib/itinerary-builder/defaults";
+import {
+  listInclusionExclusions,
+  type InclusionExclusionItem,
+} from "@/lib/master-data/inclusions-store";
 import {
   durationLabelFromDayCount,
   durationLabelFromDays,
@@ -65,7 +70,10 @@ import {
 import {
   applyCategoryDayUpdate,
   dayViewForCategory,
+  emptyLocationMealHotels,
+  getCategoryHotelPicks,
   pruneCategoryHotelPicks,
+  remapCategoryLocationHotels,
 } from "@/lib/itinerary-builder/category-hotels";
 import { listMasterContent, updateMasterContent, createMasterContent } from "@/lib/master-data/content-store";
 import { collectDisplayImages } from "@/components/ui/gallery-images-field";
@@ -79,6 +87,7 @@ import {
   type HotelCategoryKey,
   type ItineraryDay,
   type ItinerarySnapshot,
+  type LocationMealHotels,
   type PriceBasis,
 } from "@/types/itinerary-builder";
 import { cn } from "@/lib/utils";
@@ -577,114 +586,257 @@ function HotelSelectOptions({
   );
 }
 
+type MealHotelField = "breakfast_hotels" | "lunch_hotels" | "dinner_hotels";
+
+function dayLocationSlots(day: ItineraryDay): string[] {
+  const rows = [day.location ?? "", ...(day.locations ?? [])];
+  return rows.length ? rows : [""];
+}
+
+function mealCascadeFromBreakfast(
+  breakfast: [string | null, string | null],
+  locationHotels: HotelMasterItem[],
+  hotelCatalog: HotelMasterItem[]
+): HotelMasterItem[] {
+  const breakfastSelected = [breakfast[0], breakfast[1]].filter(Boolean) as string[];
+  if (breakfastSelected.length === 0) return locationHotels;
+  const byLabel = new Map(locationHotels.map((h) => [formatHotelOption(h), h]));
+  const ordered: HotelMasterItem[] = [];
+  for (const label of breakfastSelected) {
+    const fromCatalog = byLabel.get(label) ?? findHotelByOptionLabel(label, hotelCatalog);
+    if (fromCatalog && !ordered.some((h) => h.id === fromCatalog.id)) {
+      ordered.push(fromCatalog);
+    }
+  }
+  return ordered.length ? ordered : locationHotels;
+}
+
+function applyMealPick(
+  meals: LocationMealHotels,
+  field: MealHotelField,
+  slot: 0 | 1,
+  value: string
+): LocationMealHotels {
+  const pair: [string | null, string | null] = [...meals[field]];
+  pair[slot] = value || null;
+  if (slot === 0 && pair[1] === pair[0]) pair[1] = null;
+  if (slot === 1 && pair[0] === pair[1]) pair[1] = null;
+  const next: LocationMealHotels = { ...meals, [field]: pair };
+  if (field === "breakfast_hotels") {
+    const allowed = [pair[0], pair[1]].filter(Boolean) as string[];
+    if (allowed.length > 0) {
+      next.lunch_hotels = [
+        allowed.includes(meals.lunch_hotels[0] ?? "") ? meals.lunch_hotels[0] : null,
+        allowed.includes(meals.lunch_hotels[1] ?? "") ? meals.lunch_hotels[1] : null,
+      ];
+      next.dinner_hotels = [
+        allowed.includes(meals.dinner_hotels[0] ?? "") ? meals.dinner_hotels[0] : null,
+        allowed.includes(meals.dinner_hotels[1] ?? "") ? meals.dinner_hotels[1] : null,
+      ];
+    }
+  }
+  return next;
+}
+
+function clearMealPick(
+  meals: LocationMealHotels,
+  field: MealHotelField,
+  label: string
+): LocationMealHotels {
+  const pair: [string | null, string | null] = [
+    meals[field][0] === label ? null : meals[field][0],
+    meals[field][1] === label ? null : meals[field][1],
+  ];
+  const next: LocationMealHotels = { ...meals, [field]: pair };
+  if (field === "breakfast_hotels") {
+    const allowed = [pair[0], pair[1]].filter(Boolean) as string[];
+    if (allowed.length > 0) {
+      next.lunch_hotels = [
+        allowed.includes(meals.lunch_hotels[0] ?? "") ? meals.lunch_hotels[0] : null,
+        allowed.includes(meals.lunch_hotels[1] ?? "") ? meals.lunch_hotels[1] : null,
+      ];
+      next.dinner_hotels = [
+        allowed.includes(meals.dinner_hotels[0] ?? "") ? meals.dinner_hotels[0] : null,
+        allowed.includes(meals.dinner_hotels[1] ?? "") ? meals.dinner_hotels[1] : null,
+      ];
+    }
+  }
+  return next;
+}
+
+function LocationMealBlock({
+  locationName,
+  meals,
+  hotelCatalog,
+  epaiPlanOnly,
+  onMealsChange,
+}: {
+  locationName: string;
+  meals: LocationMealHotels;
+  hotelCatalog: HotelMasterItem[];
+  epaiPlanOnly: boolean;
+  onMealsChange: (next: LocationMealHotels) => void;
+}) {
+  const locationHotels = useMemo(() => {
+    const byLocation = hotelsForLocation(locationName || null, hotelCatalog);
+    return sortHotelsByCategory(byLocation);
+  }, [locationName, hotelCatalog]);
+
+  const mealCascadeOptions = useMemo(
+    () => mealCascadeFromBreakfast(meals.breakfast_hotels, locationHotels, hotelCatalog),
+    [meals.breakfast_hotels, locationHotels, hotelCatalog]
+  );
+
+  const pinLabel = locationName.trim() || "Select location on the day card";
+
+  if (epaiPlanOnly) {
+    return (
+      <div className="rounded-xl border border-blue-100 bg-stone-50 p-4">
+        <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
+          <Moon className="h-4 w-4 text-blue-600" />
+          Stay Only - Accommodation Only
+        </div>
+        <div className="mb-3 flex items-center gap-1 text-sm font-medium text-blue-700">
+          <MapPin className="h-3.5 w-3.5 text-blue-600" />
+          {pinLabel}
+        </div>
+        <p className="mb-2 text-xs font-medium text-stone-600">Hotel (Up to 2 options)</p>
+        <div className="space-y-2">
+          {[0, 1].map((slot) => {
+            const other = meals.breakfast_hotels[(slot === 0 ? 1 : 0) as 0 | 1];
+            return (
+              <Select
+                key={slot}
+                value={meals.breakfast_hotels[slot as 0 | 1] ?? ""}
+                onChange={(e) => {
+                  const pair: [string | null, string | null] = [...meals.breakfast_hotels];
+                  pair[slot as 0 | 1] = e.target.value || null;
+                  if (pair[0] && pair[0] === pair[1]) pair[1] = null;
+                  onMealsChange({ ...meals, breakfast_hotels: pair });
+                }}
+              >
+                <option value="">Hotel {slot + 1}</option>
+                <HotelSelectOptions hotels={locationHotels} excludeLabel={other} />
+              </Select>
+            );
+          })}
+        </div>
+        {(meals.breakfast_hotels[0] || meals.breakfast_hotels[1]) && (
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {meals.breakfast_hotels.filter(Boolean).map((label) => (
+              <SelectedHotelCard
+                key={label}
+                label={label!}
+                hotel={findHotelByOptionLabel(label!, hotelCatalog)}
+                onClear={() => onMealsChange(clearMealPick(meals, "breakfast_hotels", label!))}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-blue-100 bg-stone-50 p-4">
+      <div className="mb-3 flex items-center gap-1 text-sm font-medium text-blue-700">
+        <MapPin className="h-3.5 w-3.5 text-blue-600" />
+        {pinLabel}
+      </div>
+      {(
+        [
+          ["breakfast_hotels", "Breakfast Hotel", "text-orange-500", locationHotels],
+          ["lunch_hotels", "Lunch Hotel", "text-emerald-600", mealCascadeOptions],
+          ["dinner_hotels", "Dinner Hotel", "text-red-500", mealCascadeOptions],
+        ] as const
+      ).map(([field, label, iconClass, opts]) => (
+        <div key={field} className="mb-3 last:mb-0">
+          <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-stone-600">
+            <Coffee className={cn("h-3.5 w-3.5", iconClass)} />
+            {label} (Up to 2 options)
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {[0, 1].map((slot) => {
+              const other = meals[field][(slot === 0 ? 1 : 0) as 0 | 1];
+              return (
+                <Select
+                  key={slot}
+                  value={meals[field][slot as 0 | 1] ?? ""}
+                  onChange={(e) =>
+                    onMealsChange(applyMealPick(meals, field, slot as 0 | 1, e.target.value))
+                  }
+                >
+                  <option value="">
+                    {label} {slot + 1}
+                  </option>
+                  <HotelSelectOptions hotels={opts} excludeLabel={other} />
+                </Select>
+              );
+            })}
+          </div>
+          {(meals[field][0] || meals[field][1]) && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              {meals[field].filter(Boolean).map((selectedLabel) => (
+                <SelectedHotelCard
+                  key={`${field}-${selectedLabel}`}
+                  label={selectedLabel!}
+                  hotel={findHotelByOptionLabel(selectedLabel!, hotelCatalog)}
+                  onClear={() => onMealsChange(clearMealPick(meals, field, selectedLabel!))}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NightHotelCard({
   day,
   nightNo,
   onChange,
   hotelCatalog,
+  byLocation,
 }: {
   day: ItineraryDay;
   nightNo: string;
-  onChange: (updater: (d: ItineraryDay) => ItineraryDay) => void;
+  onChange: (
+    updater: (d: ItineraryDay) => ItineraryDay,
+    byLocationUpdater?: (
+      prev: Record<string, LocationMealHotels>
+    ) => Record<string, LocationMealHotels>
+  ) => void;
   hotelCatalog: HotelMasterItem[];
+  byLocation: Record<string, LocationMealHotels>;
 }) {
-  /** Hotels for this night’s location only — never spill other cities into the picker. */
-  const locationHotels = useMemo(() => {
-    const byLocation = hotelsForLocation(day.location, hotelCatalog);
-    return sortHotelsByCategory(byLocation);
-  }, [day.location, hotelCatalog]);
+  const locationSlots = dayLocationSlots(day);
 
-  const breakfastHotel1 = day.breakfast_hotels[0];
-  const breakfastHotel2 = day.breakfast_hotels[1];
-
-  /**
-   * Lunch/dinner options follow Breakfast selection order (Hotel 1, then Hotel 2),
-   * not master-catalog order — so order is consistent across devices.
-   */
-  const mealCascadeOptions = useMemo(() => {
-    const breakfastSelected = [breakfastHotel1, breakfastHotel2].filter(Boolean) as string[];
-    if (breakfastSelected.length === 0) return locationHotels;
-    const byLabel = new Map(locationHotels.map((h) => [formatHotelOption(h), h]));
-    const ordered: HotelMasterItem[] = [];
-    for (const label of breakfastSelected) {
-      const fromCatalog = byLabel.get(label) ?? findHotelByOptionLabel(label, hotelCatalog);
-      if (fromCatalog && !ordered.some((h) => h.id === fromCatalog.id)) {
-        ordered.push(fromCatalog);
-      }
-    }
-    return ordered.length ? ordered : locationHotels;
-  }, [breakfastHotel1, breakfastHotel2, locationHotels, hotelCatalog]);
-
-  function setMeal(
-    field: "breakfast_hotels" | "lunch_hotels" | "dinner_hotels",
-    slot: 0 | 1,
-    value: string
-  ) {
-    onChange((d) => {
-      const pair: [string | null, string | null] = [...d[field]];
-      pair[slot] = value || null;
-      // unique: hotel 1 cannot equal hotel 2
-      if (slot === 0 && pair[1] === pair[0]) pair[1] = null;
-      if (slot === 1 && pair[0] === pair[1]) pair[1] = null;
-      const next = { ...d, [field]: pair };
-      if (field === "dinner_hotels" && slot === 0) next.hotel_name = value || null;
-      if (field === "breakfast_hotels") {
-        // clear lunch/dinner picks that are no longer allowed
-        const allowed = [pair[0], pair[1]].filter(Boolean) as string[];
-        if (allowed.length > 0) {
-          next.lunch_hotels = [
-            allowed.includes(d.lunch_hotels[0] ?? "") ? d.lunch_hotels[0] : null,
-            allowed.includes(d.lunch_hotels[1] ?? "") ? d.lunch_hotels[1] : null,
-          ];
-          next.dinner_hotels = [
-            allowed.includes(d.dinner_hotels[0] ?? "") ? d.dinner_hotels[0] : null,
-            allowed.includes(d.dinner_hotels[1] ?? "") ? d.dinner_hotels[1] : null,
-          ];
-        }
-      }
-      return next;
-    });
+  function primaryMeals(d: ItineraryDay): LocationMealHotels {
+    return {
+      breakfast_hotels: d.breakfast_hotels,
+      lunch_hotels: d.lunch_hotels,
+      dinner_hotels: d.dinner_hotels,
+    };
   }
 
-  function setStayHotel(slot: 0 | 1, value: string) {
-    onChange((d) => {
-      const pair: [string | null, string | null] = [...d.breakfast_hotels];
-      pair[slot] = value || null;
-      if (pair[0] && pair[0] === pair[1]) pair[1] = null;
-      return {
-        ...d,
-        breakfast_hotels: pair,
-        hotel_name: pair[0] || d.hotel_name,
-      };
-    });
+  function setPrimaryMeals(next: LocationMealHotels) {
+    onChange((d) => ({
+      ...d,
+      breakfast_hotels: next.breakfast_hotels,
+      lunch_hotels: next.lunch_hotels,
+      dinner_hotels: next.dinner_hotels,
+      hotel_name: next.dinner_hotels[0] || next.breakfast_hotels[0] || d.hotel_name,
+    }));
   }
 
-  function clearSelectedHotel(
-    field: "breakfast_hotels" | "lunch_hotels" | "dinner_hotels",
-    label: string
-  ) {
-    onChange((d) => {
-      const pair: [string | null, string | null] = [
-        d[field][0] === label ? null : d[field][0],
-        d[field][1] === label ? null : d[field][1],
-      ];
-      const next = { ...d, [field]: pair };
-      if (field === "dinner_hotels") next.hotel_name = pair[0] || null;
-      if (field === "breakfast_hotels") {
-        const allowed = [pair[0], pair[1]].filter(Boolean) as string[];
-        if (allowed.length > 0) {
-          next.lunch_hotels = [
-            allowed.includes(d.lunch_hotels[0] ?? "") ? d.lunch_hotels[0] : null,
-            allowed.includes(d.lunch_hotels[1] ?? "") ? d.lunch_hotels[1] : null,
-          ];
-          next.dinner_hotels = [
-            allowed.includes(d.dinner_hotels[0] ?? "") ? d.dinner_hotels[0] : null,
-            allowed.includes(d.dinner_hotels[1] ?? "") ? d.dinner_hotels[1] : null,
-          ];
-        }
-      }
-      return next;
-    });
+  function setExtraMeals(locationName: string, next: LocationMealHotels) {
+    const key = locationName.trim();
+    if (!key) return;
+    onChange(
+      (d) => d,
+      (prev) => ({ ...prev, [key]: next })
+    );
   }
 
   return (
@@ -709,94 +861,27 @@ function NightHotelCard({
         <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm font-medium text-stone-700">
           No hotels will be booked for this day. Guest will arrange their own accommodation.
         </div>
-      ) : day.epai_plan_only ? (
-        <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
-          <div className="mb-2 flex items-center gap-2 font-semibold text-stone-800">
-            <Moon className="h-4 w-4 text-blue-600" />
-            Stay Only - Accommodation Only
-          </div>
-          <div className="mb-3 flex items-center gap-1 text-sm text-stone-600">
-            <MapPin className="h-3.5 w-3.5 text-blue-600" />
-            {day.location || "Select location on the day card"}
-          </div>
-          <p className="mb-2 text-xs font-medium text-stone-600">Hotel (Up to 2 options)</p>
-          <div className="space-y-2">
-            {[0, 1].map((slot) => {
-              const other = day.breakfast_hotels[(slot === 0 ? 1 : 0) as 0 | 1];
-              return (
-                <Select
-                  key={slot}
-                  value={day.breakfast_hotels[slot as 0 | 1] ?? ""}
-                  onChange={(e) => setStayHotel(slot as 0 | 1, e.target.value)}
-                >
-                  <option value="">Hotel {slot + 1}</option>
-                  <HotelSelectOptions hotels={locationHotels} excludeLabel={other} />
-                </Select>
-              );
-            })}
-          </div>
-          {(day.breakfast_hotels[0] || day.breakfast_hotels[1]) && (
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {day.breakfast_hotels.filter(Boolean).map((label) => (
-                <SelectedHotelCard
-                  key={label}
-                  label={label!}
-                  hotel={findHotelByOptionLabel(label!, hotelCatalog)}
-                  onClear={() => clearSelectedHotel("breakfast_hotels", label!)}
-                />
-              ))}
-            </div>
-          )}
-        </div>
       ) : (
-        <div className="mb-3 rounded-xl border border-stone-200 bg-stone-50 p-4">
-          <div className="mb-3 flex items-center gap-1 text-sm font-medium text-stone-700">
-            <MapPin className="h-3.5 w-3.5 text-blue-600" />
-            {day.location || "Select location on the day card"}
-          </div>
-          {(
-            [
-              ["breakfast_hotels", "Breakfast Hotel", "text-orange-500", locationHotels],
-              ["lunch_hotels", "Lunch Hotel", "text-emerald-600", mealCascadeOptions],
-              ["dinner_hotels", "Dinner Hotel", "text-red-500", mealCascadeOptions],
-            ] as const
-          ).map(([field, label, iconClass, opts]) => (
-            <div key={field} className="mb-3">
-              <div className="mb-1.5 flex items-center gap-1.5 text-xs font-medium text-stone-600">
-                <Coffee className={cn("h-3.5 w-3.5", iconClass)} />
-                {label} (Up to 2 options)
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {[0, 1].map((slot) => {
-                  const other = day[field][(slot === 0 ? 1 : 0) as 0 | 1];
-                  return (
-                    <Select
-                      key={slot}
-                      value={day[field][slot as 0 | 1] ?? ""}
-                      onChange={(e) => setMeal(field, slot as 0 | 1, e.target.value)}
-                    >
-                      <option value="">
-                        {label} {slot + 1}
-                      </option>
-                      <HotelSelectOptions hotels={opts} excludeLabel={other} />
-                    </Select>
-                  );
-                })}
-              </div>
-              {(day[field][0] || day[field][1]) && (
-                <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                  {day[field].filter(Boolean).map((selectedLabel) => (
-                    <SelectedHotelCard
-                      key={`${field}-${selectedLabel}`}
-                      label={selectedLabel!}
-                      hotel={findHotelByOptionLabel(selectedLabel!, hotelCatalog)}
-                      onClear={() => clearSelectedHotel(field, selectedLabel!)}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          ))}
+        <div className="mb-3 space-y-3">
+          {locationSlots.map((loc, locIndex) => {
+            const isPrimary = locIndex === 0;
+            const meals = isPrimary
+              ? primaryMeals(day)
+              : byLocation[loc.trim()] ?? emptyLocationMealHotels();
+            return (
+              <LocationMealBlock
+                key={`${locIndex}-${loc || "empty"}`}
+                locationName={loc}
+                meals={meals}
+                hotelCatalog={hotelCatalog}
+                epaiPlanOnly={day.epai_plan_only}
+                onMealsChange={(next) => {
+                  if (isPrimary) setPrimaryMeals(next);
+                  else setExtraMeals(loc, next);
+                }}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -817,6 +902,7 @@ function NightHotelCard({
   );
 }
 
+
 /** Fields that gate the Save button when `saveRequiresChanges` is on. */
 function itineraryEditFingerprint(snapshot: ItinerarySnapshot): string {
   const s = normalizeSnapshot(snapshot);
@@ -829,6 +915,7 @@ function itineraryEditFingerprint(snapshot: ItinerarySnapshot): string {
       alternate_day_titles: d.alternate_day_titles,
       day_description: d.day_description,
       location: d.location ?? "",
+      locations: d.locations ?? [],
     })),
   });
 }
@@ -881,6 +968,7 @@ export function V1BuilderForm({
   );
   const [hotelCatalog, setHotelCatalog] = useState<HotelMasterItem[]>([]);
   const [vehicleCatalog, setVehicleCatalog] = useState<WebsiteContentItem[]>([]);
+  const [inclusionMaster, setInclusionMaster] = useState<InclusionExclusionItem[]>([]);
   const [uploadingDayImage, setUploadingDayImage] = useState<number | null>(null);
   const locs = useMemo(
     () => locationCatalog.map((e) => e.name),
@@ -973,6 +1061,20 @@ export function V1BuilderForm({
       if (cancelled) return;
       setVehicleCatalog(items);
     });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listInclusionExclusions()
+      .then((rows) => {
+        if (!cancelled) setInclusionMaster(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setInclusionMaster([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -1295,7 +1397,8 @@ export function V1BuilderForm({
       : [...s.optional_inclusion_keys, key];
     const inclusion_items = mergeOptionalIntoInclusionItems(
       s.inclusion_items,
-      optional_inclusion_keys
+      optional_inclusion_keys,
+      inclusionMaster
     );
     patch({
       optional_inclusion_keys,
@@ -1437,22 +1540,26 @@ export function V1BuilderForm({
   }
 
   function dayLocationRows(day: (typeof s.days)[number]): string[] {
-    const extras = (day.locations ?? []).filter((l) => l.trim());
-    return [day.location ?? "", ...extras];
+    // Preserve empty extras so "+ Add Location" can show a blank Select.
+    const extras = day.locations ?? [];
+    const rows = [day.location ?? "", ...extras];
+    return rows.length ? rows : [""];
   }
 
   function setDayLocations(dayIndex: number, rows: string[]) {
-    const cleaned = rows.map((r) => r.trim());
-    const primary = cleaned[0] || "";
-    const extras = cleaned.slice(1).filter(Boolean);
+    const list = rows.length ? rows : [""];
+    const primary = (list[0] ?? "").trim();
+    // Keep empty slots in extras (UI placeholders); trim non-empty names.
+    const extras = list.slice(1).map((r) => r.trim());
     const nextLocation = primary || null;
     const photos = photosForLocation(locationCatalog, nextLocation).filter(
       (url) => !url.startsWith("data:")
     );
     updateDay(dayIndex, (d) => {
+      const prevRows = dayLocationRows(d);
       const locationChanged =
         (d.location ?? "").trim().toLowerCase() !== (nextLocation ?? "").trim().toLowerCase();
-      return {
+      const nextDay: ItineraryDay = {
         ...d,
         location: nextLocation,
         locations: extras,
@@ -1468,6 +1575,7 @@ export function V1BuilderForm({
             }
           : {}),
       };
+      return remapCategoryLocationHotels(nextDay, prevRows, list);
     });
   }
 
@@ -2116,20 +2224,28 @@ export function V1BuilderForm({
                         tier.room_category,
                         primaryKey
                       );
+                      const picks = getCategoryHotelPicks(
+                        day,
+                        tier.category_key,
+                        tier.room_category,
+                        primaryKey
+                      );
                       return (
                         <NightHotelCard
                           key={`${tier.category_key}-${day.day_uuid}`}
                           day={viewDay}
                           nightNo={nightNo}
                           hotelCatalog={hotelCatalog}
-                          onChange={(updater) =>
+                          byLocation={picks.by_location ?? {}}
+                          onChange={(updater, byLocationUpdater) =>
                             updateDay(dayIndex, (d) =>
                               applyCategoryDayUpdate(
                                 d,
                                 tier.category_key,
                                 tier.room_category,
                                 primaryKey,
-                                updater
+                                updater,
+                                byLocationUpdater
                               )
                             )
                           }
@@ -2169,23 +2285,42 @@ export function V1BuilderForm({
           <h2 className="text-lg font-semibold text-stone-900">Optional Inclusions</h2>
         </div>
         <div className="space-y-3">
-          {OPTIONAL_INCLUSIONS.map((opt) => (
-            <label
-              key={opt.key}
-              className="flex cursor-pointer gap-3 rounded-xl border border-stone-100 p-3 hover:bg-stone-50"
-            >
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={s.optional_inclusion_keys.includes(opt.key)}
-                onChange={() => toggleOptional(opt.key)}
-              />
-              <span>
-                <span className="font-medium text-stone-900">{opt.label}</span>
-                <span className="mt-0.5 block text-sm text-stone-600">{opt.description}</span>
-              </span>
-            </label>
-          ))}
+          {OPTIONAL_INCLUSIONS.map((opt) => {
+            const checked = s.optional_inclusion_keys.includes(opt.key);
+            const { description } = resolveOptionalInclusionFromMaster(opt, inclusionMaster);
+            return (
+              <label
+                key={opt.key}
+                className={cn(
+                  "flex cursor-pointer gap-3 rounded-xl border p-3",
+                  checked
+                    ? "border-emerald-200 bg-emerald-50/70"
+                    : "border-stone-100 hover:bg-stone-50"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={checked}
+                  onChange={() => toggleOptional(opt.key)}
+                />
+                <span>
+                  <span className="font-medium text-stone-900">
+                    {opt.label}
+                    {checked ? (
+                      <span className="ml-2 inline-flex items-center gap-1 text-sm font-medium text-emerald-700">
+                        <Check className="h-3.5 w-3.5" />
+                        Added
+                      </span>
+                    ) : null}
+                  </span>
+                  {description ? (
+                    <span className="mt-0.5 block text-sm text-stone-600">{description}</span>
+                  ) : null}
+                </span>
+              </label>
+            );
+          })}
         </div>
       </section>
 

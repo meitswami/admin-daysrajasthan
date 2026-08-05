@@ -37,6 +37,7 @@ import {
 } from "@/lib/master-data/policies-store";
 import {
   OPTIONAL_INCLUSIONS,
+  resolveOptionalInclusionFromMaster,
 } from "@/lib/itinerary-builder/defaults";
 import {
   isHardcodedPolicyDefaults,
@@ -1204,14 +1205,17 @@ export function PreviewConfirmView({
             <ul className="mt-3 space-y-2 text-sm text-stone-800">
               {OPTIONAL_INCLUSIONS.filter((o) =>
                 snapshot.optional_inclusion_keys.includes(o.key)
-              ).map((o) => (
-                <li key={o.key} className="rounded-lg border border-amber-100 bg-white px-3 py-2">
-                  <p className="font-semibold">{o.label}</p>
-                  {o.description ? (
-                    <p className="mt-0.5 text-xs text-stone-600">{o.description}</p>
-                  ) : null}
-                </li>
-              ))}
+              ).map((o) => {
+                const { description } = resolveOptionalInclusionFromMaster(o, policyMaster);
+                return (
+                  <li key={o.key} className="rounded-lg border border-amber-100 bg-white px-3 py-2">
+                    <p className="font-semibold">{o.label}</p>
+                    {description ? (
+                      <p className="mt-0.5 text-xs text-stone-600">{description}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
             </ul>
           </section>
         )}

@@ -200,37 +200,59 @@ export const OPTIONAL_INCLUSIONS = [
   {
     key: "ranthambhore_canter",
     label: "Ranthambhore Canter Safari",
-    description: "",
   },
   {
     key: "ranthambhore_gypsy",
     label: "Ranthambhore Gypsy Safari",
-    description: "",
   },
   {
     key: "jaisalmer_desert",
     label: "Jaisalmer Desert Add-ons",
-    description: "",
   },
 ] as const;
 
-export function optionalInclusionBlocks(
-  keys: string[] | null | undefined,
-  master?: { text: string; description?: string | null; image_url?: string | null; kind?: string }[]
-): { id: string; title: string; description: string; images: string[] }[] {
-  const selected = new Set(keys ?? []);
-  const byTitle = new Map(
+export type OptionalInclusionMasterRow = {
+  text: string;
+  description?: string | null;
+  image_url?: string | null;
+  kind?: string;
+};
+
+function masterInclusionByTitle(
+  master: OptionalInclusionMasterRow[] | null | undefined
+): Map<string, OptionalInclusionMasterRow> {
+  return new Map(
     (master ?? [])
       .filter((row) => !row.kind || row.kind === "inclusion")
       .map((row) => [row.text.trim().toLowerCase(), row] as const)
   );
+}
+
+/** Resolve the saved Master Data description (and image) for an optional inclusion key/label. */
+export function resolveOptionalInclusionFromMaster(
+  opt: (typeof OPTIONAL_INCLUSIONS)[number],
+  master?: OptionalInclusionMasterRow[] | null
+): { label: string; description: string; image_url: string | null } {
+  const hit = masterInclusionByTitle(master).get(opt.label.trim().toLowerCase());
+  return {
+    label: opt.label,
+    description: (hit?.description ?? "").trim(),
+    image_url: hit?.image_url ?? null,
+  };
+}
+
+export function optionalInclusionBlocks(
+  keys: string[] | null | undefined,
+  master?: OptionalInclusionMasterRow[] | null
+): { id: string; title: string; description: string; images: string[] }[] {
+  const selected = new Set(keys ?? []);
   return OPTIONAL_INCLUSIONS.filter((o) => selected.has(o.key)).map((o) => {
-    const hit = byTitle.get(o.label.trim().toLowerCase());
+    const resolved = resolveOptionalInclusionFromMaster(o, master);
     return {
       id: `optional-${o.key}`,
-      title: o.label,
-      description: (hit?.description ?? o.description ?? "").trim(),
-      images: hit?.image_url ? [hit.image_url] : [],
+      title: resolved.label,
+      description: resolved.description,
+      images: resolved.image_url ? [resolved.image_url] : [],
     };
   });
 }
@@ -241,7 +263,7 @@ export function mergeOptionalIntoInclusionItems<
 >(
   items: T[],
   keys: string[] | null | undefined,
-  master?: { text: string; description?: string | null; image_url?: string | null; kind?: string }[]
+  master?: OptionalInclusionMasterRow[] | null
 ): T[] {
   const optionalLabels = new Set(
     OPTIONAL_INCLUSIONS.map((o) => o.label.trim().toLowerCase())

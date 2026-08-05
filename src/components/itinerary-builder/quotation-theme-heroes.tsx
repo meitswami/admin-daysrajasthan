@@ -3,7 +3,6 @@ import type { PreviewTheme } from "@/lib/itinerary-builder/preview-themes";
 import type { CoveringDestination } from "@/lib/itinerary-builder/quotation-layout";
 import type { ItinerarySnapshot } from "@/types/itinerary-builder";
 import { QuotationReviewWidgets } from "@/components/itinerary-builder/quotation-review-widgets";
-import { formatInr } from "@/lib/itinerary-builder/cost-engine";
 import { formatDate } from "@/lib/utils";
 import { Mail, MapPin, Phone } from "lucide-react";
 
@@ -16,9 +15,9 @@ type HeroProps = {
   destinationsSummary: string;
   /** Theme 2 covering chips (Jaipur -2N). Falls back to destinationsSummary. */
   coveringDestinations?: CoveringDestination[];
-  /** @deprecated Prefer packagePriceTiers for multi-category quotes */
+  /** @deprecated Prices are shown in the Package Price card below the hero */
   packagePrice?: number | null;
-  /** Per hotel-type package prices shown separately in the hero */
+  /** @deprecated Prices are shown in the Package Price card below the hero */
   packagePriceTiers?: { label: string; price: number }[];
   quoteId: string;
   versionNumber: number;
@@ -26,19 +25,6 @@ type HeroProps = {
   /** Public/client payment URL for Book Now */
   bookNowHref?: string | null;
 };
-
-function resolveHeroPriceTiers(
-  packagePriceTiers?: { label: string; price: number }[],
-  packagePrice?: number | null
-): { label: string; price: number }[] {
-  if (packagePriceTiers && packagePriceTiers.length > 0) {
-    return packagePriceTiers.filter((t) => t.price > 0);
-  }
-  if (packagePrice != null && packagePrice > 0) {
-    return [{ label: "Package", price: packagePrice }];
-  }
-  return [];
-}
 
 function BookNowButton({
   href,
@@ -194,8 +180,6 @@ export function Theme2Hero({
   header,
   destinationsSummary,
   coveringDestinations,
-  packagePrice,
-  packagePriceTiers,
   bookNowHref,
 }: HeroProps) {
   const wa = brand.phone.replace(/\D/g, "");
@@ -207,7 +191,6 @@ export function Theme2Hero({
           .split(/\s*->\s*/)
           .map((s) => s.trim())
           .filter(Boolean);
-  const priceTiers = resolveHeroPriceTiers(packagePriceTiers, packagePrice);
 
   return (
     <header
@@ -262,25 +245,6 @@ export function Theme2Hero({
               </p>
             </div>
           )}
-          {priceTiers.length > 0 && (
-            <div className="mb-2 mt-2 space-y-1">
-              {priceTiers.map((tier) => (
-                <div
-                  key={`${tier.label}-${tier.price}`}
-                  className="flex flex-wrap items-baseline justify-between gap-2 text-xl sm:text-2xl md:text-3xl"
-                >
-                  {priceTiers.length > 1 && (
-                    <span className="text-sm font-semibold text-gray-600 sm:text-base md:text-lg">
-                      {tier.label}
-                    </span>
-                  )}
-                  <span className="font-bold text-gray-900">
-                    {formatInr(tier.price)}/-
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
           {cityChips.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-2 gap-y-1 text-sm font-medium text-gray-700 sm:text-lg">
               {cityChips.map((city) => (
@@ -333,8 +297,6 @@ export function Theme3Hero({
   header,
   destinationsSummary,
   coveringDestinations,
-  packagePrice,
-  packagePriceTiers,
   bookNowHref,
 }: HeroProps) {
   const circles = theme.gallery.slice(0, 3);
@@ -347,7 +309,6 @@ export function Theme3Hero({
           .split(/\s*->\s*/)
           .map((s) => s.trim())
           .filter(Boolean);
-  const priceTiers = resolveHeroPriceTiers(packagePriceTiers, packagePrice);
 
   return (
     <header
@@ -385,25 +346,6 @@ export function Theme3Hero({
               <h3 className="mt-4 text-lg font-bold leading-snug sm:mt-5 md:text-2xl">
                 {titleLine.toUpperCase()}
               </h3>
-            )}
-            {priceTiers.length > 0 && (
-              <div className="mb-2 mt-2 space-y-1">
-                {priceTiers.map((tier) => (
-                  <div
-                    key={`${tier.label}-${tier.price}`}
-                    className="flex flex-wrap items-baseline justify-between gap-2 text-xl sm:text-2xl md:text-3xl"
-                  >
-                    {priceTiers.length > 1 && (
-                      <span className="text-sm font-semibold text-gray-700 sm:text-base md:text-lg">
-                        {tier.label}
-                      </span>
-                    )}
-                    <span className="font-bold text-red-900">
-                      {formatInr(tier.price)}/-
-                    </span>
-                  </div>
-                ))}
-              </div>
             )}
             {cityChips.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-2 gap-y-1 text-xs font-medium text-gray-700 sm:text-lg">

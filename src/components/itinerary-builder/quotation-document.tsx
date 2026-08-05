@@ -173,86 +173,165 @@ function ClientDetailsTable({
   );
 }
 
-function Theme3PackageSummaryCard({
-  label,
-  packagePrice,
-  grandTotal,
+function Theme2PackagePriceCard({
+  tiers,
   advancePercent,
   bookNowHref,
 }: {
-  label: string;
-  packagePrice: number;
-  grandTotal: number;
+  tiers: { key: string; label: string; packagePrice: number; grandTotal: number }[];
   advancePercent: 20 | 30;
   bookNowHref?: string | null;
 }) {
-  const advance = bookingAmount(grandTotal, advancePercent / 100);
-  const shortKey = label.replace(/ Package$/i, "").toLowerCase();
+  const plain = (n: number) => `₹${Math.round(n)}/-`;
+  const partition = tiers.length > 1;
+
+  function TierBody({
+    label,
+    packagePrice,
+    grandTotal,
+    showLabel,
+  }: {
+    label: string;
+    packagePrice: number;
+    grandTotal: number;
+    showLabel: boolean;
+  }) {
+    const advance = bookingAmount(grandTotal, advancePercent / 100);
+    return (
+      <div className={cn(partition && "rounded-xl border border-stone-200 bg-stone-50/60 p-3 sm:p-4")}>
+        {showLabel && (
+          <h4 className="mb-3 text-base font-bold capitalize text-gray-800 sm:text-lg">
+            {label}
+          </h4>
+        )}
+        <div className="mb-2 flex justify-between text-gray-700">
+          <span>Base Price</span>
+          <span className="font-semibold">{plain(packagePrice)}</span>
+        </div>
+        <hr className="my-3" />
+        <div className="flex justify-between font-semibold text-gray-900">
+          <span>Total Price</span>
+          <span>{plain(grandTotal)}</span>
+        </div>
+        <div className="my-1 flex justify-between text-gray-700">
+          <span>Booking Amount</span>
+          <span>{plain(advance)}</span>
+        </div>
+        <a
+          href={bookNowHref || "#book"}
+          className="mt-6 block w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
+        >
+          Book Now
+        </a>
+      </div>
+    );
+  }
+
   return (
-    <section className="my-3 break-inside-avoid rounded-lg border-2 p-4 shadow-sm">
-      <h2 className="mb-4 border-b pb-2 text-2xl font-semibold text-gray-700">Package Summary</h2>
-      <div className="bg-white p-1 text-lg">
-        <h3 className="mb-6 text-2xl font-bold capitalize text-gray-900">{label}</h3>
+    <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
+      <h3 className="mb-4 text-2xl font-extrabold text-gray-700">Package Price</h3>
+      {partition ? (
+        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+          {tiers.map((tier) => (
+            <TierBody
+              key={tier.key}
+              label={tier.label}
+              packagePrice={tier.packagePrice}
+              grandTotal={tier.grandTotal}
+              showLabel
+            />
+          ))}
+        </div>
+      ) : (
+        <TierBody
+          label={tiers[0]?.label ?? "Package"}
+          packagePrice={tiers[0]?.packagePrice ?? 0}
+          grandTotal={tiers[0]?.grandTotal ?? 0}
+          showLabel={false}
+        />
+      )}
+    </section>
+  );
+}
+
+function Theme3PackageSummaryCard({
+  tiers,
+  advancePercent,
+  bookNowHref,
+}: {
+  tiers: { key: string; label: string; packagePrice: number; grandTotal: number }[];
+  advancePercent: 20 | 30;
+  bookNowHref?: string | null;
+}) {
+  const partition = tiers.length > 1;
+
+  function TierBody({
+    label,
+    packagePrice,
+    grandTotal,
+    showLabel,
+  }: {
+    label: string;
+    packagePrice: number;
+    grandTotal: number;
+    showLabel: boolean;
+  }) {
+    const advance = bookingAmount(grandTotal, advancePercent / 100);
+    const shortKey = label.replace(/ Package$/i, "").toLowerCase();
+    return (
+      <div className={cn(partition && "rounded-lg border border-stone-200 bg-white p-3")}>
+        {showLabel && (
+          <h3 className="mb-4 text-xl font-bold capitalize text-gray-900">{label}</h3>
+        )}
         <div className="flex items-center justify-between border-b py-2 text-lg">
           <span className="font-semibold text-gray-700">Base Price</span>
           <span className="font-bold text-gray-900">{formatInr(packagePrice)}</span>
         </div>
         <div className="mt-2 flex items-center justify-between border-b py-2 text-lg">
-          <span className="font-semibold text-gray-700">Total ({shortKey})</span>
+          <span className="font-semibold text-gray-700">
+            Total{showLabel ? ` (${shortKey})` : ""}
+          </span>
           <span className="font-bold text-green-700">{formatInr(grandTotal)}/-</span>
         </div>
         <div className="mt-2 flex items-center justify-between py-2 text-lg">
-          <span className="font-semibold text-gray-700">Booking Amount ({shortKey})</span>
+          <span className="font-semibold text-gray-700">
+            Booking Amount{showLabel ? ` (${shortKey})` : ""}
+          </span>
           <span className="font-bold text-red-700">{formatInr(advance)}/-</span>
         </div>
         <a
           href={bookNowHref || "#book"}
-          className="mt-8 inline-block w-full rounded-xl bg-red-900 px-4 py-4 text-center text-xl font-semibold text-white hover:bg-red-800"
+          className="mt-6 inline-block w-full rounded-xl bg-red-900 px-4 py-3 text-center text-lg font-semibold text-white hover:bg-red-800"
         >
           Book Now
         </a>
       </div>
-    </section>
-  );
-}
+    );
+  }
 
-function Theme2PackagePriceCard({
-  label,
-  packagePrice,
-  grandTotal,
-  advancePercent,
-  bookNowHref,
-}: {
-  label: string;
-  packagePrice: number;
-  grandTotal: number;
-  advancePercent: 20 | 30;
-  bookNowHref?: string | null;
-}) {
-  const advance = bookingAmount(grandTotal, advancePercent / 100);
-  const plain = (n: number) => `₹${Math.round(n)}/-`;
   return (
-    <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
-      <h3 className="mb-4 text-2xl font-extrabold capitalize text-gray-700">{label}</h3>
-      <div className="mb-2 flex justify-between text-gray-700">
-        <span>Base Price</span>
-        <span className="font-semibold">{plain(packagePrice)}</span>
-      </div>
-      <hr className="my-3" />
-      <div className="flex justify-between font-semibold text-gray-900">
-        <span>Total Price</span>
-        <span>{plain(grandTotal)}</span>
-      </div>
-      <div className="my-1 flex justify-between text-gray-700">
-        <span>Booking Amount</span>
-        <span>{plain(advance)}</span>
-      </div>
-      <a
-        href={bookNowHref || "#book"}
-        className="mt-6 block w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
-      >
-        Book Now
-      </a>
+    <section className="my-3 break-inside-avoid rounded-lg border-2 p-4 shadow-sm">
+      <h2 className="mb-4 border-b pb-2 text-2xl font-semibold text-gray-700">Package Price</h2>
+      {partition ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {tiers.map((tier) => (
+            <TierBody
+              key={tier.key}
+              label={tier.label}
+              packagePrice={tier.packagePrice}
+              grandTotal={tier.grandTotal}
+              showLabel
+            />
+          ))}
+        </div>
+      ) : (
+        <TierBody
+          label={tiers[0]?.label ?? "Package"}
+          packagePrice={tiers[0]?.packagePrice ?? 0}
+          grandTotal={tiers[0]?.grandTotal ?? 0}
+          showLabel={false}
+        />
+      )}
     </section>
   );
 }
@@ -1107,17 +1186,10 @@ export function QuotationDocument({
   const hasTiers = tierRows.length > 0;
   const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
   const advanceRate = advancePercent / 100;
-  const packagePriceTiers = tierRows.map((tier) => ({
-    label: tier.label,
-    price: tier.package_price,
-  }));
   const primaryTier = tierRows[0];
   const primaryPackagePrice =
     primaryTier?.package_price ?? snapshot.final_price ?? cost_sheet.grand_total;
   const primaryGrandTotal = primaryTier?.grand_total ?? cost_sheet.grand_total;
-  const primaryPackageLabel = primaryTier
-    ? `${primaryTier.label} Package`
-    : "Travel Package";
 
   const documentClassName = isTheme3
     ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-white p-0 text-stone-900"
@@ -1158,14 +1230,6 @@ export function QuotationDocument({
         header={header}
         destinationsSummary={destinationsSummary}
         coveringDestinations={coveringDestinations}
-        packagePrice={isTheme2 || isTheme3 ? primaryPackagePrice : null}
-        packagePriceTiers={
-          isTheme2 || isTheme3
-            ? packagePriceTiers.length > 0
-              ? packagePriceTiers
-              : [{ label: primaryPackageLabel, price: primaryPackagePrice }]
-            : undefined
-        }
         quoteId={quoteId}
         versionNumber={versionNumber}
         bookNowHref={paymentHref}
@@ -1230,20 +1294,26 @@ export function QuotationDocument({
               accent={theme.accent}
               variant="theme2"
             />
-            <div className="space-y-4">
-              {(hasTiers ? tierRows : [{ label: "Travel", package_price: primaryPackagePrice, grand_total: primaryGrandTotal, category_key: "legacy" }]).map(
-                (tier) => (
-                  <Theme2PackagePriceCard
-                    key={tier.category_key}
-                    label={`${tier.label} Package`}
-                    packagePrice={tier.package_price}
-                    grandTotal={tier.grand_total}
-                    advancePercent={advancePercent}
-                    bookNowHref={paymentHref}
-                  />
-                )
-              )}
-            </div>
+            <Theme2PackagePriceCard
+              tiers={(hasTiers
+                ? tierRows
+                : [
+                    {
+                      label: "Travel",
+                      package_price: primaryPackagePrice,
+                      grand_total: primaryGrandTotal,
+                      category_key: "legacy",
+                    },
+                  ]
+              ).map((tier) => ({
+                key: tier.category_key,
+                label: tier.label,
+                packagePrice: tier.package_price,
+                grandTotal: tier.grand_total,
+              }))}
+              advancePercent={advancePercent}
+              bookNowHref={paymentHref}
+            />
           </div>
         )}
 
@@ -1256,20 +1326,26 @@ export function QuotationDocument({
               title="Your Information"
               variant="theme3"
             />
-            <div className="space-y-4">
-              {(hasTiers ? tierRows : [{ label: "Travel", package_price: primaryPackagePrice, grand_total: primaryGrandTotal, category_key: "legacy" }]).map(
-                (tier) => (
-                  <Theme3PackageSummaryCard
-                    key={tier.category_key}
-                    label={`${tier.label} Package`}
-                    packagePrice={tier.package_price}
-                    grandTotal={tier.grand_total}
-                    advancePercent={advancePercent}
-                    bookNowHref={paymentHref}
-                  />
-                )
-              )}
-            </div>
+            <Theme3PackageSummaryCard
+              tiers={(hasTiers
+                ? tierRows
+                : [
+                    {
+                      label: "Travel",
+                      package_price: primaryPackagePrice,
+                      grand_total: primaryGrandTotal,
+                      category_key: "legacy",
+                    },
+                  ]
+              ).map((tier) => ({
+                key: tier.category_key,
+                label: tier.label,
+                packagePrice: tier.package_price,
+                grandTotal: tier.grand_total,
+              }))}
+              advancePercent={advancePercent}
+              bookNowHref={paymentHref}
+            />
           </div>
         )}
 

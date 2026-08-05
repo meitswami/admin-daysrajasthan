@@ -62,8 +62,9 @@ function normalizeDay(day: ItineraryDay, index: number): ItineraryDay {
     epai_plan_only: Boolean(day.epai_plan_only),
     guest_self_booked_hotel: Boolean(day.guest_self_booked_hotel),
     category_hotel_picks: normalizeCategoryHotelPicksMap(day.category_hotel_picks),
+    // Keep empty strings — they are intentional "Select location" slots from Add Location.
     locations: Array.isArray(day.locations)
-      ? day.locations.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean)
+      ? day.locations.map((l) => (typeof l === "string" ? l.trim() : ""))
       : [],
     guide_required: Boolean(day.guide_required),
     completion_pct: day.completion_pct ?? 0,
