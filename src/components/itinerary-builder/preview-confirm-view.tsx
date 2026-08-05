@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import {
@@ -481,13 +482,36 @@ export function PreviewConfirmView({
       return;
     }
     if (!itineraryId) return;
-    const r = getClientItinerary(itineraryId);
-    const revs = getRevisions(itineraryId);
-    const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
-    if (r && current) {
-      setRecord(r);
-      setSnapshot(normalizeSnapshot(current.snapshot));
+
+    let cancelled = false;
+
+    async function load() {
+      let r = getClientItinerary(itineraryId!);
+      let revs = getRevisions(itineraryId!);
+
+      const { isRealDataMode } = await import("@/lib/system/data-mode");
+      if (isRealDataMode() && (!r || !revs.length)) {
+        const { pullRevisionsFromSupabaseIfReal } = await import(
+          "@/lib/itinerary-builder/sync-real"
+        );
+        await pullRevisionsFromSupabaseIfReal(itineraryId!);
+        if (cancelled) return;
+        r = getClientItinerary(itineraryId!);
+        revs = getRevisions(itineraryId!);
+      }
+
+      if (cancelled) return;
+      const current = revs.find((rev) => rev.id === r?.current_revision_id) ?? revs[0];
+      if (r && current) {
+        setRecord(r);
+        setSnapshot(normalizeSnapshot(current.snapshot));
+      }
     }
+
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, [itineraryId, draftMode]);
 
   /**
@@ -553,6 +577,24 @@ export function PreviewConfirmView({
   const activeId = record?.id ?? itineraryId;
   /** Quote ID (QRT…) only after an explicit Save — never invent one for drafts. */
   const quoteLabel = record?.quote_id ?? null;
+  const backHref = draftMode
+    ? "/itinerary-builder/new"
+    : activeId
+      ? `/itinerary-builder/${activeId}`
+      : "/itinerary-builder";
+
+  /**
+   * Soft `router.push` from `…/[id]/preview-confirm` → `…/[id]` often no-ops in the
+   * App Router (same dynamic segment). Hard navigation always remounts the builder.
+   */
+  function handleBack(e?: { preventDefault: () => void }) {
+    e?.preventDefault();
+    if (typeof window !== "undefined") {
+      window.location.assign(backHref);
+      return;
+    }
+    router.push(backHref);
+  }
 
   function patch(partial: Partial<ItinerarySnapshot>) {
     setSnapshot((prev) => {
@@ -754,24 +796,17 @@ export function PreviewConfirmView({
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
-              onClick={() =>
-                router.push(
-                  draftMode
-                    ? "/itinerary-builder/new"
-                    : activeId
-                      ? `/itinerary-builder/${activeId}`
-                      : "/itinerary-builder"
-                )
-              }
+            <Link
+              href={backHref}
+              onClick={handleBack}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "border-white/25 bg-white/10 text-white hover:bg-white/20 hover:text-white"
+              )}
             >
               <ArrowLeft className="h-4 w-4" />
               Back
-            </Button>
+            </Link>
             <Button
               type="button"
               size="sm"
@@ -1288,23 +1323,17 @@ export function PreviewConfirmView({
         </section>
 
         <div className="flex flex-wrap items-center justify-end gap-3 border-t border-stone-200 pb-8 pt-4 print:hidden">
-          <Button
-            type="button"
-            variant="outline"
-            className="border-[#164e63]/30 text-[#164e63] hover:bg-[#164e63]/5"
-            onClick={() =>
-              router.push(
-                draftMode
-                  ? "/itinerary-builder/new"
-                  : activeId
-                    ? `/itinerary-builder/${activeId}`
-                    : "/itinerary-builder"
-              )
-            }
+          <Link
+            href={backHref}
+            onClick={handleBack}
+            className={cn(
+              buttonVariants({ variant: "outline" }),
+              "border-[#164e63]/30 text-[#164e63] hover:bg-[#164e63]/5"
+            )}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
-          </Button>
+          </Link>
           <Button
             type="button"
             className="bg-[#84cc16] text-white hover:bg-[#75b812]"
