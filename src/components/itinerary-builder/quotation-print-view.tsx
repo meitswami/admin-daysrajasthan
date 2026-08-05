@@ -231,10 +231,10 @@ export function QuotationPrintView({
   const bookAccent = theme.id === 2 ? "#56AB2F" : isTheme3 ? "#7B1E2E" : "#D97706";
 
   return (
-    <div className="min-h-screen overflow-x-clip bg-stone-100 print:bg-transparent">
+    <div className="min-h-screen overflow-x-clip bg-white print:bg-transparent">
       {!publicMode && (
         <div className="no-print sticky top-0 z-30 border-b border-stone-200 bg-white px-4 py-3 print:hidden">
-          <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
+          <div className="mx-auto flex w-full max-w-none items-center justify-between gap-3 px-2 sm:px-4">
             <Link
               href={`/itinerary-builder/${itineraryId}/preview-confirm`}
               className="inline-flex items-center gap-1 text-sm text-stone-600 hover:text-stone-900"
@@ -270,14 +270,7 @@ export function QuotationPrintView({
           </div>
         </div>
       )}
-      <div
-        className={
-          isTheme3
-            ? "relative w-full py-0 print:p-0"
-            : "relative mx-auto max-w-5xl px-2 py-6 sm:px-4 print:max-w-none print:p-0"
-        }
-        id="book"
-      >
+      <div className="relative w-full py-0 print:p-0" id="book">
         <QuotationDocument
           quoteId={record.quote_id}
           versionNumber={record.current_version}
