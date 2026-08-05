@@ -210,12 +210,12 @@ export function Theme2Hero({
       </div>
 
       <div className="hero-wrapper relative mx-auto flex flex-col lg:flex-row print:h-auto">
-        <div className="hero-left order-2 w-full px-2 py-3 text-lg sm:px-4 md:px-8 lg:order-1 lg:w-1/2 lg:py-4">
+        <div className="hero-left order-2 w-full min-w-0 px-2 py-3 text-lg sm:px-4 md:px-8 lg:order-1 lg:w-1/2 lg:py-4">
           <h1 className="mt-1 text-2xl font-bold text-black sm:text-3xl lg:text-4xl">
             {guestGreeting(clientLabel, client.client_name)},
           </h1>
-          <p className="mt-2 text-base text-gray-500 sm:text-lg">
-            Here is the package exclusively designed/tailor made <br /> for you
+          <p className="mt-2 w-full text-base leading-relaxed text-gray-500 sm:text-lg">
+            Here is the package exclusively designed / tailor-made for you
           </p>
           {header.duration_label && (
             <div className="mt-4">
