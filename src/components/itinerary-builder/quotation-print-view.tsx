@@ -270,7 +270,14 @@ export function QuotationPrintView({
           </div>
         </div>
       )}
-      <div className="relative w-full py-0 print:p-0" id="book">
+      <div
+        className={
+          isTheme3
+            ? "relative w-full py-0 print:p-0"
+            : "relative w-full px-4 py-0 sm:px-[10%] print:px-0"
+        }
+        id="book"
+      >
         <QuotationDocument
           quoteId={record.quote_id}
           versionNumber={record.current_version}

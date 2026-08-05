@@ -1603,10 +1603,6 @@ export function QuotationDocument({
               variant={isTheme3 ? "theme3" : "theme2"}
               accent={theme.accent}
             />
-            <p className="pt-4 text-center text-[10px] text-stone-400">
-              This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
-              {theme.id} {theme.styleName}
-            </p>
           </>
         ) : (
           !isLegacyTheme && (
@@ -1625,10 +1621,6 @@ export function QuotationDocument({
               </section>
 
               <DocumentBrandFooter brand={displayBrand} />
-              <p className="text-center text-[10px] text-stone-400">
-                This quotation is pinned to revision v{versionNumber} · {revisionId.slice(0, 8)}… · Theme{" "}
-                {theme.id} {theme.styleName}
-              </p>
             </>
           )
         )}
