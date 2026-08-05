@@ -232,9 +232,9 @@ export function Theme2Hero({
             </div>
           )}
           {cityChips.length > 0 && (
-            <p className="mt-2 text-sm font-medium leading-relaxed text-gray-600 sm:text-lg">
+            <p className="mt-2 overflow-x-auto whitespace-nowrap text-[11px] font-medium leading-none text-gray-600 sm:text-xs md:text-sm">
               {cityChips.map((city) => (
-                <span key={city} className="mr-2 inline-block">
+                <span key={city} className="mr-1.5 inline">
                   • {city}
                 </span>
               ))}
