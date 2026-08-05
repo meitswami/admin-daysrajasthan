@@ -334,6 +334,44 @@ export function isDepartureLocation(location: string | null | undefined): boolea
   return (location ?? "").trim().toLowerCase() === "departure";
 }
 
+/**
+ * Strip "Departure" from route / destination labels used in heroes & summaries.
+ * Handles ·, •, ->, →, and comma separators.
+ */
+export function stripDepartureFromRouteLabel(label: string | null | undefined): string {
+  const raw = (label ?? "").trim();
+  if (!raw) return "";
+  if (!/departure/i.test(raw)) return raw;
+
+  const sep = raw.includes("·")
+    ? " · "
+    : raw.includes("•")
+      ? " • "
+      : /\s*->\s*/.test(raw)
+        ? " -> "
+        : raw.includes("→")
+          ? " → "
+          : raw.includes(",")
+            ? ", "
+            : " · ";
+  const splitter =
+    sep === " · "
+      ? /\s*·\s*/
+      : sep === " • "
+        ? /\s*•\s*/
+        : sep === " -> "
+          ? /\s*->\s*/
+          : sep === " → "
+            ? /\s*→\s*/
+            : /\s*,\s*/;
+
+  return raw
+    .split(splitter)
+    .map((p) => p.trim())
+    .filter((p) => p && !isDepartureLocation(p))
+    .join(sep);
+}
+
 /** Last itinerary day must be Departure (drops the final overnight). */
 export function lastDayDepartureError(days: ItineraryDay[]): string | null {
   if (!days?.length) return null;

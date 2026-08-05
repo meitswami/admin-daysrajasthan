@@ -65,7 +65,11 @@ function findDestination(
 function destinationFromDays(days: ItineraryDayPlan[]): string | null {
   const locations = [
     ...new Set(
-      days.flatMap((d) => [d.location, ...(d.locations ?? [])].map((l) => l.trim()).filter(Boolean))
+      days.flatMap((d) =>
+        [d.location, ...(d.locations ?? [])]
+          .map((l) => l.trim())
+          .filter((l) => Boolean(l) && !isDepartureLocation(l))
+      )
     ),
   ];
   return locations.length ? locations.join(" · ") : null;

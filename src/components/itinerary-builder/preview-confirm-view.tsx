@@ -10,6 +10,8 @@ import {
   formatInr,
   advanceRateFromPercent,
   categoryTotalsFromSnapshot,
+  isDepartureLocation,
+  stripDepartureFromRouteLabel,
 } from "@/lib/itinerary-builder/cost-engine";
 import { normalizeSnapshot } from "@/lib/itinerary-builder/normalize";
 import {
@@ -782,7 +784,7 @@ export function PreviewConfirmView({
     .trim();
   const dayCount = snapshot.days.length;
   const heroSubtitle =
-    snapshot.header.subtitle?.trim() ||
+    stripDepartureFromRouteLabel(snapshot.header.subtitle) ||
     (dayCount > 0 ? `${dayCount} Days Amazing Journey` : "Amazing Journey");
   const tierHeroPrices = primaryTier.length
     ? primaryTier.map((tier) => ({
@@ -1045,7 +1047,7 @@ export function PreviewConfirmView({
                           !day.location ? day.pickup_location : null,
                         ]
                           .map((l) => l?.trim())
-                          .filter(Boolean) as string[];
+                          .filter((l): l is string => Boolean(l) && !isDepartureLocation(l));
                         const unique = Array.from(new Set(locs));
                         if (!unique.length) return null;
                         return (

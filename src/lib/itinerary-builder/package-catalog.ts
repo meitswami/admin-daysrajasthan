@@ -11,6 +11,7 @@ import {
   durationLabelFromDays,
   isDepartureLocation,
   resolveCategoryTierPricing,
+  stripDepartureFromRouteLabel,
 } from "./cost-engine";
 import { emptyCustomItineraryDays, emptyDay, emptySnapshot } from "./defaults";
 import { stringsToContentBlocks } from "./policy-master";
@@ -148,7 +149,7 @@ export function masterItineraryToCatalogEntry(item: Itinerary): PackageCatalogEn
         emptySnapshot({
           header: {
             title: item.package_name,
-            subtitle: item.destination,
+            subtitle: stripDepartureFromRouteLabel(item.destination) || null,
             tour_code: tourCode,
             duration_label,
             alternate_titles: item.alternate_titles ?? [],

@@ -176,10 +176,11 @@ export function formatDestinationsSummary(segments: NightSegment[]): string {
   const seen = new Set<string>();
   const names: string[] = [];
   for (const s of segments) {
-    const key = s.destination.trim().toLowerCase();
-    if (!key || seen.has(key)) continue;
+    const name = s.destination.trim();
+    const key = name.toLowerCase();
+    if (!key || seen.has(key) || isDepartureLocation(name)) continue;
     seen.add(key);
-    names.push(s.destination.trim());
+    names.push(name);
   }
   return names.join(" -> ");
 }
@@ -198,7 +199,7 @@ export function formatCoveringDestinations(segments: NightSegment[]): CoveringDe
   for (const s of segments) {
     const name = s.destination.trim();
     const key = name.toLowerCase();
-    if (!key) continue;
+    if (!key || isDepartureLocation(name)) continue;
     if (!totals.has(key)) {
       order.push(key);
       totals.set(key, { destination: name, nights: 0 });
