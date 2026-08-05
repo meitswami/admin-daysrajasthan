@@ -198,28 +198,36 @@ function Theme2PackagePriceCard({
   }) {
     const advance = bookingAmount(grandTotal, advancePercent / 100);
     return (
-      <div className={cn(partition && "rounded-xl border border-stone-200 bg-stone-50/60 p-3 sm:p-4")}>
+      <div
+        className={cn(
+          "flex h-full min-w-0 flex-col",
+          partition && "rounded-xl border border-stone-200 bg-stone-50/60 p-2.5 sm:p-3"
+        )}
+      >
         {showLabel && (
-          <h4 className="mb-3 text-base font-bold capitalize text-gray-800 sm:text-lg">
+          <h4
+            className="mb-2 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-snug capitalize text-gray-800"
+            title={label}
+          >
             {label}
           </h4>
         )}
-        <div className="mb-2 flex justify-between text-gray-700">
-          <span>Base Price</span>
-          <span className="font-semibold">{plain(packagePrice)}</span>
-        </div>
-        <hr className="my-3" />
-        <div className="flex justify-between font-semibold text-gray-900">
-          <span>Total Price</span>
-          <span>{plain(grandTotal)}</span>
-        </div>
-        <div className="my-1 flex justify-between text-gray-700">
-          <span>Booking Amount</span>
-          <span>{plain(advance)}</span>
+        <div className="grid flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 text-[11px] leading-tight text-gray-700 sm:text-xs">
+          <span className="whitespace-nowrap">Base Price</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums text-gray-900">
+            {plain(packagePrice)}
+          </span>
+          <hr className="col-span-2 my-0.5 border-stone-200" />
+          <span className="whitespace-nowrap font-semibold text-gray-900">Total Price</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums text-gray-900">
+            {plain(grandTotal)}
+          </span>
+          <span className="whitespace-nowrap">Booking Amount</span>
+          <span className="whitespace-nowrap text-right tabular-nums">{plain(advance)}</span>
         </div>
         <a
           href={bookNowHref || "#book"}
-          className="mt-6 block w-full rounded-xl bg-black py-3 text-center text-base font-semibold text-white"
+          className="mt-3 block w-full rounded-lg bg-black py-2 text-center text-xs font-semibold text-white sm:text-sm"
         >
           Book Now
         </a>
@@ -228,10 +236,10 @@ function Theme2PackagePriceCard({
   }
 
   return (
-    <section className="w-full break-inside-avoid rounded-2xl border bg-white p-4 shadow-md sm:p-5 md:p-6">
-      <h3 className="mb-4 text-2xl font-extrabold text-gray-700">Package Price</h3>
+    <section className="flex h-full w-full min-w-0 flex-col break-inside-avoid rounded-2xl border bg-white p-3 shadow-md sm:p-4">
+      <h3 className="mb-3 text-base font-extrabold text-gray-700 sm:text-lg">Package Price</h3>
       {partition ? (
-        <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+        <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch sm:gap-3">
           {tiers.map((tier) => (
             <TierBody
               key={tier.key}
@@ -277,31 +285,38 @@ function Theme3PackageSummaryCard({
     showLabel: boolean;
   }) {
     const advance = bookingAmount(grandTotal, advancePercent / 100);
-    const shortKey = label.replace(/ Package$/i, "").toLowerCase();
     return (
-      <div className={cn(partition && "rounded-lg border border-stone-200 bg-white p-3")}>
-        {showLabel && (
-          <h3 className="mb-4 text-xl font-bold capitalize text-gray-900">{label}</h3>
+      <div
+        className={cn(
+          "flex h-full min-w-0 flex-col",
+          partition && "rounded-lg border border-stone-200 bg-white p-2.5 sm:p-3"
         )}
-        <div className="flex items-center justify-between border-b py-2 text-lg">
-          <span className="font-semibold text-gray-700">Base Price</span>
-          <span className="font-bold text-gray-900">{formatInr(packagePrice)}</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between border-b py-2 text-lg">
-          <span className="font-semibold text-gray-700">
-            Total{showLabel ? ` (${shortKey})` : ""}
+      >
+        {showLabel && (
+          <h3
+            className="mb-2 line-clamp-2 min-h-[2.25rem] text-sm font-bold leading-snug capitalize text-gray-900"
+            title={label}
+          >
+            {label}
+          </h3>
+        )}
+        <div className="grid flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1.5 border-t border-stone-100 pt-2 text-[11px] leading-tight sm:text-xs">
+          <span className="whitespace-nowrap font-medium text-gray-700">Base Price</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums text-gray-900">
+            {formatInr(packagePrice)}
           </span>
-          <span className="font-bold text-green-700">{formatInr(grandTotal)}/-</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between py-2 text-lg">
-          <span className="font-semibold text-gray-700">
-            Booking Amount{showLabel ? ` (${shortKey})` : ""}
+          <span className="whitespace-nowrap font-medium text-gray-700">Total Price</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums text-green-700">
+            {formatInr(grandTotal)}/-
           </span>
-          <span className="font-bold text-red-700">{formatInr(advance)}/-</span>
+          <span className="whitespace-nowrap font-medium text-gray-700">Booking Amount</span>
+          <span className="whitespace-nowrap text-right font-semibold tabular-nums text-red-700">
+            {formatInr(advance)}/-
+          </span>
         </div>
         <a
           href={bookNowHref || "#book"}
-          className="mt-6 inline-block w-full rounded-xl bg-red-900 px-4 py-3 text-center text-lg font-semibold text-white hover:bg-red-800"
+          className="mt-3 inline-block w-full rounded-lg bg-red-900 px-3 py-2 text-center text-xs font-semibold text-white hover:bg-red-800 sm:text-sm"
         >
           Book Now
         </a>
@@ -310,10 +325,12 @@ function Theme3PackageSummaryCard({
   }
 
   return (
-    <section className="my-3 break-inside-avoid rounded-lg border-2 p-4 shadow-sm">
-      <h2 className="mb-4 border-b pb-2 text-2xl font-semibold text-gray-700">Package Price</h2>
+    <section className="flex h-full min-w-0 flex-col break-inside-avoid rounded-lg border-2 p-3 shadow-sm sm:p-4">
+      <h2 className="mb-3 border-b pb-2 text-base font-semibold text-gray-700 sm:text-lg">
+        Package Price
+      </h2>
       {partition ? (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-2 sm:items-stretch sm:gap-3">
           {tiers.map((tier) => (
             <TierBody
               key={tier.key}
