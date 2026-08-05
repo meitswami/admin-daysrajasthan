@@ -868,13 +868,13 @@ function TimelineDayCard({
       </div>
       <div className="mt-2 min-w-0 w-full flex-1 sm:mt-0">
         <p className="font-bold text-gray-800">{day.day_title}</p>
-        <div className="mt-3 grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] sm:items-start lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
+        <div className="mt-3 grid w-full gap-4 sm:grid-cols-[minmax(0,220px)_minmax(0,1fr)] sm:items-start md:grid-cols-[minmax(0,240px)_minmax(0,1fr)] lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)] lg:gap-5">
           <QuotationDayCarousel
             images={images}
             alt={day.day_title}
             accent="#16A34A"
-            className="w-full overflow-hidden rounded-lg"
-            heightClassName="h-48 sm:h-56 lg:h-64"
+            className="w-full max-w-[260px] overflow-hidden rounded-lg sm:max-w-none"
+            heightClassName="h-36 sm:h-40 lg:h-44"
           />
           <div className="min-w-0">
             {dayVehicle && (
