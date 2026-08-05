@@ -76,16 +76,13 @@ export {
   getAnalyticsSnapshot,
   getChatPlatformState,
   getDefaultWebsite,
-  getServerSyncedState,
   leaveOfflineMessage,
   listAllowedDomains,
   listWebsites,
   listWidgetKeys,
   removeAllowedDomain,
-  resolvePublicWidgetConfig,
   revokeWidgetKey,
   submitFeedbackStub,
-  syncPlatformStateToServer,
   updateAppearance,
   updateBehaviour,
   updateKnowledgeScope,
@@ -99,6 +96,8 @@ export {
   flushChatPlatformToSupabase,
   hydrateChatPlatformFromSupabase,
 } from "./repository";
+
+/* public-widget / server-store use next/headers — import from @/modules/chat/public-widget in API routes only */
 
 export {
   generateEmbedSnippets,

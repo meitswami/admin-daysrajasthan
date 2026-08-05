@@ -1,4 +1,4 @@
-import { resolvePublicWidgetConfig } from "@/modules/chat";
+import { resolvePublicWidgetConfig } from "@/modules/chat/public-widget";
 
 export async function GET(request: Request) {
   const url = new URL(request.url);

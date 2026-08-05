@@ -1,4 +1,5 @@
-import { leaveOfflineMessage, resolvePublicWidgetConfig } from "@/modules/chat";
+import { leaveOfflineMessage } from "@/modules/chat";
+import { resolvePublicWidgetConfig } from "@/modules/chat/public-widget";
 import { getServerChatPlatformState, setServerChatPlatformState } from "@/modules/chat/server-store";
 
 /** Offline/manual leave-a-message — no Intelligence. */

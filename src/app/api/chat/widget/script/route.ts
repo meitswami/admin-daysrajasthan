@@ -1,4 +1,5 @@
-import { resolvePublicWidgetConfig, resolveRequestPublicOrigin } from "@/modules/chat";
+import { resolveRequestPublicOrigin } from "@/modules/chat";
+import { resolvePublicWidgetConfig } from "@/modules/chat/public-widget";
 
 /**
  * Returns a small loader script that mounts the offline iframe widget.
