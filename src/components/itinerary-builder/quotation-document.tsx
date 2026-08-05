@@ -1210,7 +1210,7 @@ export function QuotationDocument({
           /** Show total package cost beside the hotels-package heading. */
           packagePrice: tier.grand_total || tier.package_price,
           nights: buildHotelPackageNights(days, client.travel_date, {
-            categoryKey: tier.category_key,
+            categoryKey: tier.category_key as HotelCategoryKey,
             roomCategory: tier.room_category,
             primaryKey,
           }),
