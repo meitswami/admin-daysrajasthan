@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, type MouseEvent } from "react";
 import { X, ChevronDown, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -22,22 +22,66 @@ import { Brand } from "./brand";
 import { useSystem } from "@/components/providers/system-provider";
 import { canAccessModule } from "@/lib/rbac/permissions";
 
+function hrefPath(href: string): string {
+  return href.split("?")[0];
+}
+
+/** Highlight rules: list root is exact-only so detail pages don't look like "Itinerary List". */
+function isNavItemActive(pathname: string, href: string): boolean {
+  const base = hrefPath(href);
+  if (pathname === base) return true;
+  if (base === "/itinerary-builder") return false;
+  return pathname.startsWith(`${base}/`);
+}
+
+/**
+ * Soft App Router transitions between itinerary-builder routes often no-op
+ * (especially leaving `/[id]/…` segments). Hard-nav those hops.
+ */
+function shouldHardNavigate(pathname: string, href: string): boolean {
+  const target = hrefPath(href);
+  if (pathname === target) return false;
+  const fromBuilder =
+    pathname === "/itinerary-builder" || pathname.startsWith("/itinerary-builder/");
+  const toBuilder =
+    target === "/itinerary-builder" || target.startsWith("/itinerary-builder/");
+  return fromBuilder && toBuilder;
+}
+
+function isGroupSectionActive(group: NavGroup, pathname: string): boolean {
+  if (group.items.some((item) => isNavItemActive(pathname, item.href))) return true;
+  if (group.label === "Booking" && pathname.startsWith("/itinerary-builder")) return true;
+  if (group.label === "Operations" && pathname.startsWith("/operations")) return true;
+  if (group.label === "Master Data" && pathname.startsWith("/master-data")) return true;
+  return false;
+}
+
 function NavLink({
   item,
   active,
+  pathname,
   onNavigate,
   indent,
 }: {
   item: NavItem;
   active: boolean;
+  pathname: string;
   onNavigate?: () => void;
   indent?: boolean;
 }) {
   const Icon = item.icon;
+
+  function handleClick(e: MouseEvent<HTMLAnchorElement>) {
+    onNavigate?.();
+    if (!shouldHardNavigate(pathname, item.href)) return;
+    e.preventDefault();
+    window.location.assign(item.href);
+  }
+
   return (
     <Link
       href={item.href}
-      onClick={onNavigate}
+      onClick={handleClick}
       className={cn(
         "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all",
         indent && "ml-2 py-2",
@@ -67,10 +111,7 @@ function CollapsibleGroup({
 }) {
   const items = group.items.filter(filterItem);
   if (items.length === 0) return null;
-  const childActive = group.items.some((item) => {
-    const base = item.href.split("?")[0];
-    return pathname === base || pathname.startsWith(base + "/");
-  });
+  const childActive = isGroupSectionActive(group, pathname);
   const [open, setOpen] = useState(defaultOpen ?? childActive);
 
   return (
@@ -88,23 +129,16 @@ function CollapsibleGroup({
       </button>
       {open && (
         <div className="space-y-0.5 border-l border-stone-800 ml-3 pl-1">
-          {items.map((item) => {
-            const base = item.href.split("?")[0];
-            const active =
-              pathname === base ||
-              (base !== "/itinerary-builder" &&
-                base !== "/master-data" &&
-                pathname.startsWith(base + "/")) ||
-              (base === "/itinerary-builder" &&
-                pathname.startsWith("/itinerary-builder") &&
-                !pathname.startsWith("/itinerary-builder/new") &&
-                !pathname.startsWith("/itinerary-builder/confirmed") &&
-                !pathname.startsWith("/itinerary-builder/emails") &&
-                !pathname.startsWith("/itinerary-builder/trash"));
-            return (
-              <NavLink key={item.href} item={item} active={active} onNavigate={onNavigate} indent />
-            );
-          })}
+          {items.map((item) => (
+            <NavLink
+              key={item.href}
+              item={item}
+              active={isNavItemActive(pathname, item.href)}
+              pathname={pathname}
+              onNavigate={onNavigate}
+              indent
+            />
+          ))}
         </div>
       )}
     </div>
@@ -126,7 +160,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink
           key={item.href}
           item={item}
-          active={pathname === item.href || pathname.startsWith(item.href + "/")}
+          active={isNavItemActive(pathname, item.href)}
+          pathname={pathname}
           onNavigate={onNavigate}
         />
       ))}
@@ -141,7 +176,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink
           key={item.href}
           item={item}
-          active={pathname === item.href || pathname.startsWith(item.href + "/")}
+          active={isNavItemActive(pathname, item.href)}
+          pathname={pathname}
           onNavigate={onNavigate}
         />
       ))}
@@ -155,7 +191,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             <NavLink
               key={item.href}
               item={item}
-              active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              active={isNavItemActive(pathname, item.href)}
+              pathname={pathname}
               onNavigate={onNavigate}
             />
           ))}
@@ -171,7 +208,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             <NavLink
               key={item.href}
               item={item}
-              active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              active={isNavItemActive(pathname, item.href)}
+              pathname={pathname}
               onNavigate={onNavigate}
             />
           ))}
@@ -187,7 +225,8 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
             <NavLink
               key={item.href}
               item={item}
-              active={pathname === item.href || pathname.startsWith(item.href + "/")}
+              active={isNavItemActive(pathname, item.href)}
+              pathname={pathname}
               onNavigate={onNavigate}
             />
           ))}

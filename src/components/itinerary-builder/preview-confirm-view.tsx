@@ -96,13 +96,9 @@ function dayTravelDate(travelDate: string | null, dayNumber: number): string {
 }
 
 function hotelLabelsForDay(day: ItineraryDay): string[] {
-  const labels = [
-    ...day.breakfast_hotels,
-    ...day.lunch_hotels,
-    ...day.dinner_hotels,
-    day.hotel_name,
-  ].filter(Boolean) as string[];
-  return Array.from(new Set(labels));
+  const labels = day.breakfast_hotels.filter(Boolean) as string[];
+  if (labels.length > 0) return Array.from(new Set(labels));
+  return day.hotel_name ? [day.hotel_name] : [];
 }
 
 /** Meal / plan bullets for a hotel option on a day (preview cards). */
@@ -116,9 +112,7 @@ function hotelSelectionBullets(day: ItineraryDay, label: string): string[] {
   const bullets: string[] = [];
   if (day.breakfast_hotels.includes(label)) bullets.push("Breakfast");
   if (day.lunch_hotels.includes(label)) bullets.push("Lunch");
-  if (day.dinner_hotels.includes(label) || day.hotel_name === label) {
-    if (!bullets.includes("Dinner")) bullets.push("Dinner");
-  }
+  if (day.dinner_hotels.includes(label)) bullets.push("Dinner");
   return bullets;
 }
 
@@ -130,8 +124,8 @@ function travelerCount(client: ItinerarySnapshot["client"]): number {
   );
 }
 
-function countLabel(value: number | null | undefined): string {
-  return value == null ? "—" : String(value);
+function countLabel(value: number | null | undefined): string | null {
+  return value == null ? null : String(value);
 }
 
 function PolicyAccordion({
@@ -761,19 +755,23 @@ export function PreviewConfirmView({
     .filter(Boolean)
     .join(" ")
     .trim();
-  const categoryLabels = primaryTier.map((t) => t.label).filter(Boolean);
-  const primaryBase =
-    primaryTier[0]?.package_price ??
-    primaryTier[0]?.grand_total ??
-    snapshot.final_price ??
-    0;
   const dayCount = snapshot.days.length;
   const heroSubtitle =
     snapshot.header.subtitle?.trim() ||
     (dayCount > 0 ? `${dayCount} Days Amazing Journey` : "Amazing Journey");
-  const packageCategoryLine = categoryLabels.length
-    ? categoryLabels.join(", ")
-    : "Standard";
+  const tierHeroPrices = primaryTier.length
+    ? primaryTier.map((tier) => ({
+        key: tier.category_key,
+        label: tier.label,
+        price: tier.package_price || tier.grand_total || 0,
+      }))
+    : [
+        {
+          key: "final",
+          label: "Selected Package",
+          price: snapshot.final_price ?? 0,
+        },
+      ];
   const PREVIEW_HERO_IMAGE =
     "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80";
 
@@ -853,16 +851,21 @@ export function PreviewConfirmView({
               </h1>
               <p className="mt-2 text-sm text-white/90 sm:text-base">{heroSubtitle}</p>
             </div>
-            <div className="mt-6 flex flex-wrap items-end justify-between gap-3 rounded-xl bg-black/25 px-4 py-3 backdrop-blur-sm sm:px-5">
-              <div>
-                <p className="text-sm font-semibold text-white sm:text-base">
-                  Selected Package - {packageCategoryLine}
-                </p>
-                <p className="text-xs text-white/75 sm:text-sm">Whole Group/Family</p>
-              </div>
-              <p className="text-2xl font-bold text-white sm:text-3xl">
-                {formatInr(primaryBase)}
-              </p>
+            <div className="mt-6 space-y-2 rounded-xl bg-black/25 px-4 py-3 backdrop-blur-sm sm:px-5">
+              <p className="text-xs text-white/75 sm:text-sm">Whole Group/Family</p>
+              {tierHeroPrices.map((tier) => (
+                <div
+                  key={tier.key}
+                  className="flex flex-wrap items-end justify-between gap-3"
+                >
+                  <p className="text-sm font-semibold text-white sm:text-base">
+                    {tier.label}
+                  </p>
+                  <p className="text-xl font-bold text-white sm:text-2xl">
+                    {formatInr(tier.price)}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
@@ -874,10 +877,10 @@ export function PreviewConfirmView({
             <dl className="mt-3 space-y-2 text-sm">
               {(
                 [
-                  ["Name", clientLabel || "—"],
-                  ["Email", snapshot.client.email?.trim() || "—"],
-                  ["Email 2", snapshot.client.email2?.trim() || "—"],
-                  ["Phone", snapshot.client.phone?.trim() || "—"],
+                  ["Name", clientLabel || null],
+                  ["Email", snapshot.client.email?.trim() || null],
+                  ["Email 2", snapshot.client.email2?.trim() || null],
+                  ["Phone", snapshot.client.phone?.trim() || null],
                   ["Adults", countLabel(snapshot.client.adults)],
                   ["Kids (5–12 Years)", countLabel(snapshot.client.children_5_12)],
                   ["Kids (Below 5 Years)", countLabel(snapshot.client.children_below_5)],
@@ -885,7 +888,7 @@ export function PreviewConfirmView({
                     "Total Travelers",
                     travelerCount(snapshot.client) > 0
                       ? String(travelerCount(snapshot.client))
-                      : "—",
+                      : null,
                   ],
                   ["Rooms", countLabel(snapshot.client.rooms)],
                   ["Extra Mattress", countLabel(snapshot.client.extra_beds)],
@@ -893,16 +896,20 @@ export function PreviewConfirmView({
                     "Travel Date",
                     snapshot.client.travel_date
                       ? formatDate(snapshot.client.travel_date)
-                      : "—",
+                      : null,
                   ],
-                  ...(snapshot.client.food_preference?.trim()
-                    ? ([["Food Preference", snapshot.client.food_preference.trim()]] as const)
-                    : []),
-                  ...(snapshot.client.special_requests?.trim()
-                    ? ([["Special Requests", snapshot.client.special_requests.trim()]] as const)
-                    : []),
+                  [
+                    "Food Preference",
+                    snapshot.client.food_preference?.trim() || null,
+                  ],
+                  [
+                    "Special Requests",
+                    snapshot.client.special_requests?.trim() || null,
+                  ],
                 ] as const
-              ).map(([label, value]) => (
+              )
+                .filter(([, value]) => value != null && value !== "")
+                .map(([label, value]) => (
                 <div key={label} className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0">
                   <dt className="shrink-0 font-medium text-stone-500">{label}</dt>
                   <dd className="text-right font-medium text-stone-900">{value}</dd>
@@ -913,26 +920,36 @@ export function PreviewConfirmView({
           <section className="rounded-2xl border border-stone-200/80 bg-white p-4 shadow-sm sm:p-5">
             <h2 className="text-base font-bold text-[#164e63]">Package Summary</h2>
             <dl className="mt-3 space-y-2 text-sm">
-              {(
-                [
-                  ["Duration", snapshot.header.duration_label || "—"],
-                  [
-                    "Categories",
-                    categoryLabels.length ? categoryLabels.join(", ") : "—",
-                  ],
-                  [
-                    categoryLabels[0]
-                      ? `Base Price (${categoryLabels[0]})`
-                      : "Base Price",
-                    formatInr(primaryBase),
-                  ],
-                ] as const
-              ).map(([label, value]) => (
-                <div key={label} className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0">
-                  <dt className="shrink-0 font-medium text-stone-500">{label}</dt>
-                  <dd className="text-right font-medium text-stone-900">{value}</dd>
+              {snapshot.header.duration_label ? (
+                <div className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2">
+                  <dt className="shrink-0 font-medium text-stone-500">Duration</dt>
+                  <dd className="text-right font-medium text-stone-900">
+                    {snapshot.header.duration_label}
+                  </dd>
                 </div>
-              ))}
+              ) : null}
+              {primaryTier.length > 0 ? (
+                primaryTier.map((tier) => (
+                  <div
+                    key={tier.category_key}
+                    className="flex items-start justify-between gap-4 border-b border-stone-100 pb-2 last:border-0 last:pb-0"
+                  >
+                    <dt className="shrink-0 font-medium text-stone-500">
+                      Base Price ({tier.label})
+                    </dt>
+                    <dd className="text-right font-medium text-stone-900">
+                      {formatInr(tier.package_price || tier.grand_total || 0)}
+                    </dd>
+                  </div>
+                ))
+              ) : snapshot.final_price != null && snapshot.final_price > 0 ? (
+                <div className="flex items-start justify-between gap-4 pb-0">
+                  <dt className="shrink-0 font-medium text-stone-500">Base Price</dt>
+                  <dd className="text-right font-medium text-stone-900">
+                    {formatInr(snapshot.final_price)}
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           </section>
         </div>
@@ -996,12 +1013,23 @@ export function PreviewConfirmView({
                     </div>
                     <div className="min-w-0 flex-1">
                       <h3 className="text-lg font-semibold text-stone-900">{day.day_title}</h3>
-                      {(day.location || day.pickup_location) && (
-                        <p className="mt-1 inline-flex items-center gap-1 text-sm text-stone-600">
-                          <MapPin className="h-3.5 w-3.5 text-blue-600" />
-                          {day.location || day.pickup_location}
-                        </p>
-                      )}
+                      {(() => {
+                        const locs = [
+                          day.location,
+                          ...(day.locations ?? []),
+                          !day.location ? day.pickup_location : null,
+                        ]
+                          .map((l) => l?.trim())
+                          .filter(Boolean) as string[];
+                        const unique = Array.from(new Set(locs));
+                        if (!unique.length) return null;
+                        return (
+                          <p className="mt-1 inline-flex items-center gap-1 text-sm text-stone-600">
+                            <MapPin className="h-3.5 w-3.5 text-blue-600" />
+                            {unique.join(" · ")}
+                          </p>
+                        );
+                      })()}
                       {day.day_description && (
                         <p className="mt-2 text-sm text-stone-600 line-clamp-3">{day.day_description}</p>
                       )}

@@ -91,10 +91,14 @@ export function durationMatchesQuery(duration: string | null | undefined, query:
 export function masterDayToBuilderDay(plan: ItineraryDayPlan, index: number): ItineraryDay {
   const day = emptyDay(plan.day_number || index + 1);
   const location = (plan.location ?? "").trim() || null;
+  const extraLocations = (plan.locations ?? [])
+    .map((l) => l.trim())
+    .filter((l) => l && l.toLowerCase() !== (location ?? "").toLowerCase());
   day.day_title = plan.title?.trim() || "";
   day.alternate_day_titles = (plan.alternate_titles ?? []).map((t) => t.trim()).filter(Boolean);
   day.day_description = plan.description?.trim() || "";
   day.location = location;
+  day.locations = extraLocations;
   day.pickup_location = location;
   day.images = (plan.image_urls ?? []).filter(Boolean).slice(0, 4);
   return day;

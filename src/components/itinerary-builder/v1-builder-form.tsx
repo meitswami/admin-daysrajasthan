@@ -1436,24 +1436,39 @@ export function V1BuilderForm({
     }));
   }
 
-  function setDayLocation(dayIndex: number, location: string) {
-    const nextLocation = location || null;
-    // Prefer remote/relative URLs only — data: URLs blow localStorage when snapshots are saved.
+  function dayLocationRows(day: (typeof s.days)[number]): string[] {
+    const extras = (day.locations ?? []).filter((l) => l.trim());
+    return [day.location ?? "", ...extras];
+  }
+
+  function setDayLocations(dayIndex: number, rows: string[]) {
+    const cleaned = rows.map((r) => r.trim());
+    const primary = cleaned[0] || "";
+    const extras = cleaned.slice(1).filter(Boolean);
+    const nextLocation = primary || null;
     const photos = photosForLocation(locationCatalog, nextLocation).filter(
       (url) => !url.startsWith("data:")
     );
-    updateDay(dayIndex, (d) => ({
-      ...d,
-      location: nextLocation,
-      pickup_location: nextLocation || d.pickup_location,
-      images: photos,
-      // clear hotels when location changes
-      breakfast_hotels: [null, null],
-      lunch_hotels: [null, null],
-      dinner_hotels: [null, null],
-      hotel_name: null,
-      category_hotel_picks: {},
-    }));
+    updateDay(dayIndex, (d) => {
+      const locationChanged =
+        (d.location ?? "").trim().toLowerCase() !== (nextLocation ?? "").trim().toLowerCase();
+      return {
+        ...d,
+        location: nextLocation,
+        locations: extras,
+        pickup_location: nextLocation || d.pickup_location,
+        ...(locationChanged
+          ? {
+              images: photos,
+              breakfast_hotels: [null, null] as [string | null, string | null],
+              lunch_hotels: [null, null] as [string | null, string | null],
+              dinner_hotels: [null, null] as [string | null, string | null],
+              hotel_name: null,
+              category_hotel_picks: {},
+            }
+          : {}),
+      };
+    });
   }
 
   const titleList = [s.header.title, ...s.header.alternate_titles];
@@ -1732,37 +1747,72 @@ export function V1BuilderForm({
                         </span>
                       ) : null}
                     </p>
-                    <Select
-                      value={
-                        day.location
-                          ? locs.find(
-                              (loc) =>
-                                loc.toLowerCase() === day.location!.trim().toLowerCase()
-                            ) ?? day.location
-                          : ""
-                      }
-                      onChange={(e) => setDayLocation(dayIndex, e.target.value)}
-                      className={cn(
-                        isLastDay && lastDayMissingDeparture && "border-amber-400"
-                      )}
-                    >
-                      <option value="">Select location</option>
-                      {day.location &&
-                        !locs.some(
-                          (loc) =>
-                            loc.toLowerCase() === day.location!.trim().toLowerCase()
-                        ) && (
-                          <option value={day.location}>{day.location}</option>
-                        )}
-                      {locs.map((loc) => (
-                        <option key={loc} value={loc}>
-                          {loc}
-                        </option>
+                    <div className="space-y-2">
+                      {dayLocationRows(day).map((loc, locIndex) => (
+                        <div key={locIndex} className="flex gap-2">
+                          <Select
+                            value={
+                              loc
+                                ? locs.find(
+                                    (l) => l.toLowerCase() === loc.trim().toLowerCase()
+                                  ) ?? loc
+                                : ""
+                            }
+                            onChange={(e) => {
+                              const next = [...dayLocationRows(day)];
+                              next[locIndex] = e.target.value;
+                              setDayLocations(dayIndex, next);
+                            }}
+                            className={cn(
+                              isLastDay &&
+                                locIndex === 0 &&
+                                lastDayMissingDeparture &&
+                                "border-amber-400"
+                            )}
+                          >
+                            <option value="">Select location</option>
+                            {loc &&
+                              !locs.some(
+                                (l) => l.toLowerCase() === loc.trim().toLowerCase()
+                              ) && <option value={loc}>{loc}</option>}
+                            {locs.map((name) => (
+                              <option key={name} value={name}>
+                                {name}
+                              </option>
+                            ))}
+                          </Select>
+                          {dayLocationRows(day).length > 1 && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              onClick={() =>
+                                setDayLocations(
+                                  dayIndex,
+                                  dayLocationRows(day).filter((_, i) => i !== locIndex)
+                                )
+                              }
+                              aria-label="Remove location"
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                        </div>
                       ))}
-                    </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="bg-blue-600 text-white hover:bg-blue-700"
+                        onClick={() =>
+                          setDayLocations(dayIndex, [...dayLocationRows(day), ""])
+                        }
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Add Location
+                      </Button>
+                    </div>
                     {isLastDay && lastDayMissingDeparture ? (
                       <p className="mt-1.5 text-xs text-amber-700">
-                        Set this to Departure for the final day.
+                        Set the primary location to Departure for the final day.
                       </p>
                     ) : null}
                   </div>

@@ -694,27 +694,29 @@ function TimelineDayCard({
           <div className="z-10 mt-1 h-4 w-4 rounded-full border-2 border-red-900 bg-white" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex w-full flex-wrap items-center gap-3">
-            <span className="font-semibold text-gray-900">{day.day_title}</span>
-            {dayVehicle && (
-              <span className="inline-flex items-center gap-2 rounded-lg bg-red-900 px-2 py-1 text-xs capitalize text-white sm:text-sm">
-                <Car className="h-4 w-4" />
-                {dayVehicle}
-              </span>
-            )}
+          <p className="font-semibold text-gray-900">{day.day_title}</p>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
+            <QuotationDayCarousel
+              images={images}
+              alt={day.day_title}
+              accent="#7F1D1D"
+              className="max-w-xl overflow-hidden rounded-lg"
+              heightClassName="h-48 sm:h-60"
+            />
+            <div className="min-w-0">
+              {dayVehicle && (
+                <span className="mb-3 inline-flex items-center gap-2 rounded-lg bg-red-900 px-2 py-1 text-xs capitalize text-white sm:text-sm">
+                  <Car className="h-4 w-4" />
+                  {dayVehicle}
+                </span>
+              )}
+              {day.day_description && (
+                <p className="whitespace-pre-wrap text-base leading-relaxed text-gray-700 md:text-lg">
+                  {day.day_description}
+                </p>
+              )}
+            </div>
           </div>
-          <QuotationDayCarousel
-            images={images}
-            alt={day.day_title}
-            accent="#7F1D1D"
-            className="mt-4 max-w-xl overflow-hidden rounded-lg"
-            heightClassName="h-48 sm:h-60"
-          />
-          {day.day_description && (
-            <p className="mt-3 whitespace-pre-wrap text-base leading-relaxed text-gray-700 md:text-lg">
-              {day.day_description}
-            </p>
-          )}
         </div>
       </div>
     );
@@ -730,28 +732,30 @@ function TimelineDayCard({
         {!isLast && <div className="absolute bottom-0 top-4 w-0.5 bg-green-500" />}
         <div className="z-10 mt-1 hidden h-4 w-4 rounded-full border-2 border-green-500 bg-white sm:flex" />
       </div>
-      <div className="mt-2 w-full text-lg sm:mt-0 sm:w-1/4">
+      <div className="mt-2 min-w-0 flex-1 sm:mt-0">
         <p className="font-bold text-gray-800">{day.day_title}</p>
-        {dayVehicle && (
-          <span className="mt-2 inline-flex items-center gap-2 rounded-lg bg-[#00A63E] px-2 py-1 text-xs font-semibold capitalize text-white sm:text-sm">
-            <Car className="h-4 w-4" />
-            {dayVehicle}
-          </span>
-        )}
-        <QuotationDayCarousel
-          images={images}
-          alt={day.day_title}
-          accent="#16A34A"
-          className="mt-4 overflow-hidden rounded-lg"
-          heightClassName="h-48 sm:h-60"
-        />
-      </div>
-      <div className="mt-2 min-w-0 flex-1 sm:mt-4">
-        {day.day_description && (
-          <p className="whitespace-pre-wrap text-lg leading-relaxed text-slate-600">
-            {day.day_description}
-          </p>
-        )}
+        <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
+          <QuotationDayCarousel
+            images={images}
+            alt={day.day_title}
+            accent="#16A34A"
+            className="overflow-hidden rounded-lg"
+            heightClassName="h-48 sm:h-60"
+          />
+          <div className="min-w-0">
+            {dayVehicle && (
+              <span className="mb-3 inline-flex items-center gap-2 rounded-lg bg-[#00A63E] px-2 py-1 text-xs font-semibold capitalize text-white sm:text-sm">
+                <Car className="h-4 w-4" />
+                {dayVehicle}
+              </span>
+            )}
+            {day.day_description && (
+              <p className="whitespace-pre-wrap text-lg leading-relaxed text-slate-600">
+                {day.day_description}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -839,17 +843,17 @@ function DayCard({
                 {day.day_subtitle}
               </p>
             )}
+            {day.vehicle_type && (
+              <span className="mt-2 inline-flex rounded-full bg-stone-50 px-2.5 py-1 text-xs text-stone-700 ring-1 ring-stone-200">
+                🚗 {day.vehicle_type}
+              </span>
+            )}
             {day.day_description && (
               <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-stone-700">
                 {day.day_description}
               </p>
             )}
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
-              {day.vehicle_type && (
-                <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
-                  🚗 {day.vehicle_type}
-                </span>
-              )}
               {day.meal_plan && (
                 <span className="rounded-full bg-stone-50 px-2.5 py-1 text-stone-700 ring-1 ring-stone-200">
                   Meals: {day.meal_plan}
@@ -1103,6 +1107,10 @@ export function QuotationDocument({
   const hasTiers = tierRows.length > 0;
   const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
   const advanceRate = advancePercent / 100;
+  const packagePriceTiers = tierRows.map((tier) => ({
+    label: tier.label,
+    price: tier.package_price,
+  }));
   const primaryTier = tierRows[0];
   const primaryPackagePrice =
     primaryTier?.package_price ?? snapshot.final_price ?? cost_sheet.grand_total;
@@ -1151,6 +1159,13 @@ export function QuotationDocument({
         destinationsSummary={destinationsSummary}
         coveringDestinations={coveringDestinations}
         packagePrice={isTheme2 || isTheme3 ? primaryPackagePrice : null}
+        packagePriceTiers={
+          isTheme2 || isTheme3
+            ? packagePriceTiers.length > 0
+              ? packagePriceTiers
+              : [{ label: primaryPackageLabel, price: primaryPackagePrice }]
+            : undefined
+        }
         quoteId={quoteId}
         versionNumber={versionNumber}
         bookNowHref={paymentHref}
@@ -1215,13 +1230,20 @@ export function QuotationDocument({
               accent={theme.accent}
               variant="theme2"
             />
-            <Theme2PackagePriceCard
-              label={primaryPackageLabel}
-              packagePrice={primaryPackagePrice}
-              grandTotal={primaryGrandTotal}
-              advancePercent={advancePercent}
-              bookNowHref={paymentHref}
-            />
+            <div className="space-y-4">
+              {(hasTiers ? tierRows : [{ label: "Travel", package_price: primaryPackagePrice, grand_total: primaryGrandTotal, category_key: "legacy" }]).map(
+                (tier) => (
+                  <Theme2PackagePriceCard
+                    key={tier.category_key}
+                    label={`${tier.label} Package`}
+                    packagePrice={tier.package_price}
+                    grandTotal={tier.grand_total}
+                    advancePercent={advancePercent}
+                    bookNowHref={paymentHref}
+                  />
+                )
+              )}
+            </div>
           </div>
         )}
 
@@ -1234,13 +1256,20 @@ export function QuotationDocument({
               title="Your Information"
               variant="theme3"
             />
-            <Theme3PackageSummaryCard
-              label={primaryPackageLabel}
-              packagePrice={primaryPackagePrice}
-              grandTotal={primaryGrandTotal}
-              advancePercent={advancePercent}
-              bookNowHref={paymentHref}
-            />
+            <div className="space-y-4">
+              {(hasTiers ? tierRows : [{ label: "Travel", package_price: primaryPackagePrice, grand_total: primaryGrandTotal, category_key: "legacy" }]).map(
+                (tier) => (
+                  <Theme3PackageSummaryCard
+                    key={tier.category_key}
+                    label={`${tier.label} Package`}
+                    packagePrice={tier.package_price}
+                    grandTotal={tier.grand_total}
+                    advancePercent={advancePercent}
+                    bookNowHref={paymentHref}
+                  />
+                )
+              )}
+            </div>
           </div>
         )}
 
@@ -1353,29 +1382,6 @@ export function QuotationDocument({
                 <PackageOptionCard
                   key={tier.category_key}
                   optionNumber={index + 1}
-                  label={`${tier.label} Package`}
-                  packagePrice={tier.package_price}
-                  grandTotal={tier.grand_total}
-                  segments={nightSegments}
-                  advancePercent={advancePercent}
-                  theme={theme}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Secondary tier (if Theme 2 has 2 categories): show second package price card above hotels already primary */}
-        {isTheme2 && tierRows.length > 1 && (
-          <section className="break-inside-avoid">
-            <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
-              Additional Package Options
-            </h2>
-            <div className="mt-4 grid gap-4 lg:grid-cols-2">
-              {tierRows.slice(1).map((tier, index) => (
-                <PackageOptionCard
-                  key={tier.category_key}
-                  optionNumber={index + 2}
                   label={`${tier.label} Package`}
                   packagePrice={tier.package_price}
                   grandTotal={tier.grand_total}

@@ -131,6 +131,8 @@ export interface ItineraryDay {
   travel_time_minutes: number | null;
   /** Primary city / location for the day (V1 Locations) */
   location: string | null;
+  /** Extra locations beyond the primary (Add Location) */
+  locations: string[];
   hotel_name: string | null;
   room_category: string | null;
   meal_plan: string | null;

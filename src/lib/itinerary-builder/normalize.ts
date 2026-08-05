@@ -20,11 +20,10 @@ function mealHotelPair(
   value: [string | null, string | null] | string[] | null | undefined,
   fallbackHotel: string | null
 ): [string | null, string | null] {
-  if (Array.isArray(value) && value.length >= 2) {
+  if (Array.isArray(value)) {
+    // Preserve explicit empty pairs — do not invent hotels from fallback.
+    if (value.length === 0) return [null, null];
     return [value[0] ?? null, value[1] ?? null];
-  }
-  if (Array.isArray(value) && value.length === 1) {
-    return [value[0] ?? null, null];
   }
   return [fallbackHotel, null];
 }
@@ -58,10 +57,14 @@ function normalizeDay(day: ItineraryDay, index: number): ItineraryDay {
     dinner: Boolean(day.dinner),
     breakfast_hotels: mealHotelPair(day.breakfast_hotels, day.hotel_name),
     lunch_hotels: mealHotelPair(day.lunch_hotels, null),
-    dinner_hotels: mealHotelPair(day.dinner_hotels, day.hotel_name),
+    // Never invent dinner hotels from hotel_name — that falsely marks Dinner on stay hotels.
+    dinner_hotels: mealHotelPair(day.dinner_hotels, null),
     epai_plan_only: Boolean(day.epai_plan_only),
     guest_self_booked_hotel: Boolean(day.guest_self_booked_hotel),
     category_hotel_picks: normalizeCategoryHotelPicksMap(day.category_hotel_picks),
+    locations: Array.isArray(day.locations)
+      ? day.locations.map((l) => (typeof l === "string" ? l.trim() : "")).filter(Boolean)
+      : [],
     guide_required: Boolean(day.guide_required),
     completion_pct: day.completion_pct ?? 0,
     packing_tips: day.packing_tips ?? "",

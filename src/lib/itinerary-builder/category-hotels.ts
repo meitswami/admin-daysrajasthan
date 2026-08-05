@@ -189,11 +189,9 @@ export function pruneCategoryHotelPicks(
 }
 
 export function hotelLabelsForCategoryPicks(picks: DayCategoryHotelPicks): string[] {
-  const labels = [
-    ...picks.breakfast_hotels,
-    ...picks.lunch_hotels,
-    ...picks.dinner_hotels,
-    picks.hotel_name,
-  ].filter(Boolean) as string[];
-  return Array.from(new Set(labels));
+  // Stay options are the breakfast hotel pair (max 2). Do not union lunch/dinner —
+  // those are meal tags on the same hotels, not extra hotel options.
+  const labels = picks.breakfast_hotels.filter(Boolean) as string[];
+  if (labels.length > 0) return Array.from(new Set(labels));
+  return picks.hotel_name ? [picks.hotel_name] : [];
 }
