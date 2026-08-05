@@ -2,12 +2,18 @@ import type { TeamMember } from "@/types/rbac";
 import { useCloudMaster } from "@/lib/master-data/cloud";
 import { logMasterDataChange } from "@/lib/master-data/audit";
 import { ensureStoredImageUrls } from "@/lib/supabase/storage-upload";
+import { OPTIONAL_INCLUSIONS } from "@/lib/itinerary-builder/defaults";
 import {
   DEFAULT_EXCLUSION_ITEMS,
   DEFAULT_INCLUSION_ITEMS,
   stringsToContentBlocks,
   type ContentBlockItem,
 } from "@/lib/itinerary-builder/policy-master";
+
+/** Titles left unticked by default — staff can still add them from the master picker. */
+const OPTIONAL_INCLUSION_TITLES = new Set(
+  OPTIONAL_INCLUSIONS.map((o) => o.label.trim().toLowerCase())
+);
 
 function useSupabaseMaster(): boolean {
   return useCloudMaster();
@@ -146,7 +152,11 @@ export function policyFieldsFromMaster(master: InclusionExclusionItem[]): {
   inclusions: string[];
   exclusions: string[];
 } {
-  const inclusion_items = masterToContentBlocks(master, "inclusion");
+  // Pre-select every master inclusion except the fixed optional add-ons
+  // (Ranthambhore safaris / Jaisalmer desert) — those stay available to tick.
+  const inclusion_items = masterToContentBlocks(master, "inclusion").filter(
+    (b) => !OPTIONAL_INCLUSION_TITLES.has(b.title.trim().toLowerCase())
+  );
   const exclusion_items = masterToContentBlocks(master, "exclusion");
   return {
     inclusion_items,

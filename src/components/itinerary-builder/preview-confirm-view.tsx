@@ -43,6 +43,7 @@ import {
   isHardcodedPolicyDefaults,
   listInclusionExclusions,
   masterToContentBlocks,
+  policyFieldsFromMaster,
   type InclusionExclusionItem,
   type InclusionExclusionKind,
 } from "@/lib/master-data/inclusions-store";
@@ -416,6 +417,8 @@ export function PreviewConfirmView({
   const [allContacts, setAllContacts] = useState<PreviewContact[]>(PREVIEW_CONTACTS);
   const [draftMissing, setDraftMissing] = useState(false);
   const [policyMaster, setPolicyMaster] = useState<InclusionExclusionItem[]>([]);
+  const [policyMasterLoaded, setPolicyMasterLoaded] = useState(false);
+  const policyDefaultsHydratedRef = useRef(false);
   const [termsPolicies, setTermsPolicies] = useState<PolicyLine[]>([]);
   const [cancellationPolicies, setCancellationPolicies] = useState<PolicyLine[]>([]);
   const [paymentPolicies, setPaymentPolicies] = useState<PolicyLine[]>([]);
@@ -445,7 +448,10 @@ export function PreviewConfirmView({
   }, []);
 
   useEffect(() => {
-    void listInclusionExclusions().then(setPolicyMaster);
+    void listInclusionExclusions()
+      .then((rows) => setPolicyMaster(rows))
+      .catch(() => setPolicyMaster([]))
+      .finally(() => setPolicyMasterLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -510,24 +516,42 @@ export function PreviewConfirmView({
   }, [itineraryId, draftMode]);
 
   /**
-   * Drop hardcoded demo inclusion/exclusion stubs so staff pick from Master Data.
-   * Saved real selections are left untouched.
+   * Default-select Master Data inclusions/exclusions (except optional add-ons).
+   * Runs once when the picker would otherwise be empty / demo stubs.
+   * Saved real selections are left untouched; optional items stay available to tick.
    */
   useEffect(() => {
-    if (!snapshot) return;
-    const clearInc = isHardcodedPolicyDefaults(snapshot.inclusion_items, "inclusion");
-    const clearExc = isHardcodedPolicyDefaults(snapshot.exclusion_items, "exclusion");
-    if (!clearInc && !clearExc) return;
+    if (!snapshot || !policyMasterLoaded || policyDefaultsHydratedRef.current) return;
+
+    const needInc = isHardcodedPolicyDefaults(snapshot.inclusion_items, "inclusion");
+    const needExc = isHardcodedPolicyDefaults(snapshot.exclusion_items, "exclusion");
+    if (!needInc && !needExc) {
+      policyDefaultsHydratedRef.current = true;
+      return;
+    }
+
+    policyDefaultsHydratedRef.current = true;
+    const fromMaster = policyFieldsFromMaster(policyMaster);
 
     setSnapshot((prev) => {
       if (!prev) return prev;
-      const stillClearInc = isHardcodedPolicyDefaults(prev.inclusion_items, "inclusion");
-      const stillClearExc = isHardcodedPolicyDefaults(prev.exclusion_items, "exclusion");
-      if (!stillClearInc && !stillClearExc) return prev;
+      const stillNeedInc = isHardcodedPolicyDefaults(prev.inclusion_items, "inclusion");
+      const stillNeedExc = isHardcodedPolicyDefaults(prev.exclusion_items, "exclusion");
+      if (!stillNeedInc && !stillNeedExc) return prev;
       const next = normalizeSnapshot({
         ...prev,
-        ...(stillClearInc ? { inclusion_items: [], inclusions: [] } : {}),
-        ...(stillClearExc ? { exclusion_items: [], exclusions: [] } : {}),
+        ...(stillNeedInc
+          ? {
+              inclusion_items: fromMaster.inclusion_items,
+              inclusions: fromMaster.inclusions,
+            }
+          : {}),
+        ...(stillNeedExc
+          ? {
+              exclusion_items: fromMaster.exclusion_items,
+              exclusions: fromMaster.exclusions,
+            }
+          : {}),
       });
       if (draftMode) {
         const existing = loadWizardDraft();
@@ -538,7 +562,7 @@ export function PreviewConfirmView({
       }
       return next;
     });
-  }, [snapshot, draftMode]);
+  }, [snapshot, policyMaster, policyMasterLoaded, draftMode]);
 
   // Non-admins: lock selection to their own Structure contact.
   useEffect(() => {

@@ -499,20 +499,32 @@ function Theme2HotelCard({
 
 function Theme2HotelsPackage({
   packageLabel,
+  packagePrice,
   nights,
   hotelCatalog,
 }: {
   packageLabel: string;
+  /** Total package cost shown opposite the section title. */
+  packagePrice?: number | null;
   nights: HotelPackageNight[];
   hotelCatalog: HotelMasterItem[];
 }) {
   if (!nights.length) return null;
+  const cost =
+    packagePrice != null && Number.isFinite(packagePrice) && packagePrice > 0
+      ? formatInr(packagePrice)
+      : null;
   return (
     <section className="break-inside-avoid">
-      <div className="mb-4 flex items-center justify-between border-b-2 border-green-900 pb-3">
-        <h3 className="text-lg font-bold capitalize text-green-900 sm:text-xl md:text-2xl lg:text-3xl">
+      <div className="mb-4 flex items-end justify-between gap-4 border-b-2 border-green-900 pb-3">
+        <h3 className="min-w-0 text-lg font-bold capitalize text-green-900 sm:text-xl md:text-2xl lg:text-3xl">
           <span>{packageLabel}</span>
         </h3>
+        {cost ? (
+          <p className="shrink-0 text-right text-base font-bold tabular-nums text-green-900 sm:text-xl md:text-2xl">
+            {cost}
+          </p>
+        ) : null}
       </div>
       <div className="mb-6 space-y-6 rounded-2xl border border-gray-300 bg-white p-6 shadow-lg">
         {nights.map((night) => (
@@ -830,13 +842,13 @@ function TimelineDayCard({
       </div>
       <div className="mt-2 min-w-0 flex-1 sm:mt-0">
         <p className="font-bold text-gray-800">{day.day_title}</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-2 sm:items-start">
+        <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)] sm:items-start md:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
           <QuotationDayCarousel
             images={images}
             alt={day.day_title}
             accent="#16A34A"
-            className="overflow-hidden rounded-lg"
-            heightClassName="h-48 sm:h-60"
+            className="max-w-[220px] overflow-hidden rounded-lg sm:max-w-none"
+            heightClassName="h-32 sm:h-36"
           />
           <div className="min-w-0">
             {dayVehicle && (
@@ -1183,10 +1195,20 @@ export function QuotationDocument({
   const packageVehicles = resolvePackageVehicles(snapshot);
   const primaryKey =
     (category_pricing?.[0]?.category_key as HotelCategoryKey | undefined) ?? null;
+  const tierRows = tierRowsFromSnapshot(categoryTotals, category_pricing ?? []);
+  const hasTiers = tierRows.length > 0;
+  const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
+  const advanceRate = advancePercent / 100;
+  const primaryTier = tierRows[0];
+  const primaryPackagePrice =
+    primaryTier?.package_price ?? snapshot.final_price ?? cost_sheet.grand_total;
+  const primaryGrandTotal = primaryTier?.grand_total ?? cost_sheet.grand_total;
   const hotelPackages =
-    category_pricing && category_pricing.length > 0
-      ? category_pricing.map((tier) => ({
+    tierRows.length > 0
+      ? tierRows.map((tier) => ({
           label: `${tier.label} Package`,
+          /** Show total package cost beside the hotels-package heading. */
+          packagePrice: tier.grand_total || tier.package_price,
           nights: buildHotelPackageNights(days, client.travel_date, {
             categoryKey: tier.category_key,
             roomCategory: tier.room_category,
@@ -1196,17 +1218,10 @@ export function QuotationDocument({
       : [
           {
             label: "Travel Package",
+            packagePrice: primaryGrandTotal || primaryPackagePrice,
             nights: buildHotelPackageNights(days, client.travel_date),
           },
         ];
-  const tierRows = tierRowsFromSnapshot(categoryTotals, category_pricing ?? []);
-  const hasTiers = tierRows.length > 0;
-  const advancePercent = snapshot.advance_percent === 30 ? 30 : 20;
-  const advanceRate = advancePercent / 100;
-  const primaryTier = tierRows[0];
-  const primaryPackagePrice =
-    primaryTier?.package_price ?? snapshot.final_price ?? cost_sheet.grand_total;
-  const primaryGrandTotal = primaryTier?.grand_total ?? cost_sheet.grand_total;
 
   const documentClassName = isTheme3
     ? "quotation-document quotation-theme-3 relative z-10 mx-auto max-w-7xl overflow-hidden bg-white p-0 text-stone-900"
@@ -1445,6 +1460,7 @@ export function QuotationDocument({
               <Theme2HotelsPackage
                 key={pkg.label}
                 packageLabel={pkg.label}
+                packagePrice={pkg.packagePrice}
                 nights={pkg.nights}
                 hotelCatalog={hotelCatalog}
               />

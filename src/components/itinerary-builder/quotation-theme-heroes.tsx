@@ -182,7 +182,8 @@ export function Theme2Hero({
   coveringDestinations,
   bookNowHref,
 }: HeroProps) {
-  const wa = brand.phone.replace(/\D/g, "");
+  const phoneDisplay = brand.phone.startsWith("+") ? brand.phone : `+${brand.phone}`;
+  const phoneTel = brand.phone.replace(/\D/g, "");
   const titleLine = (header.title || "").toUpperCase();
   const cityChips =
     coveringDestinations && coveringDestinations.length > 0
@@ -197,29 +198,14 @@ export function Theme2Hero({
       className="relative overflow-hidden bg-white px-4 py-2 sm:px-6"
       style={{ fontFamily: "var(--font-nunito), \"Nunito Sans\", sans-serif" }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/theme-assets/reviews/corner-pattern.png"
-        alt=""
-        className="pointer-events-none absolute -left-20 -top-24 w-44 opacity-30 print:hidden"
-      />
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src="/theme-assets/reviews/corner-pattern.png"
-        alt=""
-        className="pointer-events-none absolute -bottom-24 -right-20 w-44 opacity-30 print:hidden"
-      />
-
       <div className="relative mb-1 flex w-full items-center justify-between px-0 py-2 sm:px-0">
         <BrandMark brand={brand} size="lg" />
         <a
-          href={`https://wa.me/${wa}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="no-print flex items-center gap-2 rounded-md bg-green-500 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-green-600 print:hidden"
+          href={`tel:+${phoneTel}`}
+          className="no-print flex items-center gap-2 rounded-full bg-[#22C55E] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-[#16A34A] print:hidden"
         >
           <Phone className="h-4 w-4" />
-          {brand.phone.startsWith("+") ? brand.phone : `+${brand.phone}`}
+          {phoneDisplay}
         </a>
       </div>
 
@@ -228,12 +214,12 @@ export function Theme2Hero({
           <h1 className="mt-1 text-2xl font-bold text-black sm:text-3xl lg:text-4xl">
             {guestGreeting(clientLabel, client.client_name)},
           </h1>
-          <p className="mt-2 text-gray-500">
+          <p className="mt-2 text-base text-gray-500 sm:text-lg">
             Here is the package exclusively designed/tailor made <br /> for you
           </p>
           {header.duration_label && (
             <div className="mt-4">
-              <span className="rounded-md bg-yellow-300 px-4 py-2 text-sm font-bold text-[#343333] shadow-md sm:text-lg">
+              <span className="inline-block rounded-md bg-[#FDE047] px-4 py-2 text-sm font-bold text-[#343333] shadow-sm sm:text-lg">
                 {header.duration_label}
               </span>
             </div>
@@ -246,13 +232,13 @@ export function Theme2Hero({
             </div>
           )}
           {cityChips.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2 gap-y-1 text-sm font-medium text-gray-700 sm:text-lg">
+            <p className="mt-2 text-sm font-medium leading-relaxed text-gray-600 sm:text-lg">
               {cityChips.map((city) => (
-                <p key={city} className="flex items-center gap-1">
-                  <span aria-hidden>•</span> {city}
-                </p>
+                <span key={city} className="mr-2 inline-block">
+                  • {city}
+                </span>
               ))}
-            </div>
+            </p>
           )}
           <div className="mt-4 flex flex-col items-center justify-between gap-4 md:items-start">
             <QuotationReviewWidgets
@@ -271,15 +257,29 @@ export function Theme2Hero({
         </div>
 
         <div className="relative order-1 mx-auto flex w-full items-center justify-center px-4 py-4 lg:order-2 lg:w-1/2 lg:py-6">
-          {/* Large overlapping circles matching SenduserviewData3 reference */}
+          {/* Circular hero + yellow→lime overlays on top (exact reference treatment) */}
           <div className="relative mx-auto aspect-square w-full max-w-[420px] sm:max-w-[480px]">
-            <div className="absolute left-[-6%] top-[8%] z-0 h-[38%] w-[38%] rounded-full bg-gradient-to-br from-yellow-300 to-green-500 opacity-90" />
-            <div className="absolute bottom-[-2%] right-[-4%] z-0 h-[42%] w-[42%] rounded-full bg-gradient-to-br from-lime-300 to-yellow-300 opacity-85" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={theme.heroImage}
               alt=""
-              className="relative z-10 h-full w-full rounded-full object-cover shadow-xl ring-4 ring-white"
+              className="relative z-0 h-full w-full rounded-full object-cover shadow-xl"
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute left-[-6%] top-[0%] z-10 h-[38%] w-[38%] rounded-full"
+              style={{
+                background: "linear-gradient(90deg, #F8E71C 0%, #7ED321 100%)",
+                opacity: 0.75,
+              }}
+            />
+            <div
+              aria-hidden
+              className="pointer-events-none absolute bottom-[-4%] right-[-6%] z-10 h-[38%] w-[38%] rounded-full"
+              style={{
+                background: "linear-gradient(90deg, #F8E71C 0%, #7ED321 100%)",
+                opacity: 0.75,
+              }}
             />
           </div>
         </div>
