@@ -63,6 +63,10 @@ for d in node_modules.__trash_*; do
   remove_tree "$d"
 done
 
+# Give Next enough heap on small VPS boxes (OOM during "Collecting page data"
+# often surfaces as a misleading ENOENT on pages-manifest.json).
+export NODE_OPTIONS="${NODE_OPTIONS:---max-old-space-size=3072}"
+
 npm ci || npm install
 
 # Keep previous build until the new one succeeds (failed builds must not wipe production).
@@ -70,9 +74,32 @@ remove_tree .next.prev
 if [[ -d .next ]]; then
   mv .next .next.prev
 fi
+# Stale Turbopack caches can leave a compile "success" without server manifests.
+remove_tree .turbo
+remove_tree node_modules/.cache
+
+# Bail early if the disk is nearly full (manifest writes fail with ENOENT).
+avail_kb="$(df -Pk "$ADMIN_DIR" | awk 'NR==2 {print $4}')"
+if [[ -n "${avail_kb:-}" && "$avail_kb" -lt 1048576 ]]; then
+  echo "ADMIN_BUILD_FAILED — less than 1GiB free on $(df -Ph "$ADMIN_DIR" | awk 'NR==2 {print $6}')" >&2
+  if [[ -d .next.prev ]]; then
+    mv .next.prev .next
+  fi
+  exit 1
+fi
 
 if ! npm run build; then
   echo "ADMIN_BUILD_FAILED — restoring previous .next" >&2
+  remove_tree .next
+  if [[ -d .next.prev ]]; then
+    mv .next.prev .next
+  fi
+  exit 1
+fi
+
+# Sanity-check the build artifact Next needs to boot / collect routes.
+if [[ ! -f .next/server/pages-manifest.json ]]; then
+  echo "ADMIN_BUILD_FAILED — missing .next/server/pages-manifest.json after build" >&2
   remove_tree .next
   if [[ -d .next.prev ]]; then
     mv .next.prev .next
