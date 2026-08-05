@@ -353,16 +353,26 @@ function Theme3PackageSummaryCard({
   );
 }
 
+function formatTimelineDate(travelDate: string, dayNumber: number): string {
+  const d = new Date(travelDate);
+  d.setDate(d.getDate() + dayNumber - 1);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
 function CoveringDestinationsRow({
   covering,
   vehicles,
   variant = "theme2",
-  accent,
+  tourCode,
 }: {
   covering: CoveringDestination[];
   vehicles: string[];
   variant?: "theme2" | "theme3";
-  accent?: string;
+  /** Theme 2 reference shows Tour Code under covering destinations */
+  tourCode?: string | null;
 }) {
   const isTheme3 = variant === "theme3";
   return (
@@ -372,13 +382,17 @@ function CoveringDestinationsRow({
           "text-lg font-extrabold sm:text-2xl md:text-3xl",
           isTheme3 ? "text-red-900" : "text-green-700"
         )}
-        style={!isTheme3 && accent ? undefined : undefined}
       >
         Travel Itinerary
       </div>
       {covering.length > 0 && (
-        <p className="mt-1 flex flex-wrap gap-2 text-gray-700">
-          <span className={cn("text-xl", isTheme3 ? "text-red-900" : "text-green-600")}>
+        <p
+          className={cn(
+            "mt-1 flex flex-wrap items-center gap-x-2 gap-y-1",
+            isTheme3 ? "text-gray-700" : "text-green-700"
+          )}
+        >
+          <span className={cn("text-base sm:text-xl", isTheme3 ? "text-red-900" : "text-green-600")}>
             Covering Destinations
           </span>
           {covering.map((item) =>
@@ -389,22 +403,28 @@ function CoveringDestinationsRow({
                 <span className="ml-1 text-sm text-red-900">-{item.nights}N</span>
               </span>
             ) : (
-              <span key={item.label} className="mr-2 flex items-center gap-1 text-lg">
+              <span key={item.label} className="flex items-center gap-1 text-base sm:text-lg">
                 <span className="text-yellow-500">•</span> {item.label}
               </span>
             )
           )}
         </p>
       )}
-      {vehicles.length > 0 && (
+      {!isTheme3 && tourCode && (
+        <p className="mt-2 text-base text-green-700 sm:text-lg">
+          Tour Code:{" "}
+          <span className="font-semibold underline decoration-green-700 underline-offset-2">
+            {tourCode}
+          </span>
+        </p>
+      )}
+      {/* Theme 2 shows vehicles per day; theme 3 keeps package-level badges here */}
+      {isTheme3 && vehicles.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
           {vehicles.map((vehicle) => (
             <p
               key={vehicle}
-              className={cn(
-                "mb-2 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold capitalize text-white sm:text-lg",
-                isTheme3 ? "bg-red-900" : "bg-[#00A63E]"
-              )}
+              className="mb-2 inline-flex items-center gap-2 rounded-lg bg-red-900 px-2 py-1 text-sm font-semibold capitalize text-white sm:text-lg"
             >
               <Car className="h-5 w-5 shrink-0" strokeWidth={2} />
               {vehicle}
@@ -783,7 +803,13 @@ function TimelineDayCard({
   locationPhotos: Map<string, string[]>;
 }) {
   const dateLabel = travelDate
-    ? formatDate(new Date(new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)))
+    ? layout === "theme2"
+      ? formatTimelineDate(travelDate, day.day_number)
+      : formatDate(
+          new Date(
+            new Date(travelDate).setDate(new Date(travelDate).getDate() + day.day_number - 1)
+          )
+        )
     : null;
   const images = dayImagesForCard(day, theme, locationPhotos);
   const dayVehicle = formatVehicleLabel(
@@ -831,34 +857,34 @@ function TimelineDayCard({
   }
 
   return (
-    <div className="relative flex flex-col gap-3 text-lg text-slate-600 sm:flex-row sm:gap-5">
-      <div className="w-full shrink-0 text-left sm:w-24 sm:text-right">
+    <div className="relative flex w-full flex-col gap-3 text-lg text-slate-600 sm:flex-row sm:gap-4 lg:gap-6">
+      <div className="w-full shrink-0 text-left sm:w-20 sm:text-right lg:w-24">
         <p className="font-bold text-green-600">Day {day.day_number}</p>
-        {dateLabel && <p className="text-sm text-gray-500">{dateLabel}</p>}
+        {dateLabel && <p className="text-sm text-green-600/80">{dateLabel}</p>}
       </div>
-      <div className="relative hidden w-8 shrink-0 flex-col items-center self-stretch sm:flex sm:w-12">
+      <div className="relative hidden w-6 shrink-0 flex-col items-center self-stretch sm:flex lg:w-10">
         {!isLast && <div className="absolute bottom-0 top-4 w-0.5 bg-green-500" />}
-        <div className="z-10 mt-1 hidden h-4 w-4 rounded-full border-2 border-green-500 bg-white sm:flex" />
+        <div className="z-10 mt-1 h-4 w-4 rounded-full border-2 border-green-500 bg-white" />
       </div>
-      <div className="mt-2 min-w-0 flex-1 sm:mt-0">
+      <div className="mt-2 min-w-0 w-full flex-1 sm:mt-0">
         <p className="font-bold text-gray-800">{day.day_title}</p>
-        <div className="mt-3 grid gap-4 sm:grid-cols-[minmax(0,200px)_minmax(0,1fr)] sm:items-start md:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+        <div className="mt-3 grid w-full gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)] sm:items-start lg:grid-cols-[minmax(0,420px)_minmax(0,1fr)] lg:gap-6 xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)]">
           <QuotationDayCarousel
             images={images}
             alt={day.day_title}
             accent="#16A34A"
-            className="max-w-[220px] overflow-hidden rounded-lg sm:max-w-none"
-            heightClassName="h-32 sm:h-36"
+            className="w-full overflow-hidden rounded-lg"
+            heightClassName="h-48 sm:h-56 lg:h-64"
           />
           <div className="min-w-0">
             {dayVehicle && (
-              <span className="mb-3 inline-flex items-center gap-2 rounded-lg bg-[#00A63E] px-2 py-1 text-xs font-semibold capitalize text-white sm:text-sm">
+              <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#00A63E] px-3 py-1.5 text-xs font-semibold capitalize text-white sm:text-sm">
                 <Car className="h-4 w-4" />
                 {dayVehicle}
               </span>
             )}
             {day.day_description && (
-              <p className="whitespace-pre-wrap text-lg leading-relaxed text-slate-600">
+              <p className="whitespace-pre-wrap text-base leading-relaxed text-slate-700 sm:text-lg">
                 {day.day_description}
               </p>
             )}
@@ -1381,7 +1407,13 @@ export function QuotationDocument({
           </div>
         )}
 
-        <section>
+        <section
+          className={
+            isTheme2
+              ? "w-full rounded-2xl border border-yellow-400 bg-white p-4 sm:p-5 md:p-6 lg:px-8"
+              : undefined
+          }
+        >
           {!isLegacyTheme && !usesTimelineDays && (
             <h2 className="text-sm font-bold uppercase tracking-wide" style={{ color: theme.accent }}>
               Day-wise Itinerary
@@ -1392,7 +1424,7 @@ export function QuotationDocument({
               covering={coveringDestinations}
               vehicles={packageVehicles}
               variant={isTheme3 ? "theme3" : "theme2"}
-              accent={theme.accent}
+              tourCode={header.tour_code || quoteId}
             />
           )}
           {usesTimelineDays && !isTheme2 && !isTheme3 && (
@@ -1424,7 +1456,7 @@ export function QuotationDocument({
               theme.id === 1
                 ? "mt-2"
                 : usesTimelineDays
-                  ? "mt-2 space-y-5 sm:space-y-6"
+                  ? "mt-2 space-y-6 sm:space-y-8"
                   : "mt-4 space-y-4"
             }
           >
